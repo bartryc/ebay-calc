@@ -34,6 +34,15 @@
         .radio-group {
             margin-bottom: 16px;
         }
+        .preset-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .preset-buttons button {
+            flex: 1;
+            background-color: #6c757d;
+        }
         button {
             padding: 10px 20px;
             background-color: #007bff;
@@ -60,6 +69,13 @@
 <body>
     <div class="container">
         <h2>Przelicznik ceny eBay (Brutto/Netto)</h2>
+
+        <div class="preset-buttons">
+            <button type="button" onclick="applyPreset('USD', 0)">USD VAT 0%</button>
+            <button type="button" onclick="applyPreset('EUR', 23)">EUR VAT 23%</button>
+            <button type="button" onclick="applyPreset('EUR', 19)">EUR VAT 19%</button>
+        </div>
+
         <form id="priceForm">
             <label for="plnAmount">Kwota brutto w PLN:</label>
             <input type="number" id="plnAmount" placeholder="Wprowadź kwotę brutto w PLN" step="0.01" min="0" required>
@@ -70,7 +86,7 @@
               <option value="USD">USD</option>
             </select>
             <button type="button" id="refreshRateBtn">Odśwież kurs</button>
-
+<br><br><br>
             <label for="exchangeRate">Kurs PLN/<span id="currencyLabel">EUR</span> (automatycznie aktualizowany):</label>
             <p id="exchangeInfo" style="font-size: 0.9em; color: #555;">Pobieranie kursu...</p>
             <input type="number" id="exchangeRate" step="0.0001" min="0" required>
@@ -142,6 +158,13 @@
                 `Kwota netto w PLN: ${netPlnAmount.toFixed(2)} PLN<br>` +
                 `Cena końcowa w ${currencySymbol} (${modeText}): ${finalPrice.toFixed(2)} ${currencySymbol}<br>` +
                 `Mnożnik: ${multiplier.toFixed(4)}`;
+        }
+
+        function applyPreset(currency, vat) {
+            document.getElementById('currency').value = currency;
+            document.getElementById('vatRate').value = vat;
+            document.getElementById('currencyLabel').innerText = currency;
+            fetchExchangeRate(currency);
         }
 
         const exchangeRateInput = document.getElementById('exchangeRate');
