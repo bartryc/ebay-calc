@@ -149,28 +149,8 @@
         const exchangeInfo = document.getElementById('exchangeInfo');
         const currencySelect = document.getElementById('currency');
 
-        const staticRates = {
-            EUR: 0.2349,
-            USD: 0.2531
-        };
-
         function applyStaticRate(currency) {
-            const rate = staticRates[currency];
-            exchangeRateInput.value = rate.toFixed(4);
-            const now = new Date();
-            const dateStr = now.toLocaleDateString();
-            const timeStr = now.toLocaleTimeString();
-            exchangeInfo.innerText = `Użyto statycznego kursu PLN/${currency}: ${rate.toFixed(4)} (na dzień ${dateStr}, godz. ${timeStr})`;
-            currencyLabel.innerText = currency;
-            calculatePrice();
-        }
-
-        currencySelect.addEventListener('change', function () {
-            applyStaticRate(this.value);
-        });
-
-        document.getElementById('refreshRateBtn').addEventListener('click', function () {
-            const currency = currencySelect.value;
+            exchangeInfo.innerText = 'Pobieranie kursu...';
             fetch(`https://api.exchangerate.host/latest?base=PLN&symbols=${currency}`)
                 .then(response => response.json())
                 .then(data => {
@@ -180,7 +160,7 @@
                         const now = new Date();
                         const dateStr = now.toLocaleDateString();
                         const timeStr = now.toLocaleTimeString();
-                        exchangeInfo.innerText = `Zaktualizowano kurs PLN/${currency}: ${rate.toFixed(4)} (na dzień ${dateStr}, godz. ${timeStr})`;
+                        exchangeInfo.innerText = `Aktualny kurs PLN/${currency}: ${rate.toFixed(4)} (z dnia ${dateStr}, godz. ${timeStr})`;
                         currencyLabel.innerText = currency;
                         calculatePrice();
                     } else {
@@ -188,9 +168,16 @@
                     }
                 })
                 .catch(() => {
-                    exchangeInfo.innerText = 'Brak połączenia. Używany kurs domyślny.';
-                    applyStaticRate(currency);
+                    exchangeInfo.innerText = 'Błąd połączenia. Sprawdź internet.';
                 });
+        }
+
+        currencySelect.addEventListener('change', function () {
+            applyStaticRate(this.value);
+        });
+
+        document.getElementById('refreshRateBtn').addEventListener('click', function () {
+            applyStaticRate(currencySelect.value);
         });
 
         const inputs = document.querySelectorAll('#plnAmount, #exchangeRate, #commission, #vatRate');
