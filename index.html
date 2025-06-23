@@ -149,9 +149,9 @@
         const exchangeInfo = document.getElementById('exchangeInfo');
         const currencySelect = document.getElementById('currency');
 
-        function applyStaticRate(currency) {
+        function fetchExchangeRate(currency) {
             exchangeInfo.innerText = 'Pobieranie kursu...';
-            fetch(`https://api.exchangerate.host/latest?base=PLN&symbols=${currency}`)
+            fetch(`https://api.frankfurter.app/latest?from=PLN&to=${currency}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data && data.rates && data.rates[currency]) {
@@ -173,11 +173,11 @@
         }
 
         currencySelect.addEventListener('change', function () {
-            applyStaticRate(this.value);
+            fetchExchangeRate(this.value);
         });
 
         document.getElementById('refreshRateBtn').addEventListener('click', function () {
-            applyStaticRate(currencySelect.value);
+            fetchExchangeRate(currencySelect.value);
         });
 
         const inputs = document.querySelectorAll('#plnAmount, #exchangeRate, #commission, #vatRate');
@@ -195,7 +195,7 @@
             calculatePrice();
         });
 
-        applyStaticRate('EUR');
+        fetchExchangeRate('EUR');
     </script>
 </body>
 </html>
