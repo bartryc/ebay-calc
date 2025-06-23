@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przelicznik ceny eBay (Brutto/Netto)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input[type="number"], select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .radio-group {
+            margin-bottom: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #333;
+        }
+        .error {
+            color: #d9534f;
+            font-size: 1em;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Przelicznik ceny eBay (Brutto/Netto)</h2>
+        <form id="priceForm">
+            <label for="plnAmount">Kwota brutto w PLN:</label>
+            <input type="number" id="plnAmount" placeholder="Wprowadź kwotę brutto w PLN" step="0.01" min="0" required>
+
+            <label for="currency">Waluta docelowa:</label>
+            <select id="currency">
+              <option value="EUR" selected>EUR</option>
+              <option value="USD">USD</option>
+            </select>
+            <button type="button" id="refreshRateBtn">Odśwież kurs</button>
+
+            <label for="exchangeRate">Kurs PLN/<span id="currencyLabel">EUR</span> (automatycznie aktualizowany):</label>
+            <p id="exchangeInfo" style="font-size: 0.9em; color: #555;">Pobieranie kursu...</p>
+            <input type="number" id="exchangeRate" step="0.0001" min="0" required>
+
+            <label for="commission">Prowizja (%):</label>
+            <input type="number" id="commission" value="15" step="0.1" min="0" required>
+
+            <label for="vatRate">Stawka VAT (%):</label>
+            <input type="number" id="vatRate" value="23" step="0.1" min="0" required>
+
+            <div class="radio-group">
+                <label><input type="radio" name="calculationMode" value="gross" checked> Oblicz od kwoty brutto + prowizja</label>
+                <label><input type="radio" name="calculationMode" value="net"> Oblicz od kwoty netto + prowizja</label>
+            </div>
+            <button type="submit" style="display:none">Oblicz cenę końcową</button>
+        </form>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        function calculatePrice() {
+            const plnAmount = parseFloat(document.getElementById('plnAmount').value);
+            const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
+            const commission = parseFloat(document.getElementById('commission').value) / 100;
+            const vatRate = parseFloat(document.getElementById('vatRate').value) / 100;
+            const calculationMode = document.querySelector('input[name="calculationMode"]:checked').value;
+            const resultDiv = document.getElementById('result');
+
+            if (isNaN(plnAmount) || plnAmount <= 0) {
+                resultDiv.innerHTML = '<span class="error">Kwota brutto musi być liczbą dodatnią.</span>';
+                return;
+            }
+            if (isNaN(exchangeRate) || exchangeRate <= 0) {
+                resultDiv.innerHTML = '<span class="error">Kurs musi być liczbą dodatnią.</span>';
+                return;
+            }
+            if (isNaN(commission) || commission < 0) {
+                resultDiv.innerHTML = '<span class="error">Prowizja nie może być ujemna.</span>';
+                return;
+            }
+            if (isNaN(vatRate) || vatRate < 0) {
+                resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>';
+                return;
+            }
+
+            let finalPrice, multiplier, modeText, netPlnAmount;
+
+            if (calculationMode === 'gross') {
+                const eurAmount = plnAmount * exchangeRate;
+                finalPrice = eurAmount * (1 + commission);
+                multiplier = exchangeRate * (1 + commission);
+                modeText = "Brutto + prowizja";
+                netPlnAmount = plnAmount / (1 + vatRate);
+            } else {
+                if (vatRate === 0) {
+                    netPlnAmount = plnAmount;
+                } else {
+                    netPlnAmount = plnAmount / (1 + vatRate);
+                }
+                const netEurAmount = netPlnAmount * exchangeRate;
+                finalPrice = netEurAmount * (1 + commission);
+                multiplier = (exchangeRate / (vatRate === 0 ? 1 : 1 + vatRate)) * (1 + commission);
+                modeText = `Netto + prowizja (VAT ${vatRate * 100}%)`;
+            }
+
+            const currencySymbol = document.getElementById('currency').value;
+
+            resultDiv.innerHTML = 
+                `Kwota netto w PLN: ${netPlnAmount.toFixed(2)} PLN<br>` +
+                `Cena końcowa w ${currencySymbol} (${modeText}): ${finalPrice.toFixed(2)} ${currencySymbol}<br>` +
+                `Mnożnik: ${multiplier.toFixed(4)}`;
+        }
+
+        const exchangeRateInput = document.getElementById('exchangeRate');
+        const currencyLabel = document.getElementById('currencyLabel');
+        const exchangeInfo = document.getElementById('exchangeInfo');
+        const currencySelect = document.getElementById('currency');
+
+        const staticRates = {
+            EUR: 0.2349,
+            USD: 0.2531
+        };
+
+        function applyStaticRate(currency) {
+            const rate = staticRates[currency];
+            exchangeRateInput.value = rate.toFixed(4);
+            const now = new Date();
+            const dateStr = now.toLocaleDateString();
+            const timeStr = now.toLocaleTimeString();
+            exchangeInfo.innerText = `Użyto statycznego kursu PLN/${currency}: ${rate.toFixed(4)} (na dzień ${dateStr}, godz. ${timeStr})`;
+            currencyLabel.innerText = currency;
+            calculatePrice();
+        }
+
+        currencySelect.addEventListener('change', function () {
+            applyStaticRate(this.value);
+        });
+
+        document.getElementById('refreshRateBtn').addEventListener('click', function () {
+            const currency = currencySelect.value;
+            fetch(`https://api.exchangerate.host/latest?base=PLN&symbols=${currency}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.rates && data.rates[currency]) {
+                        const rate = data.rates[currency];
+                        exchangeRateInput.value = rate.toFixed(4);
+                        const now = new Date();
+                        const dateStr = now.toLocaleDateString();
+                        const timeStr = now.toLocaleTimeString();
+                        exchangeInfo.innerText = `Zaktualizowano kurs PLN/${currency}: ${rate.toFixed(4)} (na dzień ${dateStr}, godz. ${timeStr})`;
+                        currencyLabel.innerText = currency;
+                        calculatePrice();
+                    } else {
+                        exchangeInfo.innerText = 'Nie udało się pobrać kursu.';
+                    }
+                })
+                .catch(() => {
+                    exchangeInfo.innerText = 'Brak połączenia. Używany kurs domyślny.';
+                    applyStaticRate(currency);
+                });
+        });
+
+        const inputs = document.querySelectorAll('#plnAmount, #exchangeRate, #commission, #vatRate');
+        inputs.forEach(input => {
+            input.addEventListener('input', calculatePrice);
+        });
+
+        const radioButtons = document.querySelectorAll('input[name="calculationMode"]');
+        radioButtons.forEach(radio => {
+            radio.addEventListener('change', calculatePrice);
+        });
+
+        document.getElementById('priceForm').addEventListener('submit', function (event) {
+            event.preventDefault();
+            calculatePrice();
+        });
+
+        applyStaticRate('EUR');
+    </script>
+</body>
+</html>
