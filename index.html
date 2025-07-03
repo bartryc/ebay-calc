@@ -63,6 +63,29 @@
       color: #555;
       margin-bottom: 10px;
     }
+	#refreshRateBtn {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+#refreshRateBtn:hover {
+  background-color: #0056b3;
+}
+.currency-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.currency-row select {
+  flex: 1;
+}
+.currency-row button {
+  white-space: nowrap;
+}
   </style>
 </head>
 <body>
@@ -82,12 +105,14 @@
       <label for="plnBrutto">Kwota brutto w PLN (z VAT 23%):</label>
       <input type="number" id="plnBrutto" step="0.01" min="0" placeholder="Wprowadź lub przeliczana z netto">
 
-      <label for="currency">Waluta docelowa:</label>
-      <select id="currency">
-        <option value="EUR" selected>EUR</option>
-        <option value="USD">USD</option>
-      </select>
-      <button type="button" id="refreshRateBtn">Odśwież kurs</button>
+<label for="currency">Waluta docelowa:</label>
+<div class="currency-row">
+  <select id="currency">
+    <option value="EUR" selected>EUR</option>
+    <option value="USD">USD</option>
+  </select>
+  <button type="button" id="refreshRateBtn">Odśwież kurs</button>
+</div>
 
       <label for="exchangeRate">Kurs PLN/<span id="currencyLabel">EUR</span>:</label>
       <p id="exchangeInfo">Pobieranie kursu...</p>
@@ -157,8 +182,8 @@
 
       resultDiv.innerHTML = `
         <strong>Cena końcowa w ${currency} (dla klienta):</strong> ${finalPrice.toFixed(2)} ${currency}<br><br>
-        Mnożnik netto → ${currency}: ${multiplierNetto.toFixed(6)}<br>
-        Mnożnik brutto (PLN z VAT 23%) → ${currency}: ${multiplierBrutto.toFixed(6)}<br>
+        Mnożnik dla ceny netto → ${currency}: ${multiplierNetto.toFixed(6)}<br>
+        Mnożnik dla ceny brutto (PLN z VAT 23%) → ${currency}: ${multiplierBrutto.toFixed(6)}<br><br>
         <span class="tooltip">Pomnóż kwotę netto lub brutto w PLN przez mnożnik, aby uzyskać cenę w ${currency}.</span>
       `;
     }
