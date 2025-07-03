@@ -1,224 +1,217 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Przelicznik ceny eBay (Brutto/Netto)</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 20px;
-            background-color: #f9f9f9;
-        }
-        .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-        input[type="number"], select {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 16px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        .radio-group {
-            margin-bottom: 16px;
-        }
-        .preset-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-        .preset-buttons button {
-            flex: 1;
-            background-color: #6c757d;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        #result {
-            margin-top: 20px;
-            font-size: 1.2em;
-            color: #333;
-        }
-        .error {
-            color: #d9534f;
-            font-size: 1em;
-            margin-top: 10px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Przelicznik ceny eBay</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    .container {
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    input[type="number"], select {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    .preset-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .preset-buttons button {
+      flex: 1;
+      background-color: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px;
+      cursor: pointer;
+    }
+    .preset-buttons button:hover {
+      background-color: #5a6268;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 1.2em;
+      color: #333;
+    }
+    .error {
+      color: #d9534f;
+      font-size: 1em;
+      margin-top: 10px;
+    }
+    #exchangeInfo, .tooltip {
+      font-size: 0.9em;
+      color: #555;
+      margin-bottom: 10px;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Przelicznik ceny eBay (Brutto/Netto)</h2>
+  <div class="container">
+    <h2>Przelicznik ceny eBay (PLN → EUR/USD)</h2>
 
-        <div class="preset-buttons">
-            <button type="button" onclick="applyPreset('USD', 0)">USD VAT 0%</button>
-            <button type="button" onclick="applyPreset('EUR', 23)">EUR VAT 23%</button>
-            <button type="button" onclick="applyPreset('EUR', 19)">EUR VAT 19%</button>
-        </div>
-
-        <form id="priceForm">
-            <label for="plnAmount">Kwota brutto w PLN:</label>
-            <input type="number" id="plnAmount" placeholder="Wprowadź kwotę brutto w PLN" step="0.01" min="0" required>
-
-            <label for="currency">Waluta docelowa:</label>
-            <select id="currency">
-              <option value="EUR" selected>EUR</option>
-              <option value="USD">USD</option>
-            </select>
-            <button type="button" id="refreshRateBtn">Odśwież kurs</button>
-<br><br><br>
-            <label for="exchangeRate">Kurs PLN/<span id="currencyLabel">EUR</span> (automatycznie aktualizowany):</label>
-            <p id="exchangeInfo" style="font-size: 0.9em; color: #555;">Pobieranie kursu...</p>
-            <input type="number" id="exchangeRate" step="0.0001" min="0" required>
-
-            <label for="commission">Prowizja (%):</label>
-            <input type="number" id="commission" value="15" step="0.1" min="0" required>
-
-            <label for="vatRate">Stawka VAT (%):</label>
-            <input type="number" id="vatRate" value="23" step="0.1" min="0" required>
-
-            <div class="radio-group">
-                <label><input type="radio" name="calculationMode" value="gross" checked> Oblicz od kwoty brutto + prowizja</label>
-                <label><input type="radio" name="calculationMode" value="net"> Oblicz od kwoty netto + prowizja</label>
-            </div>
-            <button type="submit" style="display:none">Oblicz cenę końcową</button>
-        </form>
-        <div id="result"></div>
+    <div class="preset-buttons">
+      <button type="button" onclick="applyPreset('USD', 0)">USD VAT 0%</button>
+      <button type="button" onclick="applyPreset('EUR', 23)">EUR VAT 23%</button>
+      <button type="button" onclick="applyPreset('EUR', 19)">EUR VAT 19%</button>
     </div>
 
-    <script>
-        function calculatePrice() {
-            const plnAmount = parseFloat(document.getElementById('plnAmount').value);
-            const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
-            const commission = parseFloat(document.getElementById('commission').value) / 100;
-            const vatRate = parseFloat(document.getElementById('vatRate').value) / 100;
-            const calculationMode = document.querySelector('input[name="calculationMode"]:checked').value;
-            const resultDiv = document.getElementById('result');
+    <form id="priceForm">
+      <label for="plnNetto">Kwota netto w PLN:</label>
+      <input type="number" id="plnNetto" step="0.01" min="0" placeholder="Wprowadź kwotę netto">
 
-            if (isNaN(plnAmount) || plnAmount <= 0) {
-                resultDiv.innerHTML = '<span class="error">Kwota brutto musi być liczbą dodatnią.</span>';
-                return;
-            }
-            if (isNaN(exchangeRate) || exchangeRate <= 0) {
-                resultDiv.innerHTML = '<span class="error">Kurs musi być liczbą dodatnią.</span>';
-                return;
-            }
-            if (isNaN(commission) || commission < 0) {
-                resultDiv.innerHTML = '<span class="error">Prowizja nie może być ujemna.</span>';
-                return;
-            }
-            if (isNaN(vatRate) || vatRate < 0) {
-                resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>';
-                return;
-            }
+      <label for="plnBrutto">Kwota brutto w PLN (z VAT 23%):</label>
+      <input type="number" id="plnBrutto" step="0.01" min="0" placeholder="Wprowadź lub przeliczana z netto">
 
-            let finalPrice, multiplier, modeText, netPlnAmount;
+      <label for="currency">Waluta docelowa:</label>
+      <select id="currency">
+        <option value="EUR" selected>EUR</option>
+        <option value="USD">USD</option>
+      </select>
+      <button type="button" id="refreshRateBtn">Odśwież kurs</button>
 
-            if (calculationMode === 'gross') {
-                const eurAmount = plnAmount * exchangeRate;
-                finalPrice = eurAmount * (1 + commission);
-                multiplier = exchangeRate * (1 + commission);
-                modeText = "Brutto + prowizja";
-                netPlnAmount = plnAmount / (1 + vatRate);
-            } else {
-                if (vatRate === 0) {
-                    netPlnAmount = plnAmount;
-                } else {
-                    netPlnAmount = plnAmount / (1 + vatRate);
-                }
-                const netEurAmount = netPlnAmount * exchangeRate;
-                finalPrice = netEurAmount * (1 + commission);
-                multiplier = (exchangeRate / (vatRate === 0 ? 1 : 1 + vatRate)) * (1 + commission);
-                modeText = `Netto + prowizja (VAT ${vatRate * 100}%)`;
-            }
+      <label for="exchangeRate">Kurs PLN/<span id="currencyLabel">EUR</span>:</label>
+      <p id="exchangeInfo">Pobieranie kursu...</p>
+      <input type="number" id="exchangeRate" step="0.0001" min="0" required>
 
-            const currencySymbol = document.getElementById('currency').value;
+      <label for="commission">Prowizja (%):</label>
+      <input type="number" id="commission" value="15" step="0.1" min="0" max="100" required>
 
-            resultDiv.innerHTML = 
-                `Kwota netto w PLN: ${netPlnAmount.toFixed(2)} PLN<br>` +
-                `Cena końcowa w ${currencySymbol} (${modeText}): ${finalPrice.toFixed(2)} ${currencySymbol}<br>` +
-                `Mnożnik: ${multiplier.toFixed(4)}`;
-        }
+      <label for="vatRate">Stawka VAT dla klienta (%):</label>
+      <input type="number" id="vatRate" value="23" step="0.1" min="0" max="100" required>
+    </form>
 
-        function applyPreset(currency, vat) {
-            document.getElementById('currency').value = currency;
-            document.getElementById('vatRate').value = vat;
-            document.getElementById('currencyLabel').innerText = currency;
-            fetchExchangeRate(currency);
-        }
+    <div id="result"></div>
+  </div>
 
-        const exchangeRateInput = document.getElementById('exchangeRate');
-        const currencyLabel = document.getElementById('currencyLabel');
-        const exchangeInfo = document.getElementById('exchangeInfo');
-        const currencySelect = document.getElementById('currency');
+  <script>
+    let lastChanged = null;
+    const VAT23 = 0.23;
 
-        function fetchExchangeRate(currency) {
-            exchangeInfo.innerText = 'Pobieranie kursu...';
-            fetch(`https://api.frankfurter.app/latest?from=PLN&to=${currency}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data && data.rates && data.rates[currency]) {
-                        const rate = data.rates[currency];
-                        exchangeRateInput.value = rate.toFixed(4);
-                        const now = new Date();
-                        const dateStr = now.toLocaleDateString();
-                        const timeStr = now.toLocaleTimeString();
-                        exchangeInfo.innerText = `Aktualny kurs PLN/${currency}: ${rate.toFixed(4)} (z dnia ${dateStr}, godz. ${timeStr})`;
-                        currencyLabel.innerText = currency;
-                        calculatePrice();
-                    } else {
-                        exchangeInfo.innerText = 'Nie udało się pobrać kursu.';
-                    }
-                })
-                .catch(() => {
-                    exchangeInfo.innerText = 'Błąd połączenia. Sprawdź internet.';
-                });
-        }
+    function syncFields(source) {
+      const netto = parseFloat(document.getElementById('plnNetto').value);
+      const brutto = parseFloat(document.getElementById('plnBrutto').value);
 
-        currencySelect.addEventListener('change', function () {
-            fetchExchangeRate(this.value);
+      if (source === 'netto' && !isNaN(netto)) {
+        document.getElementById('plnBrutto').value = (netto * (1 + VAT23)).toFixed(2);
+      }
+      if (source === 'brutto' && !isNaN(brutto)) {
+        document.getElementById('plnNetto').value = (brutto / (1 + VAT23)).toFixed(2);
+      }
+
+      calculatePrice();
+    }
+
+    function validateInputs(netto, exchangeRate, commission, vatRate, resultDiv) {
+      if (isNaN(netto) || netto <= 0) {
+        resultDiv.innerHTML = '<span class="error">Kwota netto musi być dodatnia.</span>'; return false;
+      }
+      if (isNaN(exchangeRate) || exchangeRate <= 0) {
+        resultDiv.innerHTML = '<span class="error">Kurs waluty musi być dodatni.</span>'; return false;
+      }
+      if (isNaN(commission) || commission < 0) {
+        resultDiv.innerHTML = '<span class="error">Prowizja nie może być ujemna.</span>'; return false;
+      }
+      if (isNaN(vatRate) || vatRate < 0) {
+        resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>'; return false;
+      }
+      return true;
+    }
+
+    function calculatePrice() {
+      const netto = parseFloat(document.getElementById('plnNetto').value);
+      const brutto = netto * (1 + VAT23);
+      const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
+      const commission = parseFloat(document.getElementById('commission').value) / 100;
+      const vatRate = parseFloat(document.getElementById('vatRate').value) / 100;
+      const currency = document.getElementById('currency').value;
+      const resultDiv = document.getElementById('result');
+
+      if (!validateInputs(netto, exchangeRate, commission, vatRate, resultDiv)) return;
+
+      const bruttoClient = netto * (1 + vatRate);
+      const priceInCurrency = bruttoClient * exchangeRate;
+      const finalPrice = priceInCurrency * (1 + commission);
+
+      const multiplierNetto = finalPrice / netto;
+      const multiplierBrutto = finalPrice / brutto;
+
+      resultDiv.innerHTML = `
+        <strong>Cena końcowa w ${currency} (dla klienta):</strong> ${finalPrice.toFixed(2)} ${currency}<br><br>
+        Mnożnik netto → ${currency}: ${multiplierNetto.toFixed(6)}<br>
+        Mnożnik brutto (PLN z VAT 23%) → ${currency}: ${multiplierBrutto.toFixed(6)}<br>
+        <span class="tooltip">Pomnóż kwotę netto lub brutto w PLN przez mnożnik, aby uzyskać cenę w ${currency}.</span>
+      `;
+    }
+
+    function applyPreset(currency, vat) {
+      document.getElementById('currency').value = currency;
+      document.getElementById('vatRate').value = vat;
+      document.getElementById('currencyLabel').innerText = currency;
+      fetchExchangeRate(currency);
+    }
+
+    function fetchExchangeRate(currency) {
+      const exchangeInfo = document.getElementById('exchangeInfo');
+      const exchangeRateInput = document.getElementById('exchangeRate');
+      exchangeInfo.innerText = 'Pobieranie kursu...';
+
+      fetch(`https://api.frankfurter.app/latest?from=PLN&to=${currency}`)
+        .then(response => response.json())
+        .then(data => {
+          const rate = data.rates[currency];
+          exchangeRateInput.value = rate.toFixed(4);
+          const now = new Date();
+          exchangeInfo.innerText = `Kurs PLN/${currency}: ${rate.toFixed(4)} (${now.toLocaleString('pl-PL')})`;
+          calculatePrice();
+        })
+        .catch(() => {
+          exchangeInfo.innerText = 'Błąd pobierania kursu.';
         });
+    }
 
-        document.getElementById('refreshRateBtn').addEventListener('click', function () {
-            fetchExchangeRate(currencySelect.value);
-        });
+    document.getElementById('plnNetto').addEventListener('input', () => {
+      syncFields('netto');
+    });
 
-        const inputs = document.querySelectorAll('#plnAmount, #exchangeRate, #commission, #vatRate');
-        inputs.forEach(input => {
-            input.addEventListener('input', calculatePrice);
-        });
+    document.getElementById('plnBrutto').addEventListener('input', () => {
+      syncFields('brutto');
+    });
 
-        const radioButtons = document.querySelectorAll('input[name="calculationMode"]');
-        radioButtons.forEach(radio => {
-            radio.addEventListener('change', calculatePrice);
-        });
+    ['exchangeRate', 'commission', 'vatRate'].forEach(id => {
+      document.getElementById(id).addEventListener('input', calculatePrice);
+    });
 
-        document.getElementById('priceForm').addEventListener('submit', function (event) {
-            event.preventDefault();
-            calculatePrice();
-        });
+    document.getElementById('currency').addEventListener('change', () => {
+      document.getElementById('currencyLabel').innerText = document.getElementById('currency').value;
+      fetchExchangeRate(document.getElementById('currency').value);
+    });
 
-        fetchExchangeRate('EUR');
-    </script>
+    document.getElementById('refreshRateBtn').addEventListener('click', () => {
+      fetchExchangeRate(document.getElementById('currency').value);
+    });
+
+    // Start
+    fetchExchangeRate('EUR');
+  </script>
 </body>
 </html>
