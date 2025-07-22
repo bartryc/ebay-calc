@@ -11,12 +11,22 @@
       margin: 20px auto;
       padding: 20px;
       background-color: #f9f9f9;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    body.dark-mode {
+      background-color: #000000;
+      color: #e0e0e0;
     }
     .container {
       background-color: white;
       padding: 20px;
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: background-color 0.3s, color 0.3s;
+    }
+    body.dark-mode .container {
+      background-color: #2c2c2c;
+      box-shadow: 0 2px 4px rgba(255,255,255,0.1);
     }
     label {
       display: block;
@@ -30,6 +40,14 @@
       border: 1px solid #ccc;
       border-radius: 4px;
       box-sizing: border-box;
+      background-color: #fff;
+      color: #333;
+      transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+    }
+    body.dark-mode input[type="number"], body.dark-mode select {
+      background-color: #3a3a3a;
+      color: #e0e0e0;
+      border-color: #555;
     }
     .preset-buttons {
       display: flex;
@@ -48,10 +66,19 @@
     .preset-buttons button:hover {
       background-color: #5a6268;
     }
+    body.dark-mode .preset-buttons button {
+      background-color: #4a4a4a;
+    }
+    body.dark-mode .preset-buttons button:hover {
+      background-color: #3a3a3a;
+    }
     #result {
       margin-top: 20px;
       font-size: 1.2em;
       color: #333;
+    }
+    body.dark-mode #result {
+      color: #e0e0e0;
     }
     .error {
       color: #d9534f;
@@ -63,32 +90,72 @@
       color: #555;
       margin-bottom: 10px;
     }
-	#refreshRateBtn {
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-bottom: 16px;
-}
-#refreshRateBtn:hover {
-  background-color: #0056b3;
-}
-.currency-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.currency-row select {
-  flex: 1;
-}
-.currency-row button {
-  white-space: nowrap;
-}
+    body.dark-mode #exchangeInfo, body.dark-mode .tooltip {
+      color: #aaa;
+    }
+    #refreshRateBtn {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 16px;
+    }
+    #refreshRateBtn:hover {
+      background-color: #0056b3;
+    }
+    body.dark-mode #refreshRateBtn {
+      background-color: #1e90ff;
+    }
+    body.dark-mode #refreshRateBtn:hover {
+      background-color: #1c86ee;
+    }
+    .currency-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .currency-row select {
+      flex: 1;
+    }
+    .currency-row button {
+      white-space: nowrap;
+    }
+    #themeToggleBtn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      background-color: #6c757d;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    #themeToggleBtn:hover {
+      background-color: #5a6268;
+    }
+    body.dark-mode #themeToggleBtn {
+      background-color: #4a4a4a;
+    }
+    body.dark-mode #themeToggleBtn:hover {
+      background-color: #3a3a3a;
+    }
+    footer {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 0.8em;
+      color: #777;
+    }
+    body.dark-mode footer {
+      color: #aaa;
+    }
   </style>
 </head>
 <body>
+  <button id="themeToggleBtn">Włącz tryb ciemny</button>
   <div class="container">
     <h2>Przelicznik ceny eBay (PLN → EUR/USD)</h2>
 
@@ -105,14 +172,17 @@
       <label for="plnBrutto">Kwota brutto w PLN (z VAT 23%):</label>
       <input type="number" id="plnBrutto" step="0.01" min="0" placeholder="Wprowadź lub przeliczana z netto">
 
-<label for="currency">Waluta docelowa:</label>
-<div class="currency-row">
-  <select id="currency">
-    <option value="EUR" selected>EUR</option>
-    <option value="USD">USD</option>
-  </select>
-  <button type="button" id="refreshRateBtn">Odśwież kurs</button>
-</div>
+      <label for="ebayPrice">Docelowa cena na eBay w <span id="ebayCurrencyLabel">EUR</span>:</label>
+      <input type="number" id="ebayPrice" step="0.01" min="0" placeholder="Wprowadź docelową cenę na eBay">
+
+      <label for="currency">Waluta docelowa:</label>
+      <div class="currency-row">
+        <select id="currency">
+          <option value="EUR" selected>EUR</option>
+          <option value="USD">USD</option>
+        </select>
+        <button type="button" id="refreshRateBtn">Odśwież kurs</button>
+      </div>
 
       <label for="exchangeRate">Kurs PLN/<span id="currencyLabel">EUR</span>:</label>
       <p id="exchangeInfo">Pobieranie kursu...</p>
@@ -126,30 +196,77 @@
     </form>
 
     <div id="result"></div>
+    <footer>Wersja 0.6 ;)</footer>
   </div>
 
   <script>
     let lastChanged = null;
     const VAT23 = 0.23;
+    const DEFAULT_RATES = { EUR: 4.3, USD: 3.9 }; // Fallback exchange rates
+
+    // Dark mode functionality
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const body = document.body;
+
+    // Load theme from localStorage
+    if (localStorage.getItem('theme') === 'dark') {
+      body.classList.add('dark-mode');
+      themeToggleBtn.textContent = 'Włącz tryb jasny';
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+      body.classList.toggle('dark-mode');
+      if (body.classList.contains('dark-mode')) {
+        themeToggleBtn.textContent = 'Włącz tryb jasny';
+        localStorage.setItem('theme', 'dark');
+      } else {
+        themeToggleBtn.textContent = 'Włącz tryb ciemny';
+        localStorage.setItem('theme', 'light');
+      }
+    });
 
     function syncFields(source) {
-      const netto = parseFloat(document.getElementById('plnNetto').value);
-      const brutto = parseFloat(document.getElementById('plnBrutto').value);
+      const nettoInput = document.getElementById('plnNetto');
+      const bruttoInput = document.getElementById('plnBrutto');
+      const ebayPriceInput = document.getElementById('ebayPrice');
+      const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
+      const commission = parseFloat(document.getElementById('commission').value) / 100;
+      const vatRate = parseFloat(document.getElementById('vatRate').value) / 100;
 
-      if (source === 'netto' && !isNaN(netto)) {
-        document.getElementById('plnBrutto').value = (netto * (1 + VAT23)).toFixed(2);
-      }
-      if (source === 'brutto' && !isNaN(brutto)) {
-        document.getElementById('plnNetto').value = (brutto / (1 + VAT23)).toFixed(2);
+      if (source === 'netto' && !isNaN(parseFloat(nettoInput.value))) {
+        const netto = parseFloat(nettoInput.value);
+        bruttoInput.value = (netto * (1 + VAT23)).toFixed(2);
+        if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate)) {
+          const bruttoClient = netto * (1 + vatRate);
+          const priceInCurrency = bruttoClient * exchangeRate;
+          const finalPrice = priceInCurrency * (1 + commission);
+          ebayPriceInput.value = finalPrice.toFixed(2);
+        }
+      } else if (source === 'brutto' && !isNaN(parseFloat(bruttoInput.value))) {
+        const brutto = parseFloat(bruttoInput.value);
+        nettoInput.value = (brutto / (1 + VAT23)).toFixed(2);
+        if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate)) {
+          const netto = brutto / (1 + VAT23);
+          const bruttoClient = netto * (1 + vatRate);
+          const priceInCurrency = bruttoClient * exchangeRate;
+          const finalPrice = priceInCurrency * (1 + commission);
+          ebayPriceInput.value = finalPrice.toFixed(2);
+        }
+      } else if (source === 'ebayPrice' && !isNaN(parseFloat(ebayPriceInput.value))) {
+        const ebayPrice = parseFloat(ebayPriceInput.value);
+        if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate) && exchangeRate > 0) {
+          const priceInCurrency = ebayPrice / (1 + commission);
+          const bruttoClient = priceInCurrency / exchangeRate;
+          const netto = bruttoClient / (1 + vatRate);
+          nettoInput.value = netto.toFixed(2);
+          bruttoInput.value = (netto * (1 + VAT23)).toFixed(2);
+        }
       }
 
       calculatePrice();
     }
 
-    function validateInputs(netto, exchangeRate, commission, vatRate, resultDiv) {
-      if (isNaN(netto) || netto <= 0) {
-        resultDiv.innerHTML = '<span class="error">Kwota netto musi być dodatnia.</span>'; return false;
-      }
+    function validateInputs(exchangeRate, commission, vatRate, resultDiv) {
       if (isNaN(exchangeRate) || exchangeRate <= 0) {
         resultDiv.innerHTML = '<span class="error">Kurs waluty musi być dodatni.</span>'; return false;
       }
@@ -164,71 +281,114 @@
 
     function calculatePrice() {
       const netto = parseFloat(document.getElementById('plnNetto').value);
-      const brutto = netto * (1 + VAT23);
+      const brutto = isNaN(netto) ? 0 : netto * (1 + VAT23);
       const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
       const commission = parseFloat(document.getElementById('commission').value) / 100;
       const vatRate = parseFloat(document.getElementById('vatRate').value) / 100;
       const currency = document.getElementById('currency').value;
       const resultDiv = document.getElementById('result');
 
-      if (!validateInputs(netto, exchangeRate, commission, vatRate, resultDiv)) return;
+      if (!validateInputs(exchangeRate, commission, vatRate, resultDiv)) return;
 
-      const bruttoClient = netto * (1 + vatRate);
+      const bruttoClient = 1 * (1 + vatRate); // Use 1 as base for multiplier calculation
       const priceInCurrency = bruttoClient * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
 
-      const multiplierNetto = finalPrice / netto;
-      const multiplierBrutto = finalPrice / brutto;
+      const multiplierNetto = finalPrice / 1; // Multiplier based on 1 PLN netto
+      const multiplierBrutto = finalPrice / (1 * (1 + VAT23)); // Multiplier based on 1 PLN brutto with 23% VAT
 
-      resultDiv.innerHTML = `
-        <strong>Cena końcowa w ${currency} (dla klienta):</strong> ${finalPrice.toFixed(2)} ${currency}<br><br>
-        Mnożnik dla ceny netto → ${currency}: ${multiplierNetto.toFixed(6)}<br>
-        Mnożnik dla ceny brutto (PLN z VAT 23%) → ${currency}: ${multiplierBrutto.toFixed(6)}<br><br>
+      let resultHTML = `
+        Mnożnik dla ceny netto → ${currency}: <strong>${multiplierNetto.toFixed(6)}</strong><br>
+        Mnożnik dla ceny brutto (PLN z VAT 23%) → ${currency}: <strong>${multiplierBrutto.toFixed(6)}</strong><br><br>
         <span class="tooltip">Pomnóż kwotę netto lub brutto w PLN przez mnożnik, aby uzyskać cenę w ${currency}.</span>
       `;
+
+      if (!isNaN(netto) && netto > 0) {
+        const bruttoClient = netto * (1 + vatRate);
+        const priceInCurrency = bruttoClient * exchangeRate;
+        const finalPrice = priceInCurrency * (1 + commission);
+        resultHTML = `
+          <strong>Cena końcowa w ${currency} (dla klienta):</strong> ${finalPrice.toFixed(2)} ${currency}<br><br>
+          ${resultHTML}
+        `;
+      }
+
+      resultDiv.innerHTML = resultHTML;
     }
 
     function applyPreset(currency, vat) {
       document.getElementById('currency').value = currency;
       document.getElementById('vatRate').value = vat;
       document.getElementById('currencyLabel').innerText = currency;
+      document.getElementById('ebayCurrencyLabel').innerText = currency;
       fetchExchangeRate(currency);
     }
 
     function fetchExchangeRate(currency) {
       const exchangeInfo = document.getElementById('exchangeInfo');
       const exchangeRateInput = document.getElementById('exchangeRate');
+      const ebayPriceInput = document.getElementById('ebayPrice');
       exchangeInfo.innerText = 'Pobieranie kursu...';
 
       fetch(`https://api.frankfurter.app/latest?from=PLN&to=${currency}`)
-        .then(response => response.json())
+        .then(response => {
+          if (!response.ok) throw new Error('Błąd sieci');
+          return response.json();
+        })
         .then(data => {
           const rate = data.rates[currency];
+          if (!rate) throw new Error('Brak kursu dla wybranej waluty');
           exchangeRateInput.value = rate.toFixed(4);
           const now = new Date();
           exchangeInfo.innerText = `Kurs PLN/${currency}: ${rate.toFixed(4)} (${now.toLocaleString('pl-PL')})`;
-          calculatePrice();
+          if (!isNaN(parseFloat(ebayPriceInput.value)) && lastChanged === 'ebayPrice') {
+            syncFields('ebayPrice');
+          } else {
+            calculatePrice();
+          }
         })
         .catch(() => {
-          exchangeInfo.innerText = 'Błąd pobierania kursu.';
+          const fallbackRate = DEFAULT_RATES[currency] || 4.3; // Use default rate
+          exchangeRateInput.value = fallbackRate.toFixed(4);
+          exchangeInfo.innerText = `Błąd pobierania kursu. Użyto domyślnego kursu PLN/${currency}: ${fallbackRate.toFixed(4)}`;
+          if (!isNaN(parseFloat(ebayPriceInput.value)) && lastChanged === 'ebayPrice') {
+            syncFields('ebayPrice');
+          } else {
+            calculatePrice();
+          }
         });
     }
 
     document.getElementById('plnNetto').addEventListener('input', () => {
+      lastChanged = 'netto';
       syncFields('netto');
     });
 
     document.getElementById('plnBrutto').addEventListener('input', () => {
+      lastChanged = 'brutto';
       syncFields('brutto');
     });
 
+    document.getElementById('ebayPrice').addEventListener('input', () => {
+      lastChanged = 'ebayPrice';
+      syncFields('ebayPrice');
+    });
+
     ['exchangeRate', 'commission', 'vatRate'].forEach(id => {
-      document.getElementById(id).addEventListener('input', calculatePrice);
+      document.getElementById(id).addEventListener('input', () => {
+        if (lastChanged === 'ebayPrice' && !isNaN(parseFloat(document.getElementById('ebayPrice').value))) {
+          syncFields('ebayPrice');
+        } else {
+          calculatePrice();
+        }
+      });
     });
 
     document.getElementById('currency').addEventListener('change', () => {
-      document.getElementById('currencyLabel').innerText = document.getElementById('currency').value;
-      fetchExchangeRate(document.getElementById('currency').value);
+      const selectedCurrency = document.getElementById('currency').value;
+      document.getElementById('currencyLabel').innerText = selectedCurrency;
+      document.getElementById('ebayCurrencyLabel').innerText = selectedCurrency;
+      fetchExchangeRate(selectedCurrency);
     });
 
     document.getElementById('refreshRateBtn').addEventListener('click', () => {
