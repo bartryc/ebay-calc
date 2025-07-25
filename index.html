@@ -161,8 +161,8 @@
 
     <div class="preset-buttons">
       <button type="button" onclick="applyPreset('USD', 0)">USD VAT 0%</button>
+      <button type="button" onclick="applyPreset('EUR', 0)">EUR VAT 0%</button>
       <button type="button" onclick="applyPreset('EUR', 23)">EUR VAT 23%</button>
-      <button type="button" onclick="applyPreset('EUR', 19)">EUR VAT 19%</button>
     </div>
 
     <form id="priceForm">
@@ -192,17 +192,23 @@
       <input type="number" id="commission" value="15" step="0.1" min="0" max="100" required>
 
       <label for="vatRate">Stawka VAT dla klienta (%):</label>
-      <input type="number" id="vatRate" value="23" step="0.1" min="0" max="100" required>
+      <input type="number" id="vatRate" value="23" min="0" max="100" required>
     </form>
 
     <div id="result"></div>
-    <footer>Wersja 0.6 ;)</footer>
+    <footer>Wersja 0.9<br>Grok napisał, @bartryc pilnował :)</footer>
   </div>
 
   <script>
     let lastChanged = null;
-    const VAT23 = 0.23;
+    let originalEbayPrice = null; // Store original eBay price in original currency
+    let originalCurrency = 'EUR'; // Store original currency for eBay price
+    let originalExchangeRate = 4.3; // Store original exchange rate
+    let lastCurrency = 'EUR'; // Track last selected currency
+    let currentExchangeRate = 4.3; // Track current exchange rate
+    const VAT23 = 0.23; // Polish VAT rate
     const DEFAULT_RATES = { EUR: 4.3, USD: 3.9 }; // Fallback exchange rates
+    let isPresetApplied = false; // Track if preset was used
 
     // Dark mode functionality
     const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -229,9 +235,29 @@
       const nettoInput = document.getElementById('plnNetto');
       const bruttoInput = document.getElementById('plnBrutto');
       const ebayPriceInput = document.getElementById('ebayPrice');
+      const vatRateInput = document.getElementById('vatRate');
       const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
       const commission = parseFloat(document.getElementById('commission').value) / 100;
-      const vatRate = parseFloat(document.getElementById('vatRate').value) / 100;
+      const vatRate = parseInt(vatRateInput.value) / 100;
+      const resultDiv = document.getElementById('result');
+
+      // Validate negative inputs
+      if (source === 'netto' && !isNaN(parseFloat(nettoInput.value)) && parseFloat(nettoInput.value) < 0) {
+        resultDiv.innerHTML = '<span class="error">Kwota netto nie może być ujemna.</span>';
+        return;
+      }
+      if (source === 'brutto' && !isNaN(parseFloat(bruttoInput.value)) && parseFloat(bruttoInput.value) < 0) {
+        resultDiv.innerHTML = '<span class="error">Kwota brutto nie może być ujemna.</span>';
+        return;
+      }
+      if (source === 'ebayPrice' && !isNaN(parseFloat(ebayPriceInput.value)) && parseFloat(ebayPriceInput.value) < 0) {
+        resultDiv.innerHTML = '<span class="error">Cena na eBay nie może być ujemna.</span>';
+        return;
+      }
+      if (source === 'vatRate' && !isNaN(parseFloat(vatRateInput.value)) && parseFloat(vatRateInput.value) < 0) {
+        resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>';
+        return;
+      }
 
       if (source === 'netto' && !isNaN(parseFloat(nettoInput.value))) {
         const netto = parseFloat(nettoInput.value);
@@ -240,26 +266,59 @@
           const bruttoClient = netto * (1 + vatRate);
           const priceInCurrency = bruttoClient * exchangeRate;
           const finalPrice = priceInCurrency * (1 + commission);
-          ebayPriceInput.value = finalPrice.toFixed(2);
+          ebayPriceInput.value = finalPrice.toFixed(2); // Display rounded
+          originalEbayPrice = finalPrice; // Store exact original price
+          originalCurrency = document.getElementById('currency').value;
+          originalExchangeRate = exchangeRate;
         }
       } else if (source === 'brutto' && !isNaN(parseFloat(bruttoInput.value))) {
         const brutto = parseFloat(bruttoInput.value);
-        nettoInput.value = (brutto / (1 + VAT23)).toFixed(2);
+        const netto = brutto / (1 + VAT23);
+        nettoInput.value = netto.toFixed(2);
         if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate)) {
-          const netto = brutto / (1 + VAT23);
           const bruttoClient = netto * (1 + vatRate);
           const priceInCurrency = bruttoClient * exchangeRate;
           const finalPrice = priceInCurrency * (1 + commission);
-          ebayPriceInput.value = finalPrice.toFixed(2);
+          ebayPriceInput.value = finalPrice.toFixed(2); // Display rounded
+          originalEbayPrice = finalPrice; // Store exact original price
+          originalCurrency = document.getElementById('currency').value;
+          originalExchangeRate = exchangeRate;
         }
       } else if (source === 'ebayPrice' && !isNaN(parseFloat(ebayPriceInput.value))) {
         const ebayPrice = parseFloat(ebayPriceInput.value);
         if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate) && exchangeRate > 0) {
           const priceInCurrency = ebayPrice / (1 + commission);
           const bruttoClient = priceInCurrency / exchangeRate;
-          const netto = bruttoClient / (1 + vatRate);
+          const netto = bruttoClient / (1 + vatRate); // Use current vatRate
           nettoInput.value = netto.toFixed(2);
           bruttoInput.value = (netto * (1 + VAT23)).toFixed(2);
+          originalEbayPrice = ebayPrice; // Store exact original price
+          originalCurrency = document.getElementById('currency').value;
+          originalExchangeRate = exchangeRate;
+        }
+      } else if (source === 'vatRate' && !isNaN(parseInt(vatRateInput.value))) {
+        const vatRate = Math.max(0, Math.min(100, parseInt(vatRateInput.value))) / 100;
+        vatRateInput.value = parseInt(vatRate * 100); // Ensure VAT rate is integer
+        let netto = parseFloat(nettoInput.value);
+        if (isNaN(netto)) {
+          const brutto = parseFloat(bruttoInput.value);
+          if (!isNaN(brutto)) {
+            netto = brutto / (1 + VAT23);
+            nettoInput.value = netto.toFixed(2);
+          }
+        }
+        if (!isNaN(netto) && netto > 0 && !isNaN(exchangeRate) && !isNaN(commission)) {
+          const bruttoClient = netto * (1 + vatRate);
+          const priceInCurrency = bruttoClient * exchangeRate;
+          const finalPrice = priceInCurrency * (1 + commission);
+          ebayPriceInput.value = finalPrice.toFixed(2); // Update eBay price
+          bruttoInput.value = (netto * (1 + VAT23)).toFixed(2);
+          originalEbayPrice = finalPrice;
+          originalCurrency = document.getElementById('currency').value;
+          originalExchangeRate = exchangeRate;
+        } else {
+          resultDiv.innerHTML = '<span class="error">Wpisz kwotę netto lub brutto, aby przeliczyć cenę z nową stawką VAT.</span>';
+          return;
         }
       }
 
@@ -268,42 +327,54 @@
 
     function validateInputs(exchangeRate, commission, vatRate, resultDiv) {
       if (isNaN(exchangeRate) || exchangeRate <= 0) {
-        resultDiv.innerHTML = '<span class="error">Kurs waluty musi być dodatni.</span>'; return false;
+        resultDiv.innerHTML = '<span class="error">Kurs waluty musi być dodatni.</span>';
+        return false;
       }
       if (isNaN(commission) || commission < 0) {
-        resultDiv.innerHTML = '<span class="error">Prowizja nie może być ujemna.</span>'; return false;
+        resultDiv.innerHTML = '<span class="error">Prowizja nie może być ujemna.</span>';
+        return false;
       }
-      if (isNaN(vatRate) || vatRate < 0) {
-        resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>'; return false;
+      if (isNaN(vatRate) || vatRate < 0 || vatRate > 1) {
+        resultDiv.innerHTML = '<span class="error">Stawka VAT musi być w przedziale 0-100%.</span>';
+        return false;
       }
       return true;
     }
 
     function calculatePrice() {
       const netto = parseFloat(document.getElementById('plnNetto').value);
-      const brutto = isNaN(netto) ? 0 : netto * (1 + VAT23);
+      const brutto = parseFloat(document.getElementById('plnBrutto').value);
+      const ebayPrice = parseFloat(document.getElementById('ebayPrice').value);
       const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
       const commission = parseFloat(document.getElementById('commission').value) / 100;
-      const vatRate = parseFloat(document.getElementById('vatRate').value) / 100;
+      const vatRate = parseInt(document.getElementById('vatRate').value) / 100;
       const currency = document.getElementById('currency').value;
       const resultDiv = document.getElementById('result');
 
-      if (!validateInputs(exchangeRate, commission, vatRate, resultDiv)) return;
+      // Always calculate multipliers, even without inputs
+      if (!validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
+        return;
+      }
 
-      const bruttoClient = 1 * (1 + vatRate); // Use 1 as base for multiplier calculation
+      const bruttoClient = 1 * (1 + vatRate); // Base for multiplier calculation
       const priceInCurrency = bruttoClient * exchangeRate;
-      const finalPrice = priceInCurrency * (1 + commission);
+      const finalPriceMultiplier = priceInCurrency * (1 + commission); // Price in target currency for 1 PLN netto
 
-      const multiplierNetto = finalPrice / 1; // Multiplier based on 1 PLN netto
-      const multiplierBrutto = finalPrice / (1 * (1 + VAT23)); // Multiplier based on 1 PLN brutto with 23% VAT
+      const multiplierNetto = finalPriceMultiplier; // Multiplier based on 1 PLN netto to target currency
+      const multiplierBrutto = finalPriceMultiplier / (1 + VAT23); // Multiplier based on 1 PLN brutto with 23% VAT
 
       let resultHTML = `
         Mnożnik dla ceny netto → ${currency}: <strong>${multiplierNetto.toFixed(6)}</strong><br>
         Mnożnik dla ceny brutto (PLN z VAT 23%) → ${currency}: <strong>${multiplierBrutto.toFixed(6)}</strong><br><br>
-        <span class="tooltip">Pomnóż kwotę netto lub brutto w PLN przez mnożnik, aby uzyskać cenę w ${currency}.</span>
+        <span class="tooltip">Pomnóż kwotę netto lub brutto w PLN przez mnożnik, aby uzyskać cenę na eBay w ${currency}.</span>
       `;
 
-      if (!isNaN(netto) && netto > 0) {
+      if (!isNaN(ebayPrice) && ebayPrice > 0 && lastChanged === 'ebayPrice' && !isPresetApplied) {
+        resultHTML = `
+          <strong>Cena końcowa w ${currency} (dla klienta):</strong> ${ebayPrice.toFixed(2)} ${currency}<br><br>
+          ${resultHTML}
+        `;
+      } else if (!isNaN(netto) && netto > 0) {
         const bruttoClient = netto * (1 + vatRate);
         const priceInCurrency = bruttoClient * exchangeRate;
         const finalPrice = priceInCurrency * (1 + commission);
@@ -311,24 +382,68 @@
           <strong>Cena końcowa w ${currency} (dla klienta):</strong> ${finalPrice.toFixed(2)} ${currency}<br><br>
           ${resultHTML}
         `;
+      } else if (isNaN(netto) && isNaN(brutto) && isNaN(ebayPrice)) {
+        resultDiv.innerHTML = `<span class="error">Wprowadź kwotę netto, brutto lub cenę na eBay, aby zobaczyć cenę końcową.</span><br><br>${resultHTML}`;
+        return;
       }
 
       resultDiv.innerHTML = resultHTML;
     }
 
     function applyPreset(currency, vat) {
+      isPresetApplied = true; // Mark that a preset was applied
       document.getElementById('currency').value = currency;
-      document.getElementById('vatRate').value = vat;
+      document.getElementById('vatRate').value = parseInt(vat); // Ensure integer VAT
       document.getElementById('currencyLabel').innerText = currency;
       document.getElementById('ebayCurrencyLabel').innerText = currency;
+      lastChanged = 'vatRate'; // Treat preset as VAT change
       fetchExchangeRate(currency);
+    }
+
+    function convertEbayPrice(newRate) {
+      if (originalEbayPrice === null || isNaN(originalEbayPrice) || originalExchangeRate === null) return null;
+      return (originalEbayPrice * originalExchangeRate) / newRate; // Convert using original price and rates
+    }
+
+    function updateEbayPriceFromNettoOrBrutto() {
+      const nettoInput = document.getElementById('plnNetto');
+      const bruttoInput = document.getElementById('plnBrutto');
+      const ebayPriceInput = document.getElementById('ebayPrice');
+      const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
+      const commission = parseFloat(document.getElementById('commission').value) / 100;
+      const vatRate = parseInt(document.getElementById('vatRate').value) / 100;
+
+      if (lastChanged === 'netto' && !isNaN(parseFloat(nettoInput.value))) {
+        const netto = parseFloat(nettoInput.value);
+        if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate)) {
+          const bruttoClient = netto * (1 + vatRate);
+          const priceInCurrency = bruttoClient * exchangeRate;
+          const finalPrice = priceInCurrency * (1 + commission);
+          ebayPriceInput.value = finalPrice.toFixed(2); // Display rounded
+        }
+      } else if (lastChanged === 'brutto' && !isNaN(parseFloat(bruttoInput.value))) {
+        const brutto = parseFloat(bruttoInput.value);
+        if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate)) {
+          const netto = brutto / (1 + VAT23);
+          nettoInput.value = netto.toFixed(2); // Update plnNetto
+          const bruttoClient = netto * (1 + vatRate);
+          const priceInCurrency = bruttoClient * exchangeRate;
+          const finalPrice = priceInCurrency * (1 + commission);
+          ebayPriceInput.value = finalPrice.toFixed(2); // Display rounded
+        }
+      }
     }
 
     function fetchExchangeRate(currency) {
       const exchangeInfo = document.getElementById('exchangeInfo');
-      const exchangeRateInput = document.getElementById('exchangeRate');
+      const exchangeRateInp = document.getElementById('exchangeRate');
       const ebayPriceInput = document.getElementById('ebayPrice');
       exchangeInfo.innerText = 'Pobieranie kursu...';
+
+      const convertEbayPriceNeeded = !isNaN(parseFloat(ebayPriceInput.value)) && lastChanged === 'ebayPrice' && lastCurrency !== currency && !isPresetApplied;
+      const updateFromNettoOrBrutto = !isNaN(parseFloat(document.getElementById('plnNetto').value)) && (lastChanged === 'netto' || lastChanged === 'brutto');
+      const oldCurrency = lastCurrency;
+      lastCurrency = currency;
 
       fetch(`https://api.frankfurter.app/latest?from=PLN&to=${currency}`)
         .then(response => {
@@ -338,24 +453,55 @@
         .then(data => {
           const rate = data.rates[currency];
           if (!rate) throw new Error('Brak kursu dla wybranej waluty');
-          exchangeRateInput.value = rate.toFixed(4);
+          exchangeRateInp.value = rate.toFixed(4);
+          currentExchangeRate = rate;
           const now = new Date();
           exchangeInfo.innerText = `Kurs PLN/${currency}: ${rate.toFixed(4)} (${now.toLocaleString('pl-PL')})`;
-          if (!isNaN(parseFloat(ebayPriceInput.value)) && lastChanged === 'ebayPrice') {
-            syncFields('ebayPrice');
+
+          if (convertEbayPriceNeeded) {
+            const newEbayPrice = convertEbayPrice(rate);
+            if (newEbayPrice !== null) {
+              ebayPriceInput.value = newEbayPrice.toFixed(2); // Display rounded
+              if (originalCurrency === currency) {
+                ebayPriceInput.value = originalEbayPrice.toFixed(2); // Restore original price if returning to original currency
+              }
+              syncFields('ebayPrice'); // Trigger full sync for price change
+            }
+          } else if (updateFromNettoOrBrutto) {
+            updateEbayPriceFromNettoOrBrutto();
+            syncFields(lastChanged); // Trigger full sync
+          } else if (isPresetApplied || lastChanged === 'vatRate') {
+            syncFields('vatRate'); // Trigger full sync for VAT change or preset
           } else {
             calculatePrice();
           }
+          isPresetApplied = false; // Reset preset flag after processing
         })
-        .catch(() => {
-          const fallbackRate = DEFAULT_RATES[currency] || 4.3; // Use default rate
-          exchangeRateInput.value = fallbackRate.toFixed(4);
+        .catch(error => {
+          console.error('Błąd pobierania kursu:', error);
+          const fallbackRate = DEFAULT_RATES[currency] || 4.3;
+          exchangeRateInp.value = fallbackRate.toFixed(4);
+          currentExchangeRate = fallbackRate;
           exchangeInfo.innerText = `Błąd pobierania kursu. Użyto domyślnego kursu PLN/${currency}: ${fallbackRate.toFixed(4)}`;
-          if (!isNaN(parseFloat(ebayPriceInput.value)) && lastChanged === 'ebayPrice') {
-            syncFields('ebayPrice');
+
+          if (convertEbayPriceNeeded) {
+            const newEbayPrice = convertEbayPrice(fallbackRate);
+            if (newEbayPrice !== null) {
+              ebayPriceInput.value = newEbayPrice.toFixed(2); // Display rounded
+              if (originalCurrency === currency) {
+                ebayPriceInput.value = originalEbayPrice.toFixed(2); // Restore original price if returning to original currency
+              }
+              syncFields('ebayPrice'); // Trigger full sync
+            }
+          } else if (updateFromNettoOrBrutto) {
+            updateEbayPriceFromNettoOrBrutto();
+            syncFields(lastChanged); // Trigger full sync
+          } else if (isPresetApplied || lastChanged === 'vatRate') {
+            syncFields('vatRate'); // Trigger full sync for VAT change or preset
           } else {
             calculatePrice();
           }
+          isPresetApplied = false; // Reset preset flag after processing
         });
     }
 
@@ -374,10 +520,19 @@
       syncFields('ebayPrice');
     });
 
-    ['exchangeRate', 'commission', 'vatRate'].forEach(id => {
+    document.getElementById('vatRate').addEventListener('input', () => {
+      lastChanged = 'vatRate';
+      syncFields('vatRate');
+    });
+
+    ['exchangeRate', 'commission'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => {
         if (lastChanged === 'ebayPrice' && !isNaN(parseFloat(document.getElementById('ebayPrice').value))) {
           syncFields('ebayPrice');
+        } else if ((lastChanged === 'netto' || lastChanged === 'brutto') && !isNaN(parseFloat(document.getElementById('plnNetto').value))) {
+          syncFields(lastChanged);
+        } else if (lastChanged === 'vatRate' && !isNaN(parseInt(document.getElementById('vatRate').value))) {
+          syncFields('vatRate');
         } else {
           calculatePrice();
         }
