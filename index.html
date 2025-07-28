@@ -1,0 +1,113 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Przelicznik ceny eBay</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <button id="themeToggleBtn">Włącz tryb ciemny</button>
+  <div class="container">
+    <h2>Przelicznik ceny eBay (PLN → EUR/USD/GBP)</h2>
+
+    <div class="preset-buttons">
+      <button type="button" onclick="applyPreset('USD', 0)">USD VAT 0%</button>
+      <button type="button" onclick="applyPreset('EUR', 0)">EUR VAT 0%</button>
+      <button type="button" onclick="applyPreset('EUR', 23)">EUR VAT 23%</button>
+      <button type="button" onclick="applyPreset('GBP', 0)">GBP VAT 0%</button>
+    </div>
+
+    <form id="priceForm">
+      <label for="plnNetto">Kwota netto w PLN:</label>
+      <input type="number" id="plnNetto" step="0.01" min="0" placeholder="Wprowadź kwotę netto">
+
+      <label for="plnBrutto">Kwota brutto w PLN (z VAT 23%):</label>
+      <input type="number" id="plnBrutto" step="0.01" min="0" placeholder="Wprowadź lub przeliczana z netto">
+
+      <label for="ebayPrice">Docelowa cena na eBay w <span id="ebayCurrencyLabel">EUR (z VAT 23%)</span>:</label>
+      <input type="number" id="ebayPrice" step="0.01" min="0" placeholder="Wprowadź docelową cenę na eBay">
+
+      <label for="currency">Waluta docelowa:</label>
+      <div class="currency-row">
+        <select id="currency">
+          <option value="EUR" selected>EUR</option>
+          <option value="USD">USD</option>
+          <option value="GBP">GBP</option>
+        </select>
+        <button type="button" id="refreshRateBtn">Odśwież kurs</button>
+      </div>
+
+      <label for="exchangeRate">Kurs PLN/<span id="currencyLabel">EUR</span>:</label>
+      <p id="exchangeInfo">Pobieranie kursu...</p>
+      <input type="number" id="exchangeRate" step="0.0001" min="0" required disabled>
+
+      <label class="toggle-switch">
+        <input type="checkbox" id="advancedOptionsToggle">
+        <span class="slider"></span>
+        Opcje zaawansowane
+      </label>
+
+      <div id="advancedOptions" class="advanced-options" style="display: none;">
+        <label for="commission">Prowizja (%):</label>
+        <input type="number" id="commission" value="15" step="0.1" min="0" max="100" required>
+
+        <label for="productId">ID produktu w STOCK:</label>
+        <div class="currency-row">
+          <input type="number" id="productId" min="1" placeholder="Wprowadź ID produktu (1-6 cyfr)">
+          <button type="button" id="stockUrlBtn">Otwórz w STOCK</button>
+        </div>
+      </div>
+
+      <label for="vatRate">Stawka VAT dla klienta (%):</label>
+      <input type="number" id="vatRate" value="23" min="0" max="100" required>
+
+      <button type="button" id="clearBtn">Wyczyść</button>
+    </form>
+
+    <div id="result"></div>
+    <footer>Wersja 0.99<br>Grok napisał, @bartryc pilnował :)</footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

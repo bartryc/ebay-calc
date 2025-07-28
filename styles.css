@@ -1,0 +1,200 @@
+body {
+  font-family: Arial, sans-serif;
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 20px;
+  background-color: #f9f9f9;
+  transition: background-color 0.3s, color 0.3s;
+}
+body.dark-mode {
+  background-color: #000000;
+  color: #e0e0e0;
+}
+.container {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: background-color 0.3s, color 0.3s;
+}
+body.dark-mode .container {
+  background-color: #2c2c2c;
+  box-shadow: 0 2px 4px rgba(255,255,255,0.1);
+}
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+input[type="number"], select {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+  background-color: #fff;
+  color: #333;
+  transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+input[type="number"]:disabled {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+body.dark-mode input[type="number"], body.dark-mode select {
+  background-color: #3a3a3a;
+  color: #e0e0e0;
+  border-color: #555;
+}
+body.dark-mode input[type="number"]:disabled {
+  background-color: #4a4a4a;
+  color: #aaa;
+}
+.preset-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.preset-buttons button {
+  flex: 1;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px;
+  cursor: pointer;
+}
+.preset-buttons button:hover {
+  background-color: #5a6268;
+}
+body.dark-mode .preset-buttons button {
+  background-color: #4a4a4a;
+}
+body.dark-mode .preset-buttons button:hover {
+  background-color: #3a3a3a;
+}
+#result {
+  margin-top: 20px;
+  font-size: 1.2em;
+  color: #333;
+}
+body.dark-mode #result {
+  color: #e0e0e0;
+}
+.error {
+  color: #d9534f;
+  font-size: 1em;
+  margin-top: 10px;
+}
+#exchangeInfo, .tooltip {
+  font-size: 0.9em;
+  color: #555;
+  margin-bottom: 10px;
+}
+body.dark-mode #exchangeInfo, body.dark-mode .tooltip {
+  color: #aaa;
+}
+#refreshRateBtn, #stockUrlBtn, #clearBtn {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+#refreshRateBtn:hover, #stockUrlBtn:hover, #clearBtn:hover {
+  background-color: #0056b3;
+}
+body.dark-mode #refreshRateBtn, body.dark-mode #stockUrlBtn, body.dark-mode #clearBtn {
+  background-color: #1e90ff;
+}
+body.dark-mode #refreshRateBtn:hover, body.dark-mode #stockUrlBtn:hover, body.dark-mode #clearBtn:hover {
+  background-color: #1c86ee;
+}
+.currency-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.currency-row select, .currency-row input {
+  flex: 1;
+}
+.currency-row button {
+  white-space: nowrap;
+}
+#themeToggleBtn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 10px 20px;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+#themeToggleBtn:hover {
+  background-color: #5a6268;
+}
+body.dark-mode #themeToggleBtn {
+  background-color: #4a4a4a;
+}
+body.dark-mode #themeToggleBtn:hover {
+  background-color: #3a3a3a;
+}
+footer {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.8em;
+  color: #777;
+}
+body.dark-mode footer {
+  color: #aaa;
+}
+/* Apple-style toggle switch */
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.toggle-switch input[type="checkbox"] {
+  display: none;
+}
+.toggle-switch .slider {
+  position: relative;
+  width: 50px;
+  height: 30px;
+  background-color: #ccc;
+  border-radius: 15px;
+  transition: background-color 0.3s;
+  cursor: pointer;
+}
+.toggle-switch .slider:before {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  background-color: white;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s;
+}
+.toggle-switch input:checked + .slider {
+  background-color: #34c759;
+}
+.toggle-switch input:checked + .slider:before {
+  transform: translateX(20px);
+}
+body.dark-mode .toggle-switch .slider {
+  background-color: #555;
+}
+body.dark-mode .toggle-switch input:checked + .slider {
+  background-color: #1e90ff;
+}
+.advanced-options {
+  padding: 10px 0;
+}
