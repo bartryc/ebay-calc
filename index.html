@@ -42,19 +42,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Przelicznik ceny eBay</title>
+  <title>Przelicznik eBay Pro v2.0</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <button id="themeToggleBtn">Włącz tryb ciemny</button>
+  <div class="top-bar">
+    <div class="app-title">
+      <h1>📊 Przelicznik eBay Pro</h1>
+      <span class="version">v2.0</span>
+    </div>
+    <div class="top-actions">
+      <button id="comparisonBtn" class="btn-icon" title="Porównaj waluty (Ctrl+C)">🔄</button>
+      <button id="historyBtn" class="btn-icon" title="Historia (Ctrl+H)">📈</button>
+      <button id="settingsBtn" class="btn-icon" title="Ustawienia (Ctrl+S)">⚙️</button>
+      <button id="themeToggleBtn" class="btn-icon">🌙</button>
+    </div>
+  </div>
+  
   <div class="container">
-    <h2>Przelicznik ceny eBay (PLN → EUR/USD/GBP)</h2>
+    <div class="calculator-header">
+      <h2>Kalkulator Cen eBay</h2>
+      <div class="export-actions">
+        <button id="exportPDFBtn" class="btn-export">📄 PDF</button>
+        <button id="exportPNGBtn" class="btn-export">🖼️ PNG</button>
+      </div>
+    </div>
 
     <div class="preset-buttons">
-      <button type="button" onclick="applyPreset('USD', 0)">USD VAT 0%</button>
-      <button type="button" onclick="applyPreset('EUR', 0)">EUR VAT 0%</button>
-      <button type="button" onclick="applyPreset('EUR', 23)">EUR VAT 23%</button>
-      <button type="button" onclick="applyPreset('GBP', 0)">GBP VAT 0%</button>
+      <button type="button" data-preset="USD-0" class="preset-btn">🇺🇸 USD VAT 0%</button>
+      <button type="button" data-preset="EUR-0" class="preset-btn">🇪🇺 EUR VAT 0%</button>
+      <button type="button" data-preset="EUR-23" class="preset-btn">🇪🇺 EUR VAT 23%</button>
+      <button type="button" data-preset="GBP-0" class="preset-btn">🇬🇧 GBP VAT 0%</button>
+      <button type="button" data-preset="CHF-0" class="preset-btn">🇨🇭 CHF VAT 0%</button>
     </div>
 
     <form id="priceForm">
@@ -73,6 +95,10 @@
           <option value="EUR" selected>EUR</option>
           <option value="USD">USD</option>
           <option value="GBP">GBP</option>
+          <option value="CHF">CHF</option>
+          <option value="NOK">NOK</option>
+          <option value="SEK">SEK</option>
+          <option value="DKK">DKK</option>
         </select>
         <button type="button" id="refreshRateBtn">Odśwież kurs</button>
       </div>
@@ -105,9 +131,28 @@
     </form>
 
     <div id="result"></div>
-    <footer>Wersja 0.99<br>Grok napisał, @bartryc pilnował :)</footer>
+    
+    <div class="keyboard-shortcuts">
+      <details>
+        <summary>Skróty klawiszowe</summary>
+        <div class="shortcuts-grid">
+          <div><kbd>Ctrl+H</kbd> Historia</div>
+          <div><kbd>Ctrl+S</kbd> Ustawienia</div>
+          <div><kbd>Ctrl+R</kbd> Odśwież kurs</div>
+          <div><kbd>Ctrl+K</kbd> Wyczyść</div>
+          <div><kbd>Ctrl+E</kbd> Eksport PDF</div>
+        </div>
+      </details>
+    </div>
+    
+    <footer>
+      <div class="footer-content">
+        <span>Przelicznik eBay Pro v2.0</span>
+        <span>Powered by TypeScript & Modern Web APIs</span>
+      </div>
+    </footer>
   </div>
 
-  <script src="script.js"></script>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
