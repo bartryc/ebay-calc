@@ -193,6 +193,16 @@ h1 {
   font-size: 0.9em;
 }
 
+.highlight-link-inline {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.highlight-link-inline:hover {
+  text-decoration: underline;
+}
+
 .app-card h2 {
   margin: 0 0 16px;
   font-size: 1.2rem;
