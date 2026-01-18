@@ -7,6 +7,189 @@ let currentExchangeRate = 4.3;
 const VAT23 = 0.23;
 const DEFAULT_RATES = { EUR: 4.3, USD: 3.9, GBP: 5.0 };
 let isPresetApplied = false;
+const numberFormatter = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 });
+let selfTestHideTimer = null;
+const historyEntries = [];
+const historyTimers = {};
+let lastHistorySignature = '';
+let lastClearedHistory = [];
+let restoreHistoryTimer = null;
+const fieldBaselines = {};
+const lastLoggedValues = {};
+
+function getFieldElement(source) {
+  const map = {
+    netto: 'plnNetto',
+    brutto: 'plnBrutto',
+    ebayPrice: 'ebayPrice',
+    vatRate: 'vatRate',
+    exchangeRate: 'exchangeRate',
+    commission: 'commission'
+  };
+  const id = map[source] || source;
+  return document.getElementById(id);
+}
+
+function parseNumber(value) {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function formatPercent(value) {
+  if (!Number.isFinite(value)) return '0';
+  return numberFormatter.format(value);
+}
+
+function hideSelfTestDetails() {
+  const modal = document.getElementById('selfTestModal');
+  modal.style.display = 'none';
+  if (selfTestHideTimer) {
+    clearTimeout(selfTestHideTimer);
+    selfTestHideTimer = null;
+  }
+}
+
+function formatCurrency(value) {
+  if (!Number.isFinite(value)) return '-';
+  return value.toFixed(2);
+}
+
+function enforceTwoDecimals(inputEl) {
+  const raw = inputEl.value;
+  if (!raw) return;
+  const normalized = raw.replace(',', '.');
+  const match = normalized.match(/^-?\d*(?:\.\d{0,2})?/);
+  if (!match) return;
+  const next = match[0];
+  if (next !== raw) {
+    inputEl.value = next;
+  }
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  const restoreBtn = document.getElementById('restoreHistoryBtn');
+  if (!list) return;
+  if (!historyEntries.length) {
+    list.innerHTML = '<div class="history-item"><strong>Brak wpisów</strong><div class="history-meta">Wprowadź dane, aby pojawiła się historia.</div></div>';
+    if (!lastClearedHistory.length) {
+      restoreBtn.style.display = 'none';
+    }
+    return;
+  }
+  list.innerHTML = historyEntries
+    .slice(0, 8)
+    .map((entry, index) => (
+      `<div class="history-item">
+        <div class="history-row">
+          <strong>${entry.title}</strong>
+          <button type="button" class="history-remove" data-index="${index}" aria-label="Usuń wpis">×</button>
+        </div>
+        <div class="history-summary">${entry.summary}</div>
+        <div class="history-meta">${entry.meta} · ${entry.timestamp}</div>
+      </div>`
+    ))
+    .join('');
+}
+
+function addHistoryEntry(source) {
+  const netto = parseNumber(document.getElementById('plnNetto').value);
+  const brutto = parseNumber(document.getElementById('plnBrutto').value);
+  const ebayPrice = parseNumber(document.getElementById('ebayPrice').value);
+  const currency = document.getElementById('currency').value;
+  const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
+  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
+
+  const sourceLabel = {
+    netto: 'ERP netto',
+    brutto: 'ERP brutto',
+    ebayPrice: 'eBay',
+    vatRate: 'VAT',
+    currency: 'Waluta',
+    exchangeRate: 'Kurs',
+    commission: 'Prowizja'
+  }[source] || 'Przeliczenie';
+
+  const timestamp = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const details = [
+    `Netto <span class="history-value">${formatCurrency(netto)}</span> PLN`,
+    `Brutto <span class="history-value">${formatCurrency(brutto)}</span> PLN`,
+    `eBay <span class="history-value">${formatCurrency(ebayPrice)}</span> ${currency}`
+  ].join(' <span class="history-dot">•</span> ');
+  const meta = [
+    `VAT ${Number.isFinite(vatRateRaw) ? vatRateRaw.toFixed(1) : '-'}%`,
+    `Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}%`,
+    `Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency}`
+  ].join(' <span class="history-dot">•</span> ');
+
+  if (!Number.isFinite(netto) && !Number.isFinite(brutto) && !Number.isFinite(ebayPrice)) {
+    return;
+  }
+
+  const signature = `${sourceLabel}|${details}|${meta}`;
+  if (signature === lastHistorySignature) {
+    return;
+  }
+  lastHistorySignature = signature;
+  const loggedEl = getFieldElement(source);
+  if (loggedEl) {
+    lastLoggedValues[source] = loggedEl.value;
+  }
+
+  historyEntries.unshift({
+    title: sourceLabel,
+    summary: details,
+    meta,
+    timestamp
+  });
+
+  if (historyEntries.length > 20) {
+    historyEntries.pop();
+  }
+  renderHistory();
+}
+
+function setFieldBaseline(source) {
+  const el = getFieldElement(source);
+  if (!el) return;
+  fieldBaselines[source] = el.value;
+}
+
+function hasFieldChanged(source) {
+  const el = getFieldElement(source);
+  if (!el) return false;
+  const baseline = fieldBaselines[source];
+  if (baseline === undefined) return el.value !== '';
+  return el.value !== baseline;
+}
+
+function hasValueChangedSinceLog(source) {
+  const el = getFieldElement(source);
+  if (!el) return false;
+  const lastLogged = lastLoggedValues[source];
+  return el.value !== lastLogged;
+}
+
+function scheduleHistoryLog(source) {
+  if (!hasValueChangedSinceLog(source)) return;
+  if (historyTimers[source]) {
+    clearTimeout(historyTimers[source]);
+  }
+  historyTimers[source] = setTimeout(() => {
+    addHistoryEntry(source);
+    historyTimers[source] = null;
+  }, 700);
+}
+
+function flushHistoryLog(source) {
+  if (historyTimers[source]) {
+    clearTimeout(historyTimers[source]);
+    historyTimers[source] = null;
+  }
+  if (!hasFieldChanged(source)) return;
+  addHistoryEntry(source);
+}
 
 // Dark mode functionality
 const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -38,6 +221,7 @@ const ebayCurrencyLabel = document.getElementById('ebayCurrencyLabel');
 advancedOptionsToggle.addEventListener('change', () => {
   advancedOptions.style.display = advancedOptionsToggle.checked ? 'block' : 'none';
   exchangeRateInput.disabled = !advancedOptionsToggle.checked;
+  hideSelfTestDetails();
   calculatePrice();
 });
 
@@ -45,8 +229,9 @@ advancedOptionsToggle.addEventListener('change', () => {
 function updateEbayCurrencyLabel() {
   const currency = document.getElementById('currency').value;
   const vatRateInput = document.getElementById('vatRate');
-  const vatRate = parseInt(vatRateInput.value) || 0; // Default to 0 if invalid
-  ebayCurrencyLabel.innerText = `${currency} (z VAT ${vatRate}%)`;
+  const vatRate = parseNumber(vatRateInput.value);
+  const vatRateDisplay = Number.isFinite(vatRate) ? vatRate : 0;
+  ebayCurrencyLabel.innerText = `${currency} (z VAT ${formatPercent(vatRateDisplay)}%)`;
 }
 
 // Clear button handler
@@ -67,7 +252,160 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   originalEbayPrice = null;
   originalCurrency = 'EUR';
   lastCurrency = 'EUR';
+  hideSelfTestDetails();
+  historyEntries.length = 0;
+  renderHistory();
   fetchExchangeRate('EUR');
+});
+
+function runSelfTest() {
+  const resultDiv = document.getElementById('result');
+  const detailsDiv = document.getElementById('selfTestDetails');
+  const modal = document.getElementById('selfTestModal');
+  const fields = [
+    'plnNetto',
+    'plnBrutto',
+    'ebayPrice',
+    'vatRate',
+    'commission',
+    'currency',
+    'exchangeRate',
+    'productId'
+  ];
+  const snapshot = {};
+  fields.forEach(id => {
+    snapshot[id] = document.getElementById(id).value;
+  });
+  const snapshotState = {
+    lastChanged,
+    isPresetApplied,
+    originalEbayPrice,
+    originalExchangeRate,
+    originalCurrency,
+    lastCurrency,
+    currentExchangeRate,
+    exchangeInfo: document.getElementById('exchangeInfo').innerText,
+    currencyLabel: document.getElementById('currencyLabel').innerText,
+    ebayCurrencyLabel: ebayCurrencyLabel.innerText,
+    advancedChecked: advancedOptionsToggle.checked,
+    advancedDisplay: advancedOptions.style.display,
+    exchangeDisabled: exchangeRateInput.disabled
+  };
+
+  advancedOptionsToggle.checked = true;
+  advancedOptionsToggle.dispatchEvent(new Event('change'));
+
+  document.getElementById('currency').value = 'EUR';
+  document.getElementById('currencyLabel').innerText = 'EUR';
+  document.getElementById('exchangeRate').value = '0.2500';
+  document.getElementById('commission').value = '15';
+  document.getElementById('vatRate').value = '23';
+  updateEbayCurrencyLabel();
+
+  const failures = [];
+  const checks = [];
+  const expectedFinal = (100 * (1 + 0.23) * 0.25 * (1 + 0.15)).toFixed(2);
+
+  lastChanged = 'netto';
+  document.getElementById('plnNetto').value = '100';
+  syncFields('netto');
+  const ebayValue = document.getElementById('ebayPrice').value;
+  if (ebayValue !== expectedFinal) {
+    failures.push(`Test 1: ebayPrice ${ebayValue} zamiast ${expectedFinal}`);
+  } else {
+    checks.push(`Test 1 OK: 100 PLN netto -> ${expectedFinal} (EUR) przy VAT 23%, kurs 0.25 (1 PLN = 0.25 EUR) i prowizji 15%`);
+  }
+
+  lastChanged = 'ebayPrice';
+  document.getElementById('ebayPrice').value = expectedFinal;
+  syncFields('ebayPrice');
+  const nettoValue = parseNumber(document.getElementById('plnNetto').value);
+  if (!Number.isFinite(nettoValue) || Math.abs(nettoValue - 100) > 0.01) {
+    failures.push(`Test 2: plnNetto ${document.getElementById('plnNetto').value} zamiast 100.00`);
+  } else {
+    checks.push('Test 2 OK: cena eBay -> ERP netto wraca do 100.00 (odwrotne przeliczenie)');
+  }
+
+  originalEbayPrice = 100;
+  originalExchangeRate = 0.25;
+  const converted = convertEbayPrice(0.4);
+  if (!Number.isFinite(converted) || Math.abs(converted - 160) > 0.0001) {
+    failures.push(`Test 3: konwersja ${converted} zamiast 160`);
+  } else {
+    checks.push('Test 3 OK: konwersja waluty (100 przy kursie 0.25 -> 160 przy kursie 0.4)');
+  }
+
+  fields.forEach(id => {
+    document.getElementById(id).value = snapshot[id];
+  });
+  lastChanged = snapshotState.lastChanged;
+  isPresetApplied = snapshotState.isPresetApplied;
+  originalEbayPrice = snapshotState.originalEbayPrice;
+  originalExchangeRate = snapshotState.originalExchangeRate;
+  originalCurrency = snapshotState.originalCurrency;
+  lastCurrency = snapshotState.lastCurrency;
+  currentExchangeRate = snapshotState.currentExchangeRate;
+  document.getElementById('exchangeInfo').innerText = snapshotState.exchangeInfo;
+  document.getElementById('currencyLabel').innerText = snapshotState.currencyLabel;
+  ebayCurrencyLabel.innerText = snapshotState.ebayCurrencyLabel;
+  advancedOptionsToggle.checked = snapshotState.advancedChecked;
+  advancedOptions.style.display = snapshotState.advancedDisplay;
+  exchangeRateInput.disabled = snapshotState.exchangeDisabled;
+  updateEbayCurrencyLabel();
+  calculatePrice();
+
+  modal.style.display = 'flex';
+  const resultsList = checks.length
+    ? checks.map(item => `<li>${item}</li>`).join('')
+    : '<li>Brak testów OK.</li>';
+  const failuresList = failures.length
+    ? failures.map(item => `<li>${item}</li>`).join('')
+    : '';
+
+  detailsDiv.innerHTML = [
+    '<div class="self-test-header"><strong id="selfTestTitle">Self-test</strong> <button type="button" id="selfTestClose">Zamknij</button></div>',
+    '<div class="self-test-section">',
+    '<div class="self-test-title">Zakres</div>',
+    '<ol class="self-test-list">',
+    '<li>Przeliczenie ERP → eBay z ustalonymi danymi wejściowymi.</li>',
+    '<li>Przeliczenie eBay → ERP (odwrotne działanie).</li>',
+    '<li>Konwersja ceny eBay między kursami.</li>',
+    '</ol>',
+    '</div>',
+    '<div class="self-test-section">',
+    '<div class="self-test-title">Wyniki</div>',
+    `<ul class="self-test-results ${failures.length ? 'is-fail' : 'is-ok'}">${resultsList}</ul>`,
+    failuresList ? `<div class="self-test-title">Błędy</div><ul class="self-test-results is-fail">${failuresList}</ul>` : '',
+    '</div>'
+  ].join('');
+
+  if (failures.length) {
+    resultDiv.innerHTML = `<strong>Self-test: błędy</strong><br>${failures.join('<br>')}`;
+  } else {
+    resultDiv.innerHTML = '<strong>Self-test OK</strong><br>Wszystkie testy przeszły.';
+  }
+
+  if (selfTestHideTimer) {
+    clearTimeout(selfTestHideTimer);
+  }
+  selfTestHideTimer = setTimeout(() => {
+    hideSelfTestDetails();
+  }, 8000);
+}
+
+document.getElementById('selfTestBtn').addEventListener('click', () => {
+  runSelfTest();
+});
+
+document.getElementById('selfTestModal').addEventListener('click', (event) => {
+  if (event.target && event.target.id === 'selfTestClose') {
+    event.preventDefault();
+    hideSelfTestDetails();
+    return;
+  }
+  if (event.target && event.target.id === 'selfTestModal') {
+    hideSelfTestDetails();
+  }
 });
 
 function syncFields(source) {
@@ -75,33 +413,35 @@ function syncFields(source) {
   const bruttoInput = document.getElementById('plnBrutto');
   const ebayPriceInput = document.getElementById('ebayPrice');
   const vatRateInput = document.getElementById('vatRate');
-  const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
-  const commission = advancedOptionsToggle.checked ? parseFloat(document.getElementById('commission').value) / 100 : 0.15;
-  const vatRate = parseInt(vatRateInput.value) / 100;
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
+  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+  const vatRateRaw = parseNumber(vatRateInput.value);
+  const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
   const resultDiv = document.getElementById('result');
 
   // Validate negative inputs
-  if (source === 'netto' && !isNaN(parseFloat(nettoInput.value)) && parseFloat(nettoInput.value) < 0) {
+  if (source === 'netto' && Number.isFinite(parseNumber(nettoInput.value)) && parseNumber(nettoInput.value) < 0) {
     resultDiv.innerHTML = '<span class="error">Kwota netto nie może być ujemna.</span>';
     return;
   }
-  if (source === 'brutto' && !isNaN(parseFloat(bruttoInput.value)) && parseFloat(bruttoInput.value) < 0) {
+  if (source === 'brutto' && Number.isFinite(parseNumber(bruttoInput.value)) && parseNumber(bruttoInput.value) < 0) {
     resultDiv.innerHTML = '<span class="error">Kwota brutto nie może być ujemna.</span>';
     return;
   }
-  if (source === 'ebayPrice' && !isNaN(parseFloat(ebayPriceInput.value)) && parseFloat(ebayPriceInput.value) < 0) {
+  if (source === 'ebayPrice' && Number.isFinite(parseNumber(ebayPriceInput.value)) && parseNumber(ebayPriceInput.value) < 0) {
     resultDiv.innerHTML = '<span class="error">Cena na eBay nie może być ujemna.</span>';
     return;
   }
-  if (source === 'vatRate' && !isNaN(parseFloat(vatRateInput.value)) && parseFloat(vatRateInput.value) < 0) {
+  if (source === 'vatRate' && Number.isFinite(parseNumber(vatRateInput.value)) && parseNumber(vatRateInput.value) < 0) {
     resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>';
     return;
   }
 
-  if (source === 'netto' && !isNaN(parseFloat(nettoInput.value))) {
-    const netto = parseFloat(nettoInput.value);
+  if (source === 'netto' && Number.isFinite(parseNumber(nettoInput.value))) {
+    const netto = parseNumber(nettoInput.value);
     bruttoInput.value = (netto * (1 + VAT23)).toFixed(2);
-    if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate)) {
+    if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
       const bruttoClient = netto * (1 + vatRate);
       const priceInCurrency = bruttoClient * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
@@ -110,11 +450,11 @@ function syncFields(source) {
       originalCurrency = document.getElementById('currency').value;
       originalExchangeRate = exchangeRate;
     }
-  } else if (source === 'brutto' && !isNaN(parseFloat(bruttoInput.value))) {
-    const brutto = parseFloat(bruttoInput.value);
+  } else if (source === 'brutto' && Number.isFinite(parseNumber(bruttoInput.value))) {
+    const brutto = parseNumber(bruttoInput.value);
     const netto = brutto / (1 + VAT23);
     nettoInput.value = netto.toFixed(2);
-    if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate)) {
+    if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
       const bruttoClient = netto * (1 + vatRate);
       const priceInCurrency = bruttoClient * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
@@ -123,9 +463,9 @@ function syncFields(source) {
       originalCurrency = document.getElementById('currency').value;
       originalExchangeRate = exchangeRate;
     }
-  } else if (source === 'ebayPrice' && !isNaN(parseFloat(ebayPriceInput.value))) {
-    const ebayPrice = parseFloat(ebayPriceInput.value);
-    if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate) && exchangeRate > 0) {
+  } else if (source === 'ebayPrice' && Number.isFinite(parseNumber(ebayPriceInput.value))) {
+    const ebayPrice = parseNumber(ebayPriceInput.value);
+    if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
       const priceInCurrency = ebayPrice / (1 + commission);
       const bruttoClient = priceInCurrency / exchangeRate;
       const netto = bruttoClient / (1 + vatRate);
@@ -135,20 +475,21 @@ function syncFields(source) {
       originalCurrency = document.getElementById('currency').value;
       originalExchangeRate = exchangeRate;
     }
-  } else if (source === 'vatRate' && !isNaN(parseInt(vatRateInput.value))) {
-    const vatRate = Math.max(0, Math.min(100, parseInt(vatRateInput.value))) / 100;
-    vatRateInput.value = parseInt(vatRate * 100);
-    updateEbayCurrencyLabel(); // Ensure label updates with new VAT rate (including 0)
-    let netto = parseFloat(nettoInput.value);
-    if (isNaN(netto)) {
-      const brutto = parseFloat(bruttoInput.value);
-      if (!isNaN(brutto)) {
+  } else if (source === 'vatRate' && Number.isFinite(parseNumber(vatRateInput.value))) {
+    const vatRatePercent = Math.max(0, Math.min(100, parseNumber(vatRateInput.value)));
+    vatRateInput.value = vatRatePercent.toString();
+    updateEbayCurrencyLabel();
+    const vatRateDecimal = vatRatePercent / 100;
+    let netto = parseNumber(nettoInput.value);
+    if (!Number.isFinite(netto)) {
+      const brutto = parseNumber(bruttoInput.value);
+      if (Number.isFinite(brutto)) {
         netto = brutto / (1 + VAT23);
         nettoInput.value = netto.toFixed(2);
       }
     }
-    if (!isNaN(netto) && netto > 0 && !isNaN(exchangeRate) && !isNaN(commission)) {
-      const bruttoClient = netto * (1 + vatRate);
+    if (Number.isFinite(netto) && netto > 0 && validateInputs(exchangeRate, commission, vatRateDecimal, resultDiv)) {
+      const bruttoClient = netto * (1 + vatRateDecimal);
       const priceInCurrency = bruttoClient * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
       ebayPriceInput.value = finalPrice.toFixed(2);
@@ -182,12 +523,14 @@ function validateInputs(exchangeRate, commission, vatRate, resultDiv) {
 }
 
 function calculatePrice() {
-  const netto = parseFloat(document.getElementById('plnNetto').value);
-  const brutto = parseFloat(document.getElementById('plnBrutto').value);
-  const ebayPrice = parseFloat(document.getElementById('ebayPrice').value);
-  const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
-  const commission = advancedOptionsToggle.checked ? parseFloat(document.getElementById('commission').value) / 100 : 0.15;
-  const vatRate = parseInt(document.getElementById('vatRate').value) / 100;
+  const netto = parseNumber(document.getElementById('plnNetto').value);
+  const brutto = parseNumber(document.getElementById('plnBrutto').value);
+  const ebayPrice = parseNumber(document.getElementById('ebayPrice').value);
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
+  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+  const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
+  const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
   const currency = document.getElementById('currency').value;
   const resultDiv = document.getElementById('result');
 
@@ -231,37 +574,39 @@ function calculatePrice() {
 function applyPreset(currency, vat) {
   isPresetApplied = true;
   document.getElementById('currency').value = currency;
-  document.getElementById('vatRate').value = parseInt(vat);
+  document.getElementById('vatRate').value = parseNumber(vat).toString();
   document.getElementById('currencyLabel').innerText = currency;
-  ebayCurrencyLabel.innerText = `${currency} (z VAT ${vat}%)`;
+  ebayCurrencyLabel.innerText = `${currency} (z VAT ${formatPercent(parseNumber(vat))}%)`;
   lastChanged = 'vatRate';
   fetchExchangeRate(currency);
 }
 
 function convertEbayPrice(newRate) {
   if (originalEbayPrice === null || isNaN(originalEbayPrice) || originalExchangeRate === null) return null;
-  return (originalEbayPrice * originalExchangeRate) / newRate;
+  return (originalEbayPrice / originalExchangeRate) * newRate;
 }
 
 function updateEbayPriceFromNettoOrBrutto() {
   const nettoInput = document.getElementById('plnNetto');
   const bruttoInput = document.getElementById('plnBrutto');
   const ebayPriceInput = document.getElementById('ebayPrice');
-  const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
-  const commission = advancedOptionsToggle.checked ? parseFloat(document.getElementById('commission').value) / 100 : 0.15;
-  const vatRate = parseInt(document.getElementById('vatRate').value) / 100;
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
+  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+  const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
+  const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
 
-  if (lastChanged === 'netto' && !isNaN(parseFloat(nettoInput.value))) {
-    const netto = parseFloat(nettoInput.value);
-    if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate)) {
+  if (lastChanged === 'netto' && Number.isFinite(parseNumber(nettoInput.value))) {
+    const netto = parseNumber(nettoInput.value);
+    if (validateInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
       const bruttoClient = netto * (1 + vatRate);
       const priceInCurrency = bruttoClient * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
       ebayPriceInput.value = finalPrice.toFixed(2);
     }
-  } else if (lastChanged === 'brutto' && !isNaN(parseFloat(bruttoInput.value))) {
-    const brutto = parseFloat(bruttoInput.value);
-    if (!isNaN(exchangeRate) && !isNaN(commission) && !isNaN(vatRate)) {
+  } else if (lastChanged === 'brutto' && Number.isFinite(parseNumber(bruttoInput.value))) {
+    const brutto = parseNumber(bruttoInput.value);
+    if (validateInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
       const netto = brutto / (1 + VAT23);
       nettoInput.value = netto.toFixed(2);
       const bruttoClient = netto * (1 + vatRate);
@@ -278,8 +623,11 @@ function fetchExchangeRate(currency) {
   const ebayPriceInput = document.getElementById('ebayPrice');
   exchangeInfo.innerText = 'Pobieranie kursu...';
 
-  const convertEbayPriceNeeded = !isNaN(parseFloat(ebayPriceInput.value)) && lastChanged === 'ebayPrice' && lastCurrency !== currency && !isPresetApplied;
-  const updateFromNettoOrBrutto = !isNaN(parseFloat(document.getElementById('plnNetto').value)) && (lastChanged === 'netto' || lastChanged === 'brutto');
+  const ebayPriceValue = parseNumber(ebayPriceInput.value);
+  const convertEbayPriceNeeded = Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice' && lastCurrency !== currency && !isPresetApplied;
+  const nettoValue = parseNumber(document.getElementById('plnNetto').value);
+  const bruttoValue = parseNumber(document.getElementById('plnBrutto').value);
+  const updateFromNettoOrBrutto = (Number.isFinite(nettoValue) || Number.isFinite(bruttoValue)) && (lastChanged === 'netto' || lastChanged === 'brutto');
   const oldCurrency = lastCurrency;
   lastCurrency = currency;
 
@@ -303,11 +651,14 @@ function fetchExchangeRate(currency) {
           if (originalCurrency === currency) {
             ebayPriceInput.value = originalEbayPrice.toFixed(2);
           }
+          lastChanged = 'ebayPrice';
           syncFields('ebayPrice');
         }
       } else if (updateFromNettoOrBrutto) {
         updateEbayPriceFromNettoOrBrutto();
         syncFields(lastChanged);
+      } else if (Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice') {
+        syncFields('ebayPrice');
       } else if (isPresetApplied || lastChanged === 'vatRate') {
         syncFields('vatRate');
       } else {
@@ -329,11 +680,14 @@ function fetchExchangeRate(currency) {
           if (originalCurrency === currency) {
             ebayPriceInput.value = originalEbayPrice.toFixed(2);
           }
+          lastChanged = 'ebayPrice';
           syncFields('ebayPrice');
         }
       } else if (updateFromNettoOrBrutto) {
         updateEbayPriceFromNettoOrBrutto();
         syncFields(lastChanged);
+      } else if (Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice') {
+        syncFields('ebayPrice');
       } else if (isPresetApplied || lastChanged === 'vatRate') {
         syncFields('vatRate');
       } else {
@@ -356,26 +710,62 @@ document.getElementById('stockUrlBtn').addEventListener('click', () => {
 
 document.getElementById('plnNetto').addEventListener('input', () => {
   lastChanged = 'netto';
+  hideSelfTestDetails();
+  enforceTwoDecimals(document.getElementById('plnNetto'));
   syncFields('netto');
+  scheduleHistoryLog('netto');
+});
+document.getElementById('plnNetto').addEventListener('focus', () => {
+  setFieldBaseline('netto');
+});
+document.getElementById('plnNetto').addEventListener('blur', () => {
+  flushHistoryLog('netto');
 });
 
 document.getElementById('plnBrutto').addEventListener('input', () => {
   lastChanged = 'brutto';
+  hideSelfTestDetails();
+  enforceTwoDecimals(document.getElementById('plnBrutto'));
   syncFields('brutto');
+  scheduleHistoryLog('brutto');
+});
+document.getElementById('plnBrutto').addEventListener('focus', () => {
+  setFieldBaseline('brutto');
+});
+document.getElementById('plnBrutto').addEventListener('blur', () => {
+  flushHistoryLog('brutto');
 });
 
 document.getElementById('ebayPrice').addEventListener('input', () => {
   lastChanged = 'ebayPrice';
+  hideSelfTestDetails();
+  enforceTwoDecimals(document.getElementById('ebayPrice'));
   syncFields('ebayPrice');
+  scheduleHistoryLog('ebayPrice');
+});
+document.getElementById('ebayPrice').addEventListener('focus', () => {
+  setFieldBaseline('ebayPrice');
+});
+document.getElementById('ebayPrice').addEventListener('blur', () => {
+  flushHistoryLog('ebayPrice');
 });
 
 document.getElementById('vatRate').addEventListener('input', () => {
   lastChanged = 'vatRate';
+  hideSelfTestDetails();
   syncFields('vatRate');
+  scheduleHistoryLog('vatRate');
+});
+document.getElementById('vatRate').addEventListener('focus', () => {
+  setFieldBaseline('vatRate');
+});
+document.getElementById('vatRate').addEventListener('blur', () => {
+  flushHistoryLog('vatRate');
 });
 
 ['exchangeRate', 'commission'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => {
+    hideSelfTestDetails();
     if (lastChanged === 'ebayPrice' && !isNaN(parseFloat(document.getElementById('ebayPrice').value))) {
       syncFields('ebayPrice');
     } else if ((lastChanged === 'netto' || lastChanged === 'brutto') && !isNaN(parseFloat(document.getElementById('plnNetto').value))) {
@@ -385,6 +775,13 @@ document.getElementById('vatRate').addEventListener('input', () => {
     } else {
       calculatePrice();
     }
+    scheduleHistoryLog(id);
+  });
+  document.getElementById(id).addEventListener('focus', () => {
+    setFieldBaseline(id);
+  });
+  document.getElementById(id).addEventListener('blur', () => {
+    flushHistoryLog(id);
   });
 });
 
@@ -392,11 +789,64 @@ document.getElementById('currency').addEventListener('change', () => {
   const selectedCurrency = document.getElementById('currency').value;
   document.getElementById('currencyLabel').innerText = selectedCurrency;
   updateEbayCurrencyLabel();
+  hideSelfTestDetails();
   fetchExchangeRate(selectedCurrency);
+  addHistoryEntry('currency');
 });
 
 document.getElementById('refreshRateBtn').addEventListener('click', () => {
   fetchExchangeRate(document.getElementById('currency').value);
+  addHistoryEntry('exchangeRate');
+});
+
+updateEbayCurrencyLabel();
+fetchExchangeRate(document.getElementById('currency').value);
+renderHistory();
+
+document.getElementById('historyList').addEventListener('click', (event) => {
+  const target = event.target;
+  if (!target || !target.classList.contains('history-remove')) return;
+  const index = parseInt(target.getAttribute('data-index'), 10);
+  if (Number.isNaN(index)) return;
+  const item = target.closest('.history-item');
+  if (!item) return;
+  item.classList.add('is-removing');
+  setTimeout(() => {
+    historyEntries.splice(index, 1);
+    renderHistory();
+  }, 170);
+});
+
+document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+  if (!historyEntries.length) return;
+  const confirmed = window.confirm('Wyczyścić całą historię?');
+  if (!confirmed) return;
+  lastClearedHistory = historyEntries.slice();
+  historyEntries.length = 0;
+  lastHistorySignature = '';
+  renderHistory();
+  const restoreBtn = document.getElementById('restoreHistoryBtn');
+  restoreBtn.style.display = 'inline-flex';
+  if (restoreHistoryTimer) {
+    clearTimeout(restoreHistoryTimer);
+  }
+  restoreHistoryTimer = setTimeout(() => {
+    lastClearedHistory = [];
+    restoreBtn.style.display = 'none';
+  }, 8000);
+});
+
+document.getElementById('restoreHistoryBtn').addEventListener('click', () => {
+  if (!lastClearedHistory.length) return;
+  historyEntries.unshift(...lastClearedHistory);
+  historyEntries.splice(20);
+  lastClearedHistory = [];
+  if (restoreHistoryTimer) {
+    clearTimeout(restoreHistoryTimer);
+    restoreHistoryTimer = null;
+  }
+  document.getElementById('restoreHistoryBtn').style.display = 'none';
+  renderHistory();
 });
 
 // Start
