@@ -54,6 +54,27 @@ function formatCurrency(value) {
   return value.toFixed(2);
 }
 
+function updateBaseMultiplier() {
+  const multiplierEl = document.getElementById('baseMultiplierValue');
+  if (!multiplierEl) return;
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
+  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+  const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
+  const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
+
+  if (!Number.isFinite(exchangeRate) || !Number.isFinite(commission) || !Number.isFinite(vatRate)) {
+    multiplierEl.textContent = '—';
+    return;
+  }
+
+  const bruttoClient = 1 * (1 + vatRate);
+  const priceInCurrency = bruttoClient * exchangeRate;
+  const finalPriceMultiplier = priceInCurrency * (1 + commission);
+  const multiplierBrutto = finalPriceMultiplier / (1 + VAT23);
+  multiplierEl.textContent = multiplierBrutto.toFixed(6);
+}
+
 function enforceTwoDecimals(inputEl) {
   const raw = inputEl.value;
   if (!raw) return;
@@ -557,10 +578,7 @@ function calculatePrice() {
 
   const multiplierNetto = finalPriceMultiplier;
   const multiplierBrutto = finalPriceMultiplier / (1 + VAT23);
-  const multiplierEl = document.getElementById('baseMultiplierValue');
-  if (multiplierEl && Number.isFinite(multiplierBrutto)) {
-    multiplierEl.textContent = multiplierBrutto.toFixed(6);
-  }
+  updateBaseMultiplier();
 
   let resultHTML = ``;
 
@@ -657,6 +675,7 @@ function fetchExchangeRate(currency) {
       currentExchangeRate = rate;
       const now = new Date();
       exchangeInfo.innerText = `Kurs PLN/${currency}: ${rate.toFixed(4)} (${now.toLocaleString('pl-PL')})`;
+      updateBaseMultiplier();
 
       if (convertEbayPriceNeeded) {
         const newEbayPrice = convertEbayPrice(rate);
@@ -689,6 +708,7 @@ function fetchExchangeRate(currency) {
       exchangeRateInp.value = fallbackRate.toFixed(4);
       currentExchangeRate = fallbackRate;
       exchangeInfo.innerText = `Błąd pobierania kursu. Użyto domyślnego kursu PLN/${currency}: ${fallbackRate.toFixed(4)}`;
+      updateBaseMultiplier();
 
       if (convertEbayPriceNeeded) {
         const newEbayPrice = convertEbayPrice(fallbackRate);
