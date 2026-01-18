@@ -794,6 +794,7 @@ document.getElementById('vatRate').addEventListener('input', () => {
   lastChanged = 'vatRate';
   hideSelfTestDetails();
   syncFields('vatRate');
+  updateBaseMultiplier();
   scheduleHistoryLog('vatRate');
 });
 document.getElementById('vatRate').addEventListener('focus', () => {
@@ -815,6 +816,7 @@ document.getElementById('vatRate').addEventListener('blur', () => {
     } else {
       calculatePrice();
     }
+    updateBaseMultiplier();
     scheduleHistoryLog(id);
   });
   document.getElementById(id).addEventListener('focus', () => {
