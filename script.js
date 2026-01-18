@@ -259,9 +259,9 @@ document.getElementById('clearBtn').addEventListener('click', () => {
 });
 
 function runSelfTest() {
-  const resultDiv = document.getElementById('result');
   const detailsDiv = document.getElementById('selfTestDetails');
   const modal = document.getElementById('selfTestModal');
+  const alertBanner = document.getElementById('selfTestAlert');
   const fields = [
     'plnNetto',
     'plnBrutto',
@@ -380,9 +380,9 @@ function runSelfTest() {
   ].join('');
 
   if (failures.length) {
-    resultDiv.innerHTML = `<strong>Self-test: błędy</strong><br>${failures.join('<br>')}`;
+    alertBanner.style.display = 'flex';
   } else {
-    resultDiv.innerHTML = '<strong>Self-test OK</strong><br>Wszystkie testy przeszły.';
+    alertBanner.style.display = 'none';
   }
 
   if (selfTestHideTimer) {
@@ -406,6 +406,10 @@ document.getElementById('selfTestModal').addEventListener('click', (event) => {
   if (event.target && event.target.id === 'selfTestModal') {
     hideSelfTestDetails();
   }
+});
+
+document.getElementById('selfTestAlertClose').addEventListener('click', () => {
+  document.getElementById('selfTestAlert').style.display = 'none';
 });
 
 function syncFields(source) {
@@ -544,11 +548,12 @@ function calculatePrice() {
 
   const multiplierNetto = finalPriceMultiplier;
   const multiplierBrutto = finalPriceMultiplier / (1 + VAT23);
+  const multiplierEl = document.getElementById('baseMultiplierValue');
+  if (multiplierEl && Number.isFinite(multiplierBrutto)) {
+    multiplierEl.textContent = multiplierBrutto.toFixed(6);
+  }
 
-  let resultHTML = `
- Mnożnik dla <a href="https://panel-e.baselinker.com/inventory_settings#price_groups" target="_blank">Base</a> → ${currency}: <strong>${multiplierBrutto.toFixed(6)}</strong><br><br>
-    <span class="tooltip">Pomnóż kwotę netto lub brutto w PLN przez mnożnik, aby uzyskać cenę na eBay w ${currency}.</span>
-  `;
+  let resultHTML = ``;
 
   if (!isNaN(ebayPrice) && ebayPrice > 0 && lastChanged === 'ebayPrice' && !isPresetApplied) {
     resultHTML = `

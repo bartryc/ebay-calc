@@ -139,6 +139,28 @@ h1 {
   gap: 22px;
 }
 
+.alert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: rgba(255, 122, 69, 0.15);
+  border: 1px solid rgba(255, 122, 69, 0.4);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.alert-banner button {
+  border: none;
+  background: transparent;
+  font-size: 1.2em;
+  cursor: pointer;
+  color: inherit;
+}
+
 .app-card,
 .info-card {
   background: var(--card);
@@ -146,6 +168,29 @@ h1 {
   border-radius: var(--radius);
   padding: 18px;
   box-shadow: var(--shadow);
+}
+
+.highlight-card {
+  margin-bottom: 16px;
+  border-color: rgba(52, 199, 89, 0.35);
+  background: linear-gradient(135deg, rgba(52, 199, 89, 0.12), rgba(15, 91, 255, 0.05));
+}
+
+.highlight-card h3 {
+  margin: 0 0 8px;
+}
+
+.highlight-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1f9d55;
+  margin-bottom: 6px;
+}
+
+.highlight-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9em;
 }
 
 .app-card h2 {

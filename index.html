@@ -21,6 +21,10 @@
         </div>
       </div>
     </header>
+    <div id="selfTestAlert" class="alert-banner" style="display: none;">
+      <span>Wykryto błędy w self-teście. Kalkulator może nie działać prawidłowo — odśwież stronę.</span>
+      <button type="button" id="selfTestAlertClose" aria-label="Zamknij komunikat">×</button>
+    </div>
 
     <div class="layout">
       <section class="app-card">
@@ -86,6 +90,11 @@
       </section>
 
       <aside class="info-card">
+        <div class="info-card highlight-card">
+          <h3>Mnożnik dla Base</h3>
+          <div class="highlight-value" id="baseMultiplierValue">—</div>
+          <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
+        </div>
         <h3>Historia działań</h3>
         <p>Krótki zapis tego, co przeliczałeś w tej sesji.</p>
         <div id="historyList" class="history-list"></div>
