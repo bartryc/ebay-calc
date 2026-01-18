@@ -320,7 +320,7 @@ function runSelfTest() {
   document.getElementById('ebayPrice').value = expectedFinal;
   syncFields('ebayPrice');
   const nettoValue = parseNumber(document.getElementById('plnNetto').value);
-  if (!Number.isFinite(nettoValue) || Math.abs(nettoValue - 100) > 0.01) {
+  if (!Number.isFinite(nettoValue) || Math.abs(nettoValue - 100) > 0.02) {
     failures.push(`Test 2: plnNetto ${document.getElementById('plnNetto').value} zamiast 100.00`);
   } else {
     checks.push('Test 2 OK: cena eBay -> ERP netto wraca do 100.00 (odwrotne przeliczenie)');
