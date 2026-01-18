@@ -83,7 +83,14 @@ function renderHistory() {
       `<div class="history-item">
         <div class="history-row">
           <strong>${entry.title}</strong>
-          <button type="button" class="history-remove" data-index="${index}" aria-label="Usuń wpis">×</button>
+          <div class="history-actions-inline">
+            <button type="button" class="history-copy" data-index="${index}" aria-label="Kopiuj brutto">
+              <svg class="history-copy-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H10V7h9v14z"/>
+              </svg>
+            </button>
+            <button type="button" class="history-remove" data-index="${index}" aria-label="Usuń wpis">×</button>
+          </div>
         </div>
         <div class="history-summary">${entry.summary}</div>
         <div class="history-meta">${entry.meta} · ${entry.timestamp}</div>
@@ -108,7 +115,8 @@ function addHistoryEntry(source) {
     vatRate: 'VAT',
     currency: 'Waluta',
     exchangeRate: 'Kurs',
-    commission: 'Prowizja'
+    commission: 'Prowizja',
+    preset: 'Preset'
   }[source] || 'Przeliczenie';
 
   const timestamp = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -141,6 +149,7 @@ function addHistoryEntry(source) {
     title: sourceLabel,
     summary: details,
     meta,
+    bruttoValue: Number.isFinite(brutto) ? brutto.toFixed(2) : '',
     timestamp
   });
 
@@ -666,6 +675,9 @@ function fetchExchangeRate(currency) {
         syncFields('ebayPrice');
       } else if (isPresetApplied || lastChanged === 'vatRate') {
         syncFields('vatRate');
+        if (isPresetApplied) {
+          addHistoryEntry('preset');
+        }
       } else {
         calculatePrice();
       }
@@ -695,6 +707,9 @@ function fetchExchangeRate(currency) {
         syncFields('ebayPrice');
       } else if (isPresetApplied || lastChanged === 'vatRate') {
         syncFields('vatRate');
+        if (isPresetApplied) {
+          addHistoryEntry('preset');
+        }
       } else {
         calculatePrice();
       }
@@ -810,16 +825,37 @@ renderHistory();
 
 document.getElementById('historyList').addEventListener('click', (event) => {
   const target = event.target;
-  if (!target || !target.classList.contains('history-remove')) return;
-  const index = parseInt(target.getAttribute('data-index'), 10);
-  if (Number.isNaN(index)) return;
-  const item = target.closest('.history-item');
-  if (!item) return;
-  item.classList.add('is-removing');
-  setTimeout(() => {
-    historyEntries.splice(index, 1);
-    renderHistory();
-  }, 170);
+  if (!target) return;
+  const removeBtn = target.closest('.history-remove');
+  const copyBtn = target.closest('.history-copy');
+
+  if (removeBtn) {
+    const index = parseInt(removeBtn.getAttribute('data-index'), 10);
+    if (Number.isNaN(index)) return;
+    const item = removeBtn.closest('.history-item');
+    if (!item) return;
+    item.classList.add('is-removing');
+    setTimeout(() => {
+      historyEntries.splice(index, 1);
+      renderHistory();
+    }, 170);
+    return;
+  }
+
+  if (copyBtn) {
+    const index = parseInt(copyBtn.getAttribute('data-index'), 10);
+    if (Number.isNaN(index)) return;
+    const entry = historyEntries[index];
+    if (!entry || !entry.bruttoValue) return;
+    navigator.clipboard.writeText(entry.bruttoValue).catch(() => {});
+    copyBtn.classList.add('is-ok');
+    const originalHtml = copyBtn.innerHTML;
+    copyBtn.innerHTML = '<span class="history-copy-ok">✓</span>';
+    setTimeout(() => {
+      copyBtn.classList.remove('is-ok');
+      copyBtn.innerHTML = originalHtml;
+    }, 900);
+  }
 });
 
 document.getElementById('clearHistoryBtn').addEventListener('click', () => {
@@ -853,6 +889,7 @@ document.getElementById('restoreHistoryBtn').addEventListener('click', () => {
   document.getElementById('restoreHistoryBtn').style.display = 'none';
   renderHistory();
 });
+
 
 // Start
 fetchExchangeRate('EUR');
