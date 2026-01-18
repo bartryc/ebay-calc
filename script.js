@@ -582,25 +582,14 @@ function calculatePrice() {
 
   let resultHTML = ``;
 
-  if (!isNaN(ebayPrice) && ebayPrice > 0 && lastChanged === 'ebayPrice' && !isPresetApplied) {
-    resultHTML = `
-      <strong>Cena końcowa w ${currency} (dla klienta):</strong> ${ebayPrice.toFixed(2)} ${currency}<br><br>
-      ${resultHTML}
-    `;
-  } else if (!isNaN(netto) && netto > 0) {
-    const bruttoClient = netto * (1 + vatRate);
-    const priceInCurrency = bruttoClient * exchangeRate;
-    const finalPrice = priceInCurrency * (1 + commission);
-    resultHTML = `
-      <strong>Cena końcowa w ${currency} (dla klienta):</strong> ${finalPrice.toFixed(2)} ${currency}<br><br>
-      ${resultHTML}
-    `;
-  } else if (isNaN(netto) && isNaN(brutto) && isNaN(ebayPrice)) {
-    resultDiv.innerHTML = `<span class="error">Wprowadź kwotę netto, brutto lub cenę na eBay, aby zobaczyć cenę końcową.</span><br><br>${resultHTML}`;
+  if (isNaN(netto) && isNaN(brutto) && isNaN(ebayPrice)) {
+    resultDiv.innerHTML = `<span class="error">Wprowadź kwotę netto, brutto lub cenę na eBay, aby zobaczyć cenę końcową.</span>`;
+    resultDiv.classList.add('is-visible');
     return;
   }
 
   resultDiv.innerHTML = resultHTML;
+  resultDiv.classList.toggle('is-visible', resultHTML.trim().length > 0);
 }
 
 function applyPreset(currency, vat) {

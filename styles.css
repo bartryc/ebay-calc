@@ -309,13 +309,22 @@ input[type="number"]:disabled {
   margin-bottom: 8px;
 }
 
-#result {
-  margin-top: 16px;
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  background: var(--card-2);
-  border: 1px dashed var(--border);
-  font-size: 1.05em;
+#result.info-alert {
+  background: rgba(255, 122, 69, 0.12);
+  border: 1px solid rgba(255, 122, 69, 0.35);
+  color: var(--ink);
+  font-weight: 600;
+  opacity: 0;
+  transform: translateY(-6px);
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 180ms ease, transform 180ms ease, max-height 180ms ease;
+}
+
+#result.info-alert.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 160px;
 }
 
 .error {
