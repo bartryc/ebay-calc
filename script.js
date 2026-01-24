@@ -75,6 +75,14 @@ function updateBaseMultiplier() {
   multiplierEl.textContent = multiplierBrutto.toFixed(6);
 }
 
+function openSearch(urlBase, query) {
+  const trimmed = query.trim();
+  if (!trimmed) return false;
+  const url = `${urlBase}${encodeURIComponent(trimmed)}`;
+  window.open(url, '_blank', 'noopener');
+  return true;
+}
+
 function enforceTwoDecimals(inputEl) {
   const raw = inputEl.value;
   if (!raw) return;
@@ -900,6 +908,22 @@ document.getElementById('restoreHistoryBtn').addEventListener('click', () => {
   document.getElementById('restoreHistoryBtn').style.display = 'none';
   renderHistory();
 });
+
+const partNumberInput = document.getElementById('partNumberInput');
+if (partNumberInput) {
+  document.getElementById('searchAllBtn').addEventListener('click', () => {
+    const query = partNumberInput.value;
+    openSearch('https://www.google.com/search?q=', `"${query}"`);
+    openSearch('https://www.ebay.com/sch/i.html?_nkw=', query);
+    openSearch('https://allegro.pl/listing?string=', query);
+  });
+  partNumberInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      document.getElementById('searchAllBtn').click();
+    }
+  });
+}
 
 
 // Start

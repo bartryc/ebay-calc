@@ -193,6 +193,64 @@ h1 {
   font-size: 0.9em;
 }
 
+.search-card {
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(15, 91, 255, 0.06), rgba(255, 255, 255, 0.6));
+}
+
+.search-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.search-row input[type="text"] {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.search-card input[type="text"] {
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  color: var(--ink);
+}
+
+.search-card input[type="text"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 91, 255, 0.12);
+}
+
+.search-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.search-actions button {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.search-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.search-card input[type="text"] {
+  min-width: 0;
+  width: 100%;
+}
+
 .highlight-link-inline {
   color: var(--accent);
   font-weight: 700;
