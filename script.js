@@ -921,6 +921,7 @@ if (partNumberInput) {
     if (event.key === 'Enter') {
       event.preventDefault();
       document.getElementById('searchAllBtn').click();
+      partNumberInput.value = '';
     }
   });
 }
