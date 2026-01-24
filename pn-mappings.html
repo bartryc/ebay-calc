@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mapowania PN</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Narzędzie sprzedażowe</div>
+        <h1>Mapowania PN → producent</h1>
+        <p class="subtitle">Dodawaj, edytuj i usuwaj mapowania używane w sugestiach.</p>
+      </div>
+      <div class="top-actions">
+        <button id="themeToggleBtn">Włącz tryb ciemny</button>
+      </div>
+    </header>
+
+    <section class="app-card">
+      <div class="mapping-help">
+        <strong>Wzorce:</strong> `x` = cyfra, `*` = dowolny ciąg znaków.
+        <span class="mapping-help-examples">Przykłady: `xxxxx`, `0xxxxx`, `xxxxxx-xxx`</span>
+      </div>
+      <div class="mapping-actions">
+        <div class="mapping-actions-left">
+          <button type="button" id="downloadBackupBtn">Pobierz backup JSON</button>
+          <button type="button" id="restoreBackupBtn">Przywróć z pliku</button>
+        </div>
+        <a class="mapping-link mapping-link-cta" href="index.html">Wróć do kalkulatora</a>
+      </div>
+      <input type="file" id="backupFileInput" accept="application/json" style="display: none;">
+      <div class="search-row">
+        <input type="text" id="pnKeyInput" maxlength="64" placeholder="PN lub wzorzec (np. JVFVR, 100-000000xxx)">
+        <input type="text" id="pnVendorInput" maxlength="64" placeholder="Producent (np. Dell, AMD, HPE)">
+        <div class="search-actions">
+          <button type="button" id="saveMappingBtn" aria-label="Zapisz">✓</button>
+        </div>
+      </div>
+      <div class="search-status" id="pnMappingStatus" aria-live="polite"></div>
+      <div id="mappingList" class="history-list"></div>
+      <div id="patternList" class="history-list"></div>
+    </section>
+  </div>
+
+  <div id="mappingToastStack" class="mapping-toast-stack" role="status" aria-live="polite"></div>
+
+  <div id="mappingModal" class="mapping-modal" style="display: none;">
+    <div class="mapping-modal-card" role="dialog" aria-modal="true" aria-labelledby="mappingModalTitle">
+      <div class="mapping-modal-header">
+        <strong id="mappingModalTitle">Edytuj mapowanie</strong>
+        <button type="button" id="mappingModalClose" aria-label="Zamknij">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <label for="mappingModalKey" id="mappingModalKeyLabel">PN</label>
+        <input type="text" id="mappingModalKey" maxlength="64">
+        <label for="mappingModalVendor">Producent</label>
+        <input type="text" id="mappingModalVendor" maxlength="64">
+      </div>
+      <div class="mapping-modal-actions">
+        <button type="button" id="mappingModalSave">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="pn-mappings.js"></script>
+  <script>
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const body = document.body;
+
+    if (localStorage.getItem('theme') === 'dark') {
+      body.classList.add('dark-mode');
+      themeToggleBtn.textContent = 'Włącz tryb jasny';
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+      body.classList.toggle('dark-mode');
+      if (body.classList.contains('dark-mode')) {
+        themeToggleBtn.textContent = 'Włącz tryb jasny';
+        localStorage.setItem('theme', 'dark');
+      } else {
+        themeToggleBtn.textContent = 'Włącz tryb ciemny';
+        localStorage.setItem('theme', 'light');
+      }
+    });
+
+    const list = document.getElementById('mappingList');
+    const keyInput = document.getElementById('pnKeyInput');
+    const vendorInput = document.getElementById('pnVendorInput');
+    const statusEl = document.getElementById('pnMappingStatus');
+    const saveBtn = document.getElementById('saveMappingBtn');
+    const toastStack = document.getElementById('mappingToastStack');
+    const downloadBackupBtn = document.getElementById('downloadBackupBtn');
+    const restoreBackupBtn = document.getElementById('restoreBackupBtn');
+    const backupFileInput = document.getElementById('backupFileInput');
+    const modal = document.getElementById('mappingModal');
+    const modalClose = document.getElementById('mappingModalClose');
+    const modalSave = document.getElementById('mappingModalSave');
+    const modalKey = document.getElementById('mappingModalKey');
+    const modalVendor = document.getElementById('mappingModalVendor');
+    const modalKeyLabel = document.getElementById('mappingModalKeyLabel');
+
+    function openModal(mode, payload) {
+      modal.dataset.mode = mode;
+      if (mode === 'exact') {
+        modal.dataset.originalKey = payload.key;
+        modalKeyLabel.textContent = 'PN';
+        modalKey.value = payload.key;
+      } else {
+        modal.dataset.patternIndex = payload.index;
+        modalKeyLabel.textContent = 'Wzorzec';
+        modalKey.value = payload.pattern;
+      }
+      modalVendor.value = payload.vendor;
+      modal.style.display = 'flex';
+      modalKey.focus();
+    }
+
+    function closeModal() {
+      modal.style.display = 'none';
+      modal.dataset.mode = '';
+      modal.dataset.originalKey = '';
+      modal.dataset.patternIndex = '';
+    }
+
+    function showToast(message, variant) {
+      if (!toastStack) return;
+      const toast = document.createElement('div');
+      toast.className = 'mapping-toast';
+      if (variant === 'warn') toast.classList.add('is-warn');
+      if (variant === 'ok') toast.classList.add('is-ok');
+      toast.textContent = message || '';
+      toastStack.append(toast);
+      requestAnimationFrame(() => {
+        toast.classList.add('is-visible');
+      });
+      setTimeout(() => {
+        toast.classList.remove('is-visible');
+        setTimeout(() => toast.remove(), 200);
+      }, 10000);
+    }
+
+    function isValidPattern(value) {
+      const normalized = value.replace(/\s+/g, '');
+      return /^[a-z0-9x*\-]+$/i.test(normalized);
+    }
+
+    function shouldTreatAsPattern(value) {
+      return /\*/.test(value) || /^[0-9x*\-]+$/i.test(value);
+    }
+
+    function downloadBackup() {
+      const data = window.PN_MAPPINGS_API.get();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const now = new Date();
+      const stamp = now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pn-mappings-backup-${stamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast('Backup zapisany do pliku.', 'ok');
+    }
+
+    function restoreBackupFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          const normalized = window.PN_MAPPINGS_API.normalizeData(parsed);
+          window.PN_MAPPINGS_API.set(normalized);
+          renderMappings();
+          showToast('Przywrócono backup z pliku.', 'ok');
+        } catch (error) {
+          showToast('Nie udało się odczytać pliku backupu.', 'warn');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function renderMappings() {
+      const data = window.PN_MAPPINGS_API.get();
+      const entries = Object.entries(data.exact || {});
+      if (!entries.length) {
+        list.innerHTML = '<div class="history-item"><strong>Brak mapowań</strong><div class="history-meta">Dodaj pierwsze mapowanie powyżej.</div></div>';
+      } else {
+        list.innerHTML = entries
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([key, vendor]) => `
+            <div class="history-item">
+              <div class="history-row">
+                <strong>${key}</strong>
+                <div class="history-actions-inline">
+                  <button type="button" class="history-copy" data-key="${key}" aria-label="Edytuj">Edytuj</button>
+                  <button type="button" class="history-remove" data-key="${key}" aria-label="Usuń">×</button>
+                </div>
+              </div>
+              <div class="history-summary">Producent: <span class="history-value">${vendor}</span></div>
+            </div>
+          `)
+          .join('');
+      }
+
+      const patterns = Array.isArray(data.patterns) ? data.patterns : [];
+      const patternList = document.getElementById('patternList');
+      if (patternList) {
+        if (!patterns.length) {
+          patternList.innerHTML = '<div class="history-item"><strong>Brak wzorców</strong><div class="history-meta">Dodaj pierwszy wzorzec powyżej.</div></div>';
+        } else {
+          patternList.innerHTML = patterns
+            .map((rule, index) => `
+              <div class="history-item">
+                <div class="history-row">
+                  <strong>Wzorzec: ${rule.pattern}</strong>
+                  <div class="history-actions-inline">
+                    <button type="button" class="history-copy" data-pattern-index="${index}" aria-label="Edytuj">Edytuj</button>
+                    <button type="button" class="history-remove" data-pattern-index="${index}" aria-label="Usuń">×</button>
+                  </div>
+                </div>
+                <div class="history-summary">Producent: <span class="history-value">${rule.vendor}</span></div>
+              </div>
+            `)
+            .join('');
+        }
+      }
+    }
+
+    function saveMapping() {
+      const rawKey = keyInput.value.trim();
+      const vendor = vendorInput.value.trim();
+      if (!rawKey || !vendor) {
+        showToast('Uzupełnij PN i producenta.', 'warn');
+        return;
+      }
+      const data = window.PN_MAPPINGS_API.get();
+      const isPattern = shouldTreatAsPattern(rawKey);
+      if (isPattern) {
+        if (!isValidPattern(rawKey)) {
+          showToast('Wzorzec może zawierać tylko litery, cyfry, x, * i -.', 'warn');
+          return;
+        }
+        const pattern = window.PN_MAPPINGS_API.normalizePattern(rawKey);
+        data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
+        if (data.patterns.some(rule => rule.pattern === pattern)) {
+          showToast(`Wzorzec ${pattern} już istnieje.`, 'warn');
+          return;
+        }
+        data.patterns.push({ pattern, vendor });
+        window.PN_MAPPINGS_API.set(data);
+        showToast(`Zapisano wzorzec: ${pattern} → ${vendor}`, 'ok');
+      } else {
+        const key = window.PN_MAPPINGS_API.normalize(rawKey);
+        data.exact = data.exact || {};
+        if (data.exact[key]) {
+          showToast(`PN ${key} już istnieje.`, 'warn');
+          return;
+        }
+        data.exact[key] = vendor;
+        window.PN_MAPPINGS_API.set(data);
+        showToast(`Zapisano: ${key} → ${vendor}`, 'ok');
+      }
+      keyInput.value = '';
+      vendorInput.value = '';
+      renderMappings();
+    }
+
+    saveBtn.addEventListener('click', () => {
+      saveMapping();
+    });
+    [keyInput, vendorInput].forEach((input) => {
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          saveMapping();
+        }
+      });
+    });
+    downloadBackupBtn.addEventListener('click', () => {
+      downloadBackup();
+    });
+    restoreBackupBtn.addEventListener('click', () => {
+      backupFileInput.click();
+    });
+    backupFileInput.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (file) restoreBackupFile(file);
+      backupFileInput.value = '';
+    });
+
+    list.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!target) return;
+      if (target.classList.contains('history-remove')) {
+        const key = target.getAttribute('data-key');
+        const data = window.PN_MAPPINGS_API.get();
+        if (data.exact) {
+          delete data.exact[key];
+          window.PN_MAPPINGS_API.set(data);
+        }
+        renderMappings();
+        showToast(`Usunięto: ${key}`, 'ok');
+        return;
+      }
+      if (target.classList.contains('history-copy')) {
+        const key = target.getAttribute('data-key');
+        const data = window.PN_MAPPINGS_API.get();
+        if (data.exact && data.exact[key]) {
+          openModal('exact', { key, vendor: data.exact[key] });
+        }
+      }
+    });
+
+    patternList.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!target) return;
+      if (target.classList.contains('history-remove')) {
+        const index = parseInt(target.getAttribute('data-pattern-index'), 10);
+        if (Number.isNaN(index)) return;
+        const data = window.PN_MAPPINGS_API.get();
+        if (Array.isArray(data.patterns)) {
+          const removed = data.patterns[index];
+          data.patterns.splice(index, 1);
+          window.PN_MAPPINGS_API.set(data);
+          renderMappings();
+          if (removed?.pattern) {
+            showToast(`Usunięto wzorzec: ${removed.pattern}`, 'ok');
+          } else {
+            showToast('Usunięto wzorzec.', 'ok');
+          }
+        }
+        return;
+      }
+      if (target.classList.contains('history-copy')) {
+        const index = parseInt(target.getAttribute('data-pattern-index'), 10);
+        if (Number.isNaN(index)) return;
+        const data = window.PN_MAPPINGS_API.get();
+        if (Array.isArray(data.patterns) && data.patterns[index]) {
+          openModal('pattern', {
+            index,
+            pattern: data.patterns[index].pattern,
+            vendor: data.patterns[index].vendor
+          });
+        }
+      }
+    });
+
+    modalClose.addEventListener('click', () => {
+      closeModal();
+    });
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+    modalSave.addEventListener('click', () => {
+      const mode = modal.dataset.mode;
+      const rawKey = modalKey.value.trim();
+      const vendor = modalVendor.value.trim();
+      if (!rawKey || !vendor) {
+        showToast('Uzupełnij PN/wzorzec i producenta.', 'warn');
+        return;
+      }
+      const nextMode = shouldTreatAsPattern(rawKey) ? 'pattern' : 'exact';
+      const data = window.PN_MAPPINGS_API.get();
+      if (nextMode === 'exact') {
+        const originalKey = modal.dataset.originalKey;
+        const newKey = window.PN_MAPPINGS_API.normalize(rawKey);
+        data.exact = data.exact || {};
+        if (newKey !== originalKey && data.exact[newKey]) {
+          showToast(`PN ${newKey} już istnieje.`, 'warn');
+          return;
+        }
+        if (mode === 'pattern') {
+          const index = parseInt(modal.dataset.patternIndex, 10);
+          if (!Number.isNaN(index) && Array.isArray(data.patterns)) {
+            data.patterns.splice(index, 1);
+          }
+        }
+        if (originalKey && originalKey !== newKey) {
+          delete data.exact[originalKey];
+        }
+        data.exact[newKey] = vendor;
+      } else if (nextMode === 'pattern') {
+        if (!isValidPattern(rawKey)) {
+          showToast('Wzorzec może zawierać tylko litery, cyfry, x, * i -.', 'warn');
+          return;
+        }
+        const index = parseInt(modal.dataset.patternIndex, 10);
+        const newPattern = window.PN_MAPPINGS_API.normalizePattern(rawKey);
+        data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
+        if (data.patterns.some((rule, idx) => rule.pattern === newPattern && idx !== index)) {
+          showToast(`Wzorzec ${newPattern} już istnieje.`, 'warn');
+          return;
+        }
+        if (mode === 'exact') {
+          const originalKey = modal.dataset.originalKey;
+          if (originalKey && data.exact) {
+            delete data.exact[originalKey];
+          }
+          data.patterns.push({ pattern: newPattern, vendor });
+        } else if (!Number.isNaN(index) && Array.isArray(data.patterns)) {
+          data.patterns[index] = { pattern: newPattern, vendor };
+        }
+      }
+      window.PN_MAPPINGS_API.set(data);
+      renderMappings();
+      showToast('Zapisano zmiany.', 'ok');
+      closeModal();
+    });
+
+    modal.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        modalSave.click();
+      }
+    });
+
+    renderMappings();
+  </script>
+</body>
+</html>

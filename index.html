@@ -90,19 +90,19 @@
       </section>
 
       <aside class="info-card">
-        <div class="info-card highlight-card">
-          <h3>Mnożnik dla <a class="highlight-link-inline" href="https://panel-e.baselinker.com/inventory_settings#price_groups" target="_blank" rel="noopener noreferrer">Base</a></h3>
-          <div class="highlight-value" id="baseMultiplierValue">—</div>
-          <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
-        </div>
         <div class="info-card search-card">
           <h3>Wyszukaj ofertę po PN</h3>
           <div class="search-row">
             <input type="text" id="partNumberInput" placeholder="Wpisz Part Number">
             <div class="search-actions">
-              <button type="button" id="searchAllBtn">Otwórz 3 karty</button>
+              <button type="button" id="searchAllBtn" aria-label="Szukaj">
+                <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M10.5 3a7.5 7.5 0 1 1 0 15 7.5 7.5 0 0 1 0-15Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Zm7.8 12.4 3.3 3.3-1.4 1.4-3.3-3.3 1.4-1.4Z"/>
+                </svg>
+              </button>
             </div>
           </div>
+          <div class="pn-suggestion" id="pnSuggestion"></div>
           <div class="search-status" id="searchStatus" aria-live="polite"></div>
         </div>
         <div class="history-header">
@@ -116,7 +116,12 @@
           <button type="button" id="clearHistoryBtn">Wyczyść historię</button>
           <button type="button" id="restoreHistoryBtn" style="display: none;">Cofnij</button>
         </div>
-        <footer>Wersja 1.42<br>Projekt i wykonanie: Codex, z uśmiechem dla @bartryc :)</footer>
+        <div class="info-card highlight-card">
+          <h3>Mnożnik dla <a class="highlight-link-inline" href="https://panel-e.baselinker.com/inventory_settings#price_groups" target="_blank" rel="noopener noreferrer">Base</a></h3>
+          <div class="highlight-value" id="baseMultiplierValue">—</div>
+          <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
+        </div>
+        <footer>Wersja 1.5<br>Projekt i wykonanie: Codex, z uśmiechem dla <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <a class="mapping-link mapping-link-compact" href="pn-mappings.html">Zarządzaj mapowaniami PN</a></footer>
       </aside>
     </div>
   </div>
@@ -127,6 +132,7 @@
     </div>
   </div>
 
+  <script src="pn-mappings.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

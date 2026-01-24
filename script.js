@@ -913,6 +913,53 @@ const partNumberInput = document.getElementById('partNumberInput');
 if (partNumberInput) {
   let lastSearchQuery = '';
   const searchStatus = document.getElementById('searchStatus');
+  const pnSuggestion = document.getElementById('pnSuggestion');
+
+  const inferManufacturer = (value) => {
+    const normalized = value.replace(/\s+/g, '').toUpperCase();
+    if (/^\d{6}-\d{3}$/.test(normalized)) return 'HPE';
+    const data = window.PN_MAPPINGS_API?.get?.() || { exact: {}, patterns: [] };
+    if (data.exact && data.exact[normalized]) return data.exact[normalized];
+    if (Array.isArray(data.patterns) && window.PN_MAPPINGS_API?.matchPattern) {
+      const sorted = [...data.patterns].sort((a, b) => (b?.pattern?.length || 0) - (a?.pattern?.length || 0));
+      for (const rule of sorted) {
+        if (rule?.pattern && rule?.vendor && window.PN_MAPPINGS_API.matchPattern(rule.pattern, normalized)) {
+          return rule.vendor;
+        }
+      }
+    }
+    if (normalized.length === 5) return 'Dell';
+    if (normalized.length === 6 && normalized.startsWith('0')) return 'Dell';
+    return '';
+  };
+
+  const updatePnSuggestion = () => {
+    const raw = partNumberInput.value.trim();
+    if (!raw) {
+      partNumberInput.dataset.suggestion = '';
+      if (pnSuggestion) pnSuggestion.textContent = '';
+      return;
+    }
+    const manufacturer = inferManufacturer(raw);
+    const suggestionValue = manufacturer && !raw.toLowerCase().startsWith(manufacturer.toLowerCase())
+      ? `${manufacturer} ${raw}`
+      : '';
+    partNumberInput.dataset.suggestion = suggestionValue;
+    if (pnSuggestion) {
+      pnSuggestion.textContent = '';
+      if (suggestionValue) {
+        const label = document.createElement('span');
+        label.className = 'pn-label';
+        label.textContent = `Sugestia ${manufacturer}?`;
+
+        const hint = document.createElement('span');
+        hint.className = 'pn-hint';
+        hint.textContent = 'Tab, aby uzupełnić';
+
+        pnSuggestion.append(label, hint);
+      }
+    }
+  };
   const runSearchAll = () => {
     const query = partNumberInput.value.trim();
     if (!query || query === lastSearchQuery) {
@@ -935,14 +982,34 @@ if (partNumberInput) {
     runSearchAll();
   });
   partNumberInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab') {
+      const suggestionValue = partNumberInput.dataset.suggestion;
+      if (suggestionValue) {
+        event.preventDefault();
+        partNumberInput.value = suggestionValue;
+        updatePnSuggestion();
+        runSearchAll();
+        if (partNumberInput.value.trim()) {
+          partNumberInput.value = '';
+          updatePnSuggestion();
+        }
+      }
+      return;
+    }
     if (event.key === 'Enter') {
       event.preventDefault();
       runSearchAll();
       if (partNumberInput.value.trim()) {
         partNumberInput.value = '';
+        updatePnSuggestion();
       }
     }
   });
+
+  partNumberInput.addEventListener('input', () => {
+    updatePnSuggestion();
+  });
+  updatePnSuggestion();
 }
 
 

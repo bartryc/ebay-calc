@@ -171,6 +171,7 @@ h1 {
 }
 
 .highlight-card {
+  margin-top: 16px;
   margin-bottom: 16px;
   border-color: rgba(52, 199, 89, 0.35);
   background: linear-gradient(135deg, rgba(52, 199, 89, 0.12), rgba(15, 91, 255, 0.05));
@@ -195,7 +196,8 @@ h1 {
 
 .search-card {
   margin-bottom: 16px;
-  background: linear-gradient(135deg, rgba(15, 91, 255, 0.06), rgba(255, 255, 255, 0.6));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(241, 236, 229, 0.75));
+  border-color: rgba(170, 160, 150, 0.35);
 }
 
 .search-row {
@@ -207,6 +209,11 @@ h1 {
 .search-row input[type="text"] {
   flex: 1;
   margin-bottom: 0;
+  min-width: 240px;
+}
+
+.search-row + .search-row {
+  margin-top: 8px;
 }
 
 .search-card input[type="text"] {
@@ -230,15 +237,25 @@ h1 {
 }
 
 .search-actions button {
-  padding: 6px 10px;
-  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--ink);
   cursor: pointer;
-  font-weight: 600;
-  font-size: 0.85rem;
-  white-space: nowrap;
+  font-weight: 700;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
 }
 
 .search-actions button:hover {
@@ -256,6 +273,255 @@ h1 {
 .search-status.is-warn {
   color: #d13b2f;
 }
+
+.pn-suggestion {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.85em;
+  min-height: 1.2em;
+}
+
+.mapping-link {
+  display: inline-flex;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.8em;
+  text-decoration: none;
+}
+
+.mapping-link:hover {
+  color: var(--accent);
+}
+
+.mapping-link-compact {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.mapping-link-compact:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+footer a {
+  color: inherit;
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
+}
+
+.mapping-link-cta {
+  margin-top: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.mapping-link-cta:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mapping-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.mapping-help {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.mapping-help strong {
+  color: var(--ink);
+}
+
+.mapping-help-examples {
+  margin-left: 6px;
+  color: var(--muted);
+}
+
+.mapping-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mapping-note {
+  margin-bottom: 10px;
+}
+
+.mapping-actions button {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85em;
+}
+
+.mapping-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mapping-note {
+  color: var(--muted);
+  font-size: 0.8em;
+}
+
+.mapping-note.is-warn {
+  color: #d13b2f;
+}
+
+.mapping-toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 300;
+  width: 320px;
+}
+
+.mapping-toast {
+  min-height: 52px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.mapping-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mapping-toast.is-warn {
+  background: rgba(209, 59, 47, 0.9);
+  border-color: rgba(209, 59, 47, 0.6);
+}
+
+.mapping-toast.is-ok {
+  background: rgba(31, 157, 85, 0.9);
+  border-color: rgba(31, 157, 85, 0.6);
+}
+
+.mapping-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 14, 18, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 200;
+}
+
+.mapping-modal-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.mapping-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mapping-modal-header button {
+  border: none;
+  background: transparent;
+  font-size: 1.2em;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.mapping-modal-body label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.mapping-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.mapping-modal-actions button {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.mapping-modal-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pn-suggestion .pn-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7em;
+  color: var(--muted);
+  margin-right: 6px;
+}
+
+.pn-suggestion .pn-value {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.pn-suggestion .pn-hint {
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+body.dark-mode .search-card {
+  background: linear-gradient(135deg, rgba(18, 22, 28, 0.7), rgba(30, 36, 44, 0.6));
+  border-color: rgba(120, 120, 120, 0.25);
+}
+
 
 .search-card input[type="text"] {
   min-width: 0;
@@ -307,6 +573,7 @@ label {
 }
 
 input[type="number"],
+input[type="text"],
 select {
   width: 100%;
   padding: 10px 10px;
@@ -319,6 +586,7 @@ select {
 }
 
 input[type="number"]:focus,
+input[type="text"]:focus,
 select:focus {
   outline: none;
   border-color: var(--accent);
@@ -563,12 +831,16 @@ input[type="number"]:disabled {
   display: block;
   margin-bottom: 2px;
   font-size: 0.95em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .history-summary {
   color: var(--ink);
   line-height: 1.4;
   margin-bottom: 6px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .history-value {
