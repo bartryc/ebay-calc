@@ -928,8 +928,8 @@ if (partNumberInput) {
       searchStatus.classList.remove('is-warn');
     }
     openSearch('https://www.google.com/search?q=', `"${query}"`);
-    openSearch('https://www.ebay.com/sch/i.html?_nkw=', query);
-    openSearch('https://allegro.pl/listing?string=', query);
+    openSearch('https://www.ebay.com/sch/58058/i.html?_oac=1&_from=R40&_nkw=', query);
+    openSearch('https://allegro.pl/kategoria/komputery?string=', query);
   };
   document.getElementById('searchAllBtn').addEventListener('click', () => {
     runSearchAll();
