@@ -246,6 +246,17 @@ h1 {
   color: var(--accent);
 }
 
+.search-status {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.85em;
+  min-height: 1.2em;
+}
+
+.search-status.is-warn {
+  color: #d13b2f;
+}
+
 .search-card input[type="text"] {
   min-width: 0;
   width: 100%;

@@ -911,17 +911,36 @@ document.getElementById('restoreHistoryBtn').addEventListener('click', () => {
 
 const partNumberInput = document.getElementById('partNumberInput');
 if (partNumberInput) {
-  document.getElementById('searchAllBtn').addEventListener('click', () => {
-    const query = partNumberInput.value;
+  let lastSearchQuery = '';
+  const searchStatus = document.getElementById('searchStatus');
+  const runSearchAll = () => {
+    const query = partNumberInput.value.trim();
+    if (!query || query === lastSearchQuery) {
+      if (searchStatus) {
+        searchStatus.textContent = 'To samo zapytanie — pomijam.';
+        searchStatus.classList.add('is-warn');
+      }
+      return;
+    }
+    lastSearchQuery = query;
+    if (searchStatus) {
+      searchStatus.textContent = '';
+      searchStatus.classList.remove('is-warn');
+    }
     openSearch('https://www.google.com/search?q=', `"${query}"`);
     openSearch('https://www.ebay.com/sch/i.html?_nkw=', query);
     openSearch('https://allegro.pl/listing?string=', query);
+  };
+  document.getElementById('searchAllBtn').addEventListener('click', () => {
+    runSearchAll();
   });
   partNumberInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      document.getElementById('searchAllBtn').click();
-      partNumberInput.value = '';
+      runSearchAll();
+      if (partNumberInput.value.trim()) {
+        partNumberInput.value = '';
+      }
     }
   });
 }
