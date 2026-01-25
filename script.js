@@ -920,6 +920,7 @@ if (partNumberInput) {
     if (/^\d{6}-\d{3}$/.test(normalized)) return 'HPE';
     const data = window.PN_MAPPINGS_API?.get?.() || { exact: {}, patterns: [] };
     if (data.exact && data.exact[normalized]) return data.exact[normalized];
+    if (normalized.length < 5) return '';
     if (Array.isArray(data.patterns) && window.PN_MAPPINGS_API?.matchPattern) {
       const sorted = [...data.patterns].sort((a, b) => (b?.pattern?.length || 0) - (a?.pattern?.length || 0));
       for (const rule of sorted) {

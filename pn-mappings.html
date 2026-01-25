@@ -21,8 +21,8 @@
 
     <section class="app-card">
       <div class="mapping-help">
-        <strong>Wzorce:</strong> `x` = cyfra, `*` = dowolny ciąg znaków.
-        <span class="mapping-help-examples">Przykłady: `xxxxx`, `0xxxxx`, `xxxxxx-xxx`</span>
+        <strong>Wzorce:</strong> `x` = jedna cyfra, `*` = jeden dowolny znak, `+` = dowolny ciąg znaków.
+        <span class="mapping-help-examples">Przykłady: `xxxxx`, `0xxxxx`, `******-***`, `AFBR+`</span>
       </div>
       <div class="mapping-actions">
         <div class="mapping-actions-left">
@@ -144,11 +144,11 @@
 
     function isValidPattern(value) {
       const normalized = value.replace(/\s+/g, '');
-      return /^[a-z0-9x*\-]+$/i.test(normalized);
+      return /^[a-z0-9x*+\-]+$/i.test(normalized);
     }
 
     function shouldTreatAsPattern(value) {
-      return /\*/.test(value) || /^[0-9x*\-]+$/i.test(value);
+      return /[+*]/.test(value) || /^[0-9x*+\-]+$/i.test(value);
     }
 
     function downloadBackup() {
@@ -241,7 +241,7 @@
       const isPattern = shouldTreatAsPattern(rawKey);
       if (isPattern) {
         if (!isValidPattern(rawKey)) {
-          showToast('Wzorzec może zawierać tylko litery, cyfry, x, * i -.', 'warn');
+          showToast('Wzorzec może zawierać tylko litery, cyfry, x, *, + i -.', 'warn');
           return;
         }
         const pattern = window.PN_MAPPINGS_API.normalizePattern(rawKey);
@@ -385,7 +385,7 @@
         data.exact[newKey] = vendor;
       } else if (nextMode === 'pattern') {
         if (!isValidPattern(rawKey)) {
-          showToast('Wzorzec może zawierać tylko litery, cyfry, x, * i -.', 'warn');
+          showToast('Wzorzec może zawierać tylko litery, cyfry, x, *, + i -.', 'warn');
           return;
         }
         const index = parseInt(modal.dataset.patternIndex, 10);

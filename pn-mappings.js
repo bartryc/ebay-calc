@@ -15,7 +15,7 @@ function normalizePnKey(value) {
 }
 
 function normalizePattern(value) {
-  return value.replace(/\s+/g, '').toLowerCase();
+  return value.replace(/\s+/g, '').toUpperCase();
 }
 
 function normalizeData(raw) {
@@ -55,7 +55,8 @@ function matchPattern(pattern, value) {
   const escaped = normalized
     .replace(/[.+^${}()|[\]\\]/g, '\\$&')
     .replace(/x/g, '\\d')
-    .replace(/\*/g, '[A-Z0-9-]+');
+    .replace(/\*/g, '[A-Z0-9-]')
+    .replace(/\+/g, '[A-Z0-9-]+');
   const regex = new RegExp(`^${escaped}$`, 'i');
   return regex.test(target);
 }
