@@ -841,6 +841,9 @@ document.getElementById('refreshRateBtn').addEventListener('click', () => {
 updateEbayCurrencyLabel();
 fetchExchangeRate(document.getElementById('currency').value);
 renderHistory();
+if (window.PN_MAPPINGS_API?.load) {
+  window.PN_MAPPINGS_API.load();
+}
 
 document.getElementById('historyList').addEventListener('click', (event) => {
   const target = event.target;

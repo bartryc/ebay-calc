@@ -418,7 +418,9 @@
       }
     });
 
-    renderMappings();
+    window.PN_MAPPINGS_API.load()
+      .then(renderMappings)
+      .catch(() => renderMappings());
   </script>
 </body>
 </html>
