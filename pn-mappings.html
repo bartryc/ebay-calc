@@ -190,15 +190,8 @@
     }
 
     function logMappingAction(action, meta = {}) {
-      if (!window.PN_MAPPINGS_API?.request) return;
-      window.PN_MAPPINGS_API.request('/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'mapping',
-          meta: { action, ...meta }
-        })
-      }).catch(() => {});
+      if (!window.PN_MAPPINGS_API?.log) return;
+      window.PN_MAPPINGS_API.log('mapping', { action, ...meta });
     }
 
     function isValidPattern(value) {

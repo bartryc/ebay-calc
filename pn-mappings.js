@@ -12,6 +12,10 @@ const DEFAULT_PN_DATA = {
   ]
 };
 let pnCache = null;
+const LOG_QUEUE = [];
+let logFlushTimer = null;
+const LOG_FLUSH_INTERVAL = 20000;
+const LOG_MAX_BATCH = 50;
 
 function getClientFingerprint() {
   try {
@@ -48,6 +52,45 @@ function buildHeaders(extra = {}) {
     },
     extra
   );
+}
+
+async function flushLogQueue() {
+  if (!LOG_QUEUE.length) return;
+  const batch = LOG_QUEUE.splice(0, LOG_MAX_BATCH);
+  try {
+    await fetch(`${PN_MAPPINGS_API_URL}/log-batch`, {
+      method: 'POST',
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ logs: batch })
+    });
+  } catch (error) {
+    LOG_QUEUE.unshift(...batch);
+  }
+}
+
+function scheduleLogFlush() {
+  if (logFlushTimer) return;
+  logFlushTimer = setInterval(() => {
+    flushLogQueue();
+  }, LOG_FLUSH_INTERVAL);
+}
+
+function enqueueLog(type, meta = {}) {
+  LOG_QUEUE.push({ type, meta, ts: Date.now() });
+  scheduleLogFlush();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (!LOG_QUEUE.length) return;
+    const payload = JSON.stringify({ logs: LOG_QUEUE.slice(0, LOG_MAX_BATCH) });
+    navigator.sendBeacon(`${PN_MAPPINGS_API_URL}/log-batch`, payload);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushLogQueue();
+    }
+  });
 }
 
 function normalizePnKey(value) {
@@ -168,6 +211,7 @@ window.PN_MAPPINGS_API = {
   matchPattern,
   normalizeData,
   load: loadPnData,
+  log: enqueueLog,
   request: (path, options = {}) => {
     const headers = buildHeaders(options.headers || {});
     return fetch(`${PN_MAPPINGS_API_URL}${path}`, { ...options, headers });

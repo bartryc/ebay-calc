@@ -122,18 +122,14 @@ function showMainToast(message, variant = 'info') {
 }
 
 function logActivity(type, meta = {}) {
-  if (!window.PN_MAPPINGS_API?.request) return;
+  if (!window.PN_MAPPINGS_API?.log) return;
   const key = `${type}:${JSON.stringify(meta).slice(0, 200)}`;
   const now = Date.now();
   if (activityLogCache[key] && now - activityLogCache[key] < 10000) {
     return;
   }
   activityLogCache[key] = now;
-  window.PN_MAPPINGS_API.request('/log', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, meta })
-  }).catch(() => {});
+  window.PN_MAPPINGS_API.log(type, meta);
 }
 
 function normalizePnValue(value) {
