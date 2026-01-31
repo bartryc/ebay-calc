@@ -195,7 +195,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'update',
+          type: 'mapping',
           meta: { action, ...meta }
         })
       }).catch(() => {});
@@ -384,6 +384,7 @@
           delete data.exact[key];
           window.PN_MAPPINGS_API.set(data);
         }
+        renderMappings();
         showToast(`Usunięto: ${key}`, 'ok');
         logMappingAction('delete-exact', { key });
         return;
