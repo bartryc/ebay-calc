@@ -194,6 +194,18 @@
       }, 8000);
     }
 
+    function logAdminAction(action, meta = {}) {
+      if (!window.PN_MAPPINGS_API?.request) return;
+      window.PN_MAPPINGS_API.request('/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'backup',
+          meta: { action, ...meta }
+        })
+      }).catch(() => {});
+    }
+
     async function downloadBackup() {
       try {
         const resp = await window.PN_MAPPINGS_API.request('/backup', { method: 'GET' });
@@ -232,6 +244,7 @@
           localStorage.setItem(ADMIN_LAST_SYNC_KEY, stamp);
           if (lastSyncValue) lastSyncValue.textContent = stamp;
           showToast('Przywrócono backup z pliku.', 'ok');
+          logAdminAction('restore', { source: 'file' });
           fetchLogs();
         } catch (error) {
           showToast('Nie udało się odczytać pliku backupu.', 'warn');
