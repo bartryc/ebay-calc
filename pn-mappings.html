@@ -189,6 +189,18 @@
       }, 10000);
     }
 
+    function logMappingAction(action, meta = {}) {
+      if (!window.PN_MAPPINGS_API?.request) return;
+      window.PN_MAPPINGS_API.request('/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'update',
+          meta: { action, ...meta }
+        })
+      }).catch(() => {});
+    }
+
     function isValidPattern(value) {
       const normalized = value.replace(/\s+/g, '');
       return /^[a-z0-9x*+\-]+$/i.test(normalized);
@@ -223,6 +235,7 @@
           window.PN_MAPPINGS_API.set(normalized);
           renderMappings();
           showToast('Przywrócono backup z pliku.', 'ok');
+          logMappingAction('restore', { source: 'file' });
         } catch (error) {
           showToast('Nie udało się odczytać pliku backupu.', 'warn');
         }
@@ -309,6 +322,7 @@
         data.patterns.push({ pattern, vendor });
         window.PN_MAPPINGS_API.set(data);
         showToast(`Zapisano wzorzec: ${pattern} → ${vendor}`, 'ok');
+        logMappingAction('add-pattern', { pattern, vendor });
       } else {
         const key = window.PN_MAPPINGS_API.normalize(rawKey);
         data.exact = data.exact || {};
@@ -319,6 +333,7 @@
         data.exact[key] = vendor;
         window.PN_MAPPINGS_API.set(data);
         showToast(`Zapisano: ${key} → ${vendor}`, 'ok');
+        logMappingAction('add-exact', { key, vendor });
       }
       keyInput.value = '';
       vendorInput.value = '';
@@ -370,6 +385,7 @@
           window.PN_MAPPINGS_API.set(data);
         }
         showToast(`Usunięto: ${key}`, 'ok');
+        logMappingAction('delete-exact', { key });
         return;
       }
       if (target.classList.contains('history-copy')) {
@@ -402,8 +418,10 @@
           renderMappings();
           if (removed?.pattern) {
             showToast(`Usunięto wzorzec: ${removed.pattern}`, 'ok');
+            logMappingAction('delete-pattern', { pattern: removed.pattern });
           } else {
             showToast('Usunięto wzorzec.', 'ok');
+            logMappingAction('delete-pattern', {});
           }
         }
         return;
@@ -488,6 +506,7 @@
       window.PN_MAPPINGS_API.set(data);
       renderMappings();
       showToast('Zapisano zmiany.', 'ok');
+      logMappingAction('edit', { mode: nextMode });
       closeModal();
     });
 
