@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin PN</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Narzędzie sprzedażowe</div>
+        <h1>Admin mapowań PN</h1>
+        <p class="subtitle">Backup i przywracanie mapowań.</p>
+      </div>
+      <div class="top-actions">
+        <button id="themeToggleBtn">Włącz tryb ciemny</button>
+      </div>
+    </header>
+
+    <section class="app-card admin-shell">
+      <div class="admin-header-row">
+        <div>
+          <div class="eyebrow">Panel narzędzi</div>
+          <h2>Kontrola mapowań</h2>
+          <p class="subtitle">Backupy, przywracanie i szybkie testy w jednym miejscu.</p>
+        </div>
+        <div class="admin-links">
+          <a class="mapping-link mapping-link-cta" href="pn-mappings.html">Wróć do mapowań</a>
+          <a class="mapping-link mapping-link-cta" href="index.html">Wróć do kalkulatora</a>
+        </div>
+      </div>
+
+      <div class="admin-grid">
+        <div class="admin-card">
+          <h3>Backup mapowań</h3>
+          <p>Zapisz bieżące mapowania do pliku JSON. Przyda się przed większymi zmianami.</p>
+          <div class="admin-actions">
+            <button type="button" id="downloadBackupBtn">Pobierz backup JSON</button>
+          </div>
+          <div class="admin-meta">Ostatni backup: <span id="lastBackupValue">brak</span></div>
+        </div>
+
+        <div class="admin-card">
+          <h3>Przywracanie</h3>
+          <p>Wczytaj plik JSON i nadpisz mapowania w bazie.</p>
+          <div class="admin-actions">
+            <button type="button" id="restoreBackupBtn">Przywróć z pliku</button>
+          </div>
+          <div class="admin-meta warn">Uwaga: przywrócenie backupu nadpisuje bieżące mapowania.</div>
+        </div>
+
+
+        <div class="admin-card admin-card-wide">
+          <h3>Status mapowań</h3>
+          <div class="admin-kpis">
+            <div class="admin-kpi">
+              <span class="label">PN exact</span>
+              <strong id="exactCount">—</strong>
+            </div>
+            <div class="admin-kpi">
+              <span class="label">Wzorce</span>
+              <strong id="patternCount">—</strong>
+            </div>
+            <div class="admin-kpi">
+              <span class="label">Razem</span>
+              <strong id="totalCount">—</strong>
+            </div>
+          </div>
+          <div class="admin-meta">Ostatnia synchronizacja: <span id="lastSyncValue">—</span></div>
+        </div>
+
+        <div class="admin-card admin-card-wide">
+          <h3>Historia operacji</h3>
+          <p>Lista ostatnich działań na backupach i zapisach (IP + data).</p>
+          <div class="admin-log-controls">
+            <div class="admin-log-field">
+              <label for="logTypeFilter">Typ</label>
+              <select id="logTypeFilter">
+                <option value="all" selected>Wszystko</option>
+                <option value="backup">Backup</option>
+                <option value="update">Update</option>
+                <option value="calc">Przeliczenia</option>
+                <option value="search">Wyszukiwania</option>
+              </select>
+            </div>
+            <div class="admin-log-field admin-log-field-wide">
+              <label for="logQuery">Szukaj (IP / FP / UA / miasto)</label>
+              <input type="text" id="logQuery" placeholder="np. 185.152, fp-123, Chrome, Warsaw">
+            </div>
+            <div class="admin-log-field">
+              <label for="logPageSize">Na stronę</label>
+              <select id="logPageSize">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+            <div class="admin-log-field">
+              <label>&nbsp;</label>
+              <button type="button" id="logRefreshBtn">Odśwież logi</button>
+            </div>
+          </div>
+          <div id="adminLogList" class="admin-log-list">Brak danych.</div>
+          <div class="admin-log-pagination">
+            <button type="button" id="logPrevBtn">Wstecz</button>
+            <span id="logPageInfo">Strona 1 / 1</span>
+            <button type="button" id="logNextBtn">Dalej</button>
+          </div>
+        </div>
+
+        <div class="admin-card admin-card-wide">
+          <h3>Wskazówki</h3>
+          <ul class="admin-list">
+            <li>`x` = jedna cyfra, `*` = jeden dowolny znak, `+` = dowolny ciąg znaków.</li>
+            <li>Po dużej edycji wykonaj backup, żeby nie stracić reguł.</li>
+            <li>Backup przechowuj lokalnie z nazwą daty dla szybkiego przywrócenia.</li>
+            <li>Jeśli coś wygląda podejrzanie, sprawdź logi IP i User-Agent.</li>
+            <li>Dodawaj wzorce od najbardziej szczegółowych do ogólnych.</li>
+          </ul>
+        </div>
+      </div>
+
+      <input type="file" id="backupFileInput" accept="application/json" style="display: none;">
+    </section>
+  </div>
+
+  <div id="mappingToastStack" class="mapping-toast-stack" role="status" aria-live="polite"></div>
+
+  <script src="pn-mappings.js"></script>
+  <script>
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const body = document.body;
+
+    if (localStorage.getItem('theme') === 'dark') {
+      body.classList.add('dark-mode');
+      themeToggleBtn.textContent = 'Włącz tryb jasny';
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+      body.classList.toggle('dark-mode');
+      if (body.classList.contains('dark-mode')) {
+        themeToggleBtn.textContent = 'Włącz tryb jasny';
+        localStorage.setItem('theme', 'dark');
+      } else {
+        themeToggleBtn.textContent = 'Włącz tryb ciemny';
+        localStorage.setItem('theme', 'light');
+      }
+    });
+
+    const toastStack = document.getElementById('mappingToastStack');
+    const downloadBackupBtn = document.getElementById('downloadBackupBtn');
+    const restoreBackupBtn = document.getElementById('restoreBackupBtn');
+    const backupFileInput = document.getElementById('backupFileInput');
+    const lastBackupValue = document.getElementById('lastBackupValue');
+    const lastSyncValue = document.getElementById('lastSyncValue');
+    const adminLogList = document.getElementById('adminLogList');
+    const logTypeFilter = document.getElementById('logTypeFilter');
+    const logQuery = document.getElementById('logQuery');
+    const logPageSize = document.getElementById('logPageSize');
+    const logPrevBtn = document.getElementById('logPrevBtn');
+    const logNextBtn = document.getElementById('logNextBtn');
+    const logPageInfo = document.getElementById('logPageInfo');
+    const logRefreshBtn = document.getElementById('logRefreshBtn');
+    const exactCountEl = document.getElementById('exactCount');
+    const patternCountEl = document.getElementById('patternCount');
+    const totalCountEl = document.getElementById('totalCount');
+    const ADMIN_LAST_BACKUP_KEY = 'adminLastBackup';
+    const ADMIN_LAST_SYNC_KEY = 'adminLastSync';
+    let logsCache = [];
+    let logPage = 1;
+
+    function showToast(message, variant) {
+      if (!toastStack) return;
+      const maxToasts = 6;
+      while (toastStack.children.length >= maxToasts) {
+        toastStack.firstElementChild?.remove();
+      }
+      const toast = document.createElement('div');
+      toast.className = 'mapping-toast';
+      if (variant === 'warn') toast.classList.add('is-warn');
+      if (variant === 'info') toast.classList.add('is-info');
+      if (variant === 'ok') toast.classList.add('is-ok');
+      toast.textContent = message || '';
+      toastStack.append(toast);
+      requestAnimationFrame(() => {
+        toast.classList.add('is-visible');
+      });
+      setTimeout(() => {
+        toast.classList.remove('is-visible');
+        setTimeout(() => toast.remove(), 200);
+      }, 8000);
+    }
+
+    async function downloadBackup() {
+      try {
+        const resp = await window.PN_MAPPINGS_API.request('/backup', { method: 'GET' });
+        if (!resp.ok) throw new Error('Backup failed');
+        const data = await resp.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const now = new Date();
+        const fileStamp = now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `pn-mappings-backup-${fileStamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        const displayStamp = new Date().toLocaleString('pl-PL');
+        localStorage.setItem(ADMIN_LAST_BACKUP_KEY, displayStamp);
+        if (lastBackupValue) lastBackupValue.textContent = displayStamp;
+        showToast('Backup zapisany do pliku.', 'ok');
+        fetchLogs();
+      } catch (error) {
+        showToast('Nie udało się pobrać backupu z serwera.', 'warn');
+      }
+    }
+
+    function restoreBackupFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          const normalized = window.PN_MAPPINGS_API.normalizeData(parsed);
+          window.PN_MAPPINGS_API.set(normalized);
+          updateStats(normalized);
+          const stamp = new Date().toLocaleString('pl-PL');
+          localStorage.setItem(ADMIN_LAST_SYNC_KEY, stamp);
+          if (lastSyncValue) lastSyncValue.textContent = stamp;
+          showToast('Przywrócono backup z pliku.', 'ok');
+          fetchLogs();
+        } catch (error) {
+          showToast('Nie udało się odczytać pliku backupu.', 'warn');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    downloadBackupBtn.addEventListener('click', () => {
+      downloadBackup();
+    });
+    restoreBackupBtn.addEventListener('click', () => {
+      backupFileInput.click();
+    });
+    backupFileInput.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (file) restoreBackupFile(file);
+      backupFileInput.value = '';
+    });
+
+    if (window.PN_MAPPINGS_API?.load) {
+      window.PN_MAPPINGS_API.load()
+        .then((data) => {
+          updateStats(data);
+          const stamp = new Date().toLocaleString('pl-PL');
+          localStorage.setItem(ADMIN_LAST_SYNC_KEY, stamp);
+          if (lastSyncValue) lastSyncValue.textContent = stamp;
+          fetchLogs();
+        })
+        .catch(() => {
+          showToast('Nie udało się pobrać mapowań z serwera.', 'warn');
+          updateStats(window.PN_MAPPINGS_API.get());
+        });
+    }
+
+    function updateStats(data) {
+      const exact = data?.exact || {};
+      const patterns = Array.isArray(data?.patterns) ? data.patterns : [];
+      const exactCount = Object.keys(exact).length;
+      const patternCount = patterns.length;
+      if (exactCountEl) exactCountEl.textContent = exactCount;
+      if (patternCountEl) patternCountEl.textContent = patternCount;
+      if (totalCountEl) totalCountEl.textContent = exactCount + patternCount;
+    }
+
+    const lastBackup = localStorage.getItem(ADMIN_LAST_BACKUP_KEY);
+    if (lastBackupValue) lastBackupValue.textContent = lastBackup || 'brak';
+    const lastSync = localStorage.getItem(ADMIN_LAST_SYNC_KEY);
+    if (lastSyncValue) lastSyncValue.textContent = lastSync || '—';
+
+    async function fetchLogs() {
+      if (!adminLogList) return;
+      try {
+        const resp = await window.PN_MAPPINGS_API.request('/logs?limit=200', { method: 'GET' });
+        if (!resp.ok) throw new Error('Log fetch failed');
+        const data = await resp.json();
+        logsCache = Array.isArray(data.logs) ? data.logs : [];
+        logPage = 1;
+        renderLogs();
+      } catch (error) {
+        adminLogList.textContent = 'Nie udało się pobrać historii.';
+      }
+    }
+
+    function renderLogs() {
+      if (!adminLogList) return;
+      const query = (logQuery?.value || '').trim().toLowerCase();
+      const typeFilter = logTypeFilter?.value || 'all';
+      const pageSize = Number(logPageSize?.value) || 20;
+      const filtered = logsCache.filter((entry) => {
+        if (typeFilter !== 'all' && entry.type !== typeFilter) return false;
+        if (!query) return true;
+        const geo = entry.geo || {};
+        const haystack = [
+          entry.ip,
+          entry.clientFp,
+          entry.ua,
+          entry.ray,
+          geo.city,
+          geo.region,
+          geo.country,
+          geo.asn
+        ].join(' ').toLowerCase();
+        return haystack.includes(query);
+      });
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      if (logPage > totalPages) logPage = totalPages;
+      const start = (logPage - 1) * pageSize;
+      const pageItems = filtered.slice(start, start + pageSize);
+      if (!pageItems.length) {
+        adminLogList.textContent = 'Brak danych.';
+      } else {
+        adminLogList.innerHTML = pageItems.map((entry) => {
+          const type = entry.type || 'unknown';
+          const ip = entry.ip || 'unknown';
+          const ts = entry.ts ? new Date(entry.ts).toLocaleString('pl-PL') : '—';
+          const ua = entry.ua || 'unknown';
+          const fp = entry.clientFp || 'unknown';
+          const geo = entry.geo || {};
+          const place = [geo.city, geo.region, geo.country].filter(Boolean).join(', ') || 'unknown';
+          const asn = geo.asn ? `AS${geo.asn}` : 'unknown';
+          const ray = entry.ray || '—';
+          const meta = entry.meta ? JSON.stringify(entry.meta) : '';
+          return `
+            <div class="admin-log-item">
+              <div class="log-main">
+                <strong>${type}</strong>
+                <span>${ts}</span>
+              </div>
+              <div class="log-sub">
+                <span>IP: ${ip}</span>
+                <span>FP: ${fp}</span>
+                <span>${place}</span>
+                <span>${asn}</span>
+                <span>Ray: ${ray}</span>
+              </div>
+              ${meta ? `<div class="log-meta">${meta}</div>` : ''}
+              <div class="log-ua">${ua}</div>
+            </div>
+          `;
+        }).join('');
+      }
+      if (logPageInfo) {
+        logPageInfo.textContent = `Strona ${logPage} / ${totalPages}`;
+      }
+      if (logPrevBtn) logPrevBtn.disabled = logPage <= 1;
+      if (logNextBtn) logNextBtn.disabled = logPage >= totalPages;
+    }
+
+    [logTypeFilter, logQuery, logPageSize].forEach((el) => {
+      if (!el) return;
+      el.addEventListener('input', () => {
+        logPage = 1;
+        renderLogs();
+      });
+      el.addEventListener('change', () => {
+        logPage = 1;
+        renderLogs();
+      });
+    });
+    if (logRefreshBtn) {
+      logRefreshBtn.addEventListener('click', () => {
+        fetchLogs();
+      });
+    }
+    if (logPrevBtn) {
+      logPrevBtn.addEventListener('click', () => {
+        logPage = Math.max(1, logPage - 1);
+        renderLogs();
+      });
+    }
+    if (logNextBtn) {
+      logNextBtn.addEventListener('click', () => {
+        logPage += 1;
+        renderLogs();
+      });
+    }
+
+    setInterval(() => {
+      fetchLogs();
+    }, 30000);
+
+  </script>
+</body>
+</html>

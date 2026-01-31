@@ -6,6 +6,24 @@ let lastCurrency = 'EUR';
 let currentExchangeRate = 4.3;
 const VAT23 = 0.23;
 const DEFAULT_RATES = { EUR: 4.3, USD: 3.9, GBP: 5.0 };
+const RATE_PROVIDERS = {
+  frankfurter: {
+    label: 'Frankfurter',
+    buildUrl: (currency) => `https://api.frankfurter.app/latest?from=PLN&to=${currency}`,
+    readRate: (data, currency) => data?.rates?.[currency]
+  },
+  exchangerate: {
+    label: 'exchangerate.host',
+    buildUrl: (currency) => `https://api.exchangerate.host/latest?base=PLN&symbols=${currency}`,
+    readRate: (data, currency) => data?.rates?.[currency]
+  },
+  erapi: {
+    label: 'open.er-api.com',
+    buildUrl: () => 'https://open.er-api.com/v6/latest/PLN',
+    readRate: (data, currency) => data?.rates?.[currency]
+  }
+};
+const rateStatusCache = {};
 let isPresetApplied = false;
 const numberFormatter = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 });
 let selfTestHideTimer = null;
@@ -16,6 +34,8 @@ let lastClearedHistory = [];
 let restoreHistoryTimer = null;
 const fieldBaselines = {};
 const lastLoggedValues = {};
+const mainToastStack = document.getElementById('mainToastStack');
+const activityLogCache = {};
 
 function getFieldElement(source) {
   const map = {
@@ -40,14 +60,7 @@ function formatPercent(value) {
   return numberFormatter.format(value);
 }
 
-function hideSelfTestDetails() {
-  const modal = document.getElementById('selfTestModal');
-  modal.style.display = 'none';
-  if (selfTestHideTimer) {
-    clearTimeout(selfTestHideTimer);
-    selfTestHideTimer = null;
-  }
-}
+function hideSelfTestDetails() {}
 
 function formatCurrency(value) {
   if (!Number.isFinite(value)) return '-';
@@ -65,6 +78,7 @@ function updateBaseMultiplier() {
 
   if (!Number.isFinite(exchangeRate) || !Number.isFinite(commission) || !Number.isFinite(vatRate)) {
     multiplierEl.textContent = '—';
+    multiplierEl.dataset.value = '';
     return;
   }
 
@@ -72,7 +86,9 @@ function updateBaseMultiplier() {
   const priceInCurrency = bruttoClient * exchangeRate;
   const finalPriceMultiplier = priceInCurrency * (1 + commission);
   const multiplierBrutto = finalPriceMultiplier / (1 + VAT23);
-  multiplierEl.textContent = multiplierBrutto.toFixed(6);
+  const formatted = multiplierBrutto.toFixed(4);
+  multiplierEl.textContent = formatted;
+  multiplierEl.dataset.value = formatted;
 }
 
 function openSearch(urlBase, query) {
@@ -81,6 +97,105 @@ function openSearch(urlBase, query) {
   const url = `${urlBase}${encodeURIComponent(trimmed)}`;
   window.open(url, '_blank', 'noopener');
   return true;
+}
+
+function showMainToast(message, variant = 'info') {
+  if (!mainToastStack) return;
+  const maxToasts = 6;
+  while (mainToastStack.children.length >= maxToasts) {
+    mainToastStack.firstElementChild?.remove();
+  }
+  const toast = document.createElement('div');
+  toast.className = 'mapping-toast';
+  if (variant === 'warn') toast.classList.add('is-warn');
+  if (variant === 'info') toast.classList.add('is-info');
+  if (variant === 'success' || variant === 'ok') toast.classList.add('is-ok');
+  toast.textContent = message || '';
+  mainToastStack.append(toast);
+  requestAnimationFrame(() => {
+    toast.classList.add('is-visible');
+  });
+  setTimeout(() => {
+    toast.classList.remove('is-visible');
+    setTimeout(() => toast.remove(), 200);
+  }, 6000);
+}
+
+function logActivity(type, meta = {}) {
+  if (!window.PN_MAPPINGS_API?.request) return;
+  const key = `${type}:${JSON.stringify(meta).slice(0, 200)}`;
+  const now = Date.now();
+  if (activityLogCache[key] && now - activityLogCache[key] < 10000) {
+    return;
+  }
+  activityLogCache[key] = now;
+  window.PN_MAPPINGS_API.request('/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, meta })
+  }).catch(() => {});
+}
+
+function normalizePnValue(value) {
+  return String(value || '').replace(/\s+/g, '').toUpperCase();
+}
+
+function getBestPatternMatch(patterns, normalized) {
+  if (!Array.isArray(patterns) || !window.PN_MAPPINGS_API?.matchPattern) return null;
+  const scored = [];
+  for (const rule of patterns) {
+    if (!rule?.pattern || !rule?.vendor) continue;
+    if (!window.PN_MAPPINGS_API.matchPattern(rule.pattern, normalized)) continue;
+    const pattern = String(rule.pattern).toUpperCase();
+    let literalCount = 0;
+    let wildcardCount = 0;
+    for (const char of pattern) {
+      if (char === 'X' || char === '*' || char === '+') {
+        wildcardCount += 1;
+      } else {
+        literalCount += 1;
+      }
+    }
+    scored.push({
+      vendor: rule.vendor,
+      pattern,
+      literalCount,
+      wildcardCount,
+      length: pattern.length
+    });
+  }
+  if (!scored.length) return null;
+  scored.sort((a, b) => {
+    if (b.literalCount !== a.literalCount) return b.literalCount - a.literalCount;
+    if (b.length !== a.length) return b.length - a.length;
+    return a.wildcardCount - b.wildcardCount;
+  });
+  return scored[0];
+}
+
+function resolvePnManufacturer(value) {
+  const normalized = normalizePnValue(value);
+  if (!normalized) return { vendor: '', source: '' };
+  if (/^\d{6}-\d{3}$/.test(normalized)) {
+    return { vendor: 'HPE', source: 'rule', detail: 'xxxxxx-xxx' };
+  }
+  const data = window.PN_MAPPINGS_API?.get?.() || { exact: {}, patterns: [] };
+  const hasMappings = (data.exact && Object.keys(data.exact).length > 0)
+    || (Array.isArray(data.patterns) && data.patterns.length > 0);
+  if (data.exact && data.exact[normalized]) {
+    return { vendor: data.exact[normalized], source: 'exact', detail: normalized };
+  }
+  if (normalized.length < 5) return { vendor: '', source: '' };
+  const best = getBestPatternMatch(data.patterns, normalized);
+  if (best) {
+    return { vendor: best.vendor, source: 'pattern', detail: best.pattern };
+  }
+  if (hasMappings) return { vendor: '', source: '' };
+  if (normalized.length === 5) return { vendor: 'Dell', source: 'fallback', detail: 'xxxxx' };
+  if (normalized.length === 6 && normalized.startsWith('0')) {
+    return { vendor: 'Dell', source: 'fallback', detail: '0xxxxx' };
+  }
+  return { vendor: '', source: '' };
 }
 
 function enforceTwoDecimals(inputEl) {
@@ -126,6 +241,24 @@ function renderHistory() {
       </div>`
     ))
     .join('');
+}
+
+const baseMultiplierValue = document.getElementById('baseMultiplierValue');
+if (baseMultiplierValue) {
+  baseMultiplierValue.addEventListener('click', () => {
+    const value = baseMultiplierValue.dataset.value;
+    if (!value) {
+      showMainToast('Brak wartości do skopiowania.', 'warn');
+      return;
+    }
+    navigator.clipboard.writeText(value)
+      .then(() => {
+        showMainToast('Skopiowano mnożnik do schowka.', 'success');
+      })
+      .catch(() => {
+        showMainToast('Nie udało się skopiować mnożnika.', 'warn');
+      });
+  });
 }
 
 function addHistoryEntry(source) {
@@ -186,6 +319,16 @@ function addHistoryEntry(source) {
     historyEntries.pop();
   }
   renderHistory();
+  logActivity('calc', {
+    source: sourceLabel,
+    netto: Number.isFinite(netto) ? netto.toFixed(2) : null,
+    brutto: Number.isFinite(brutto) ? brutto.toFixed(2) : null,
+    ebay: Number.isFinite(ebayPrice) ? ebayPrice.toFixed(2) : null,
+    currency,
+    vat: Number.isFinite(vatRateRaw) ? vatRateRaw.toFixed(1) : null,
+    commission: Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : null,
+    rate: Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : null
+  });
 }
 
 function setFieldBaseline(source) {
@@ -261,6 +404,9 @@ advancedOptionsToggle.addEventListener('change', () => {
   exchangeRateInput.disabled = !advancedOptionsToggle.checked;
   hideSelfTestDetails();
   calculatePrice();
+  if (advancedOptionsToggle.checked) {
+    checkRateProvidersStatus(document.getElementById('currency').value);
+  }
 });
 
 // Update eBay currency label with VAT rate
@@ -294,160 +440,6 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   historyEntries.length = 0;
   renderHistory();
   fetchExchangeRate('EUR');
-});
-
-function runSelfTest() {
-  const detailsDiv = document.getElementById('selfTestDetails');
-  const modal = document.getElementById('selfTestModal');
-  const alertBanner = document.getElementById('selfTestAlert');
-  const fields = [
-    'plnNetto',
-    'plnBrutto',
-    'ebayPrice',
-    'vatRate',
-    'commission',
-    'currency',
-    'exchangeRate',
-    'productId'
-  ];
-  const snapshot = {};
-  fields.forEach(id => {
-    snapshot[id] = document.getElementById(id).value;
-  });
-  const snapshotState = {
-    lastChanged,
-    isPresetApplied,
-    originalEbayPrice,
-    originalExchangeRate,
-    originalCurrency,
-    lastCurrency,
-    currentExchangeRate,
-    exchangeInfo: document.getElementById('exchangeInfo').innerText,
-    currencyLabel: document.getElementById('currencyLabel').innerText,
-    ebayCurrencyLabel: ebayCurrencyLabel.innerText,
-    advancedChecked: advancedOptionsToggle.checked,
-    advancedDisplay: advancedOptions.style.display,
-    exchangeDisabled: exchangeRateInput.disabled
-  };
-
-  advancedOptionsToggle.checked = true;
-  advancedOptionsToggle.dispatchEvent(new Event('change'));
-
-  document.getElementById('currency').value = 'EUR';
-  document.getElementById('currencyLabel').innerText = 'EUR';
-  document.getElementById('exchangeRate').value = '0.2500';
-  document.getElementById('commission').value = '15';
-  document.getElementById('vatRate').value = '23';
-  updateEbayCurrencyLabel();
-
-  const failures = [];
-  const checks = [];
-  const expectedFinal = (100 * (1 + 0.23) * 0.25 * (1 + 0.15)).toFixed(2);
-
-  lastChanged = 'netto';
-  document.getElementById('plnNetto').value = '100';
-  syncFields('netto');
-  const ebayValue = document.getElementById('ebayPrice').value;
-  if (ebayValue !== expectedFinal) {
-    failures.push(`Test 1: ebayPrice ${ebayValue} zamiast ${expectedFinal}`);
-  } else {
-    checks.push(`Test 1 OK: 100 PLN netto -> ${expectedFinal} (EUR) przy VAT 23%, kurs 0.25 (1 PLN = 0.25 EUR) i prowizji 15%`);
-  }
-
-  lastChanged = 'ebayPrice';
-  document.getElementById('ebayPrice').value = expectedFinal;
-  syncFields('ebayPrice');
-  const nettoValue = parseNumber(document.getElementById('plnNetto').value);
-  if (!Number.isFinite(nettoValue) || Math.abs(nettoValue - 100) > 0.02) {
-    failures.push(`Test 2: plnNetto ${document.getElementById('plnNetto').value} zamiast 100.00`);
-  } else {
-    checks.push('Test 2 OK: cena eBay -> ERP netto wraca do 100.00 (odwrotne przeliczenie)');
-  }
-
-  originalEbayPrice = 100;
-  originalExchangeRate = 0.25;
-  const converted = convertEbayPrice(0.4);
-  if (!Number.isFinite(converted) || Math.abs(converted - 160) > 0.0001) {
-    failures.push(`Test 3: konwersja ${converted} zamiast 160`);
-  } else {
-    checks.push('Test 3 OK: konwersja waluty (100 przy kursie 0.25 -> 160 przy kursie 0.4)');
-  }
-
-  fields.forEach(id => {
-    document.getElementById(id).value = snapshot[id];
-  });
-  lastChanged = snapshotState.lastChanged;
-  isPresetApplied = snapshotState.isPresetApplied;
-  originalEbayPrice = snapshotState.originalEbayPrice;
-  originalExchangeRate = snapshotState.originalExchangeRate;
-  originalCurrency = snapshotState.originalCurrency;
-  lastCurrency = snapshotState.lastCurrency;
-  currentExchangeRate = snapshotState.currentExchangeRate;
-  document.getElementById('exchangeInfo').innerText = snapshotState.exchangeInfo;
-  document.getElementById('currencyLabel').innerText = snapshotState.currencyLabel;
-  ebayCurrencyLabel.innerText = snapshotState.ebayCurrencyLabel;
-  advancedOptionsToggle.checked = snapshotState.advancedChecked;
-  advancedOptions.style.display = snapshotState.advancedDisplay;
-  exchangeRateInput.disabled = snapshotState.exchangeDisabled;
-  updateEbayCurrencyLabel();
-  calculatePrice();
-
-  modal.style.display = 'flex';
-  const resultsList = checks.length
-    ? checks.map(item => `<li>${item}</li>`).join('')
-    : '<li>Brak testów OK.</li>';
-  const failuresList = failures.length
-    ? failures.map(item => `<li>${item}</li>`).join('')
-    : '';
-
-  detailsDiv.innerHTML = [
-    '<div class="self-test-header"><strong id="selfTestTitle">Self-test</strong> <button type="button" id="selfTestClose">Zamknij</button></div>',
-    '<div class="self-test-section">',
-    '<div class="self-test-title">Zakres</div>',
-    '<ol class="self-test-list">',
-    '<li>Przeliczenie ERP → eBay z ustalonymi danymi wejściowymi.</li>',
-    '<li>Przeliczenie eBay → ERP (odwrotne działanie).</li>',
-    '<li>Konwersja ceny eBay między kursami.</li>',
-    '</ol>',
-    '</div>',
-    '<div class="self-test-section">',
-    '<div class="self-test-title">Wyniki</div>',
-    `<ul class="self-test-results ${failures.length ? 'is-fail' : 'is-ok'}">${resultsList}</ul>`,
-    failuresList ? `<div class="self-test-title">Błędy</div><ul class="self-test-results is-fail">${failuresList}</ul>` : '',
-    '</div>'
-  ].join('');
-
-  if (failures.length) {
-    alertBanner.style.display = 'flex';
-  } else {
-    alertBanner.style.display = 'none';
-  }
-
-  if (selfTestHideTimer) {
-    clearTimeout(selfTestHideTimer);
-  }
-  selfTestHideTimer = setTimeout(() => {
-    hideSelfTestDetails();
-  }, 8000);
-}
-
-document.getElementById('selfTestBtn').addEventListener('click', () => {
-  runSelfTest();
-});
-
-document.getElementById('selfTestModal').addEventListener('click', (event) => {
-  if (event.target && event.target.id === 'selfTestClose') {
-    event.preventDefault();
-    hideSelfTestDetails();
-    return;
-  }
-  if (event.target && event.target.id === 'selfTestModal') {
-    hideSelfTestDetails();
-  }
-});
-
-document.getElementById('selfTestAlertClose').addEventListener('click', () => {
-  document.getElementById('selfTestAlert').style.display = 'none';
 });
 
 function syncFields(source) {
@@ -646,10 +638,14 @@ function updateEbayPriceFromNettoOrBrutto() {
   }
 }
 
-function fetchExchangeRate(currency) {
+function fetchExchangeRate(currency, options = {}) {
   const exchangeInfo = document.getElementById('exchangeInfo');
   const exchangeRateInp = document.getElementById('exchangeRate');
   const ebayPriceInput = document.getElementById('ebayPrice');
+  const rateSourceSelect = document.getElementById('rateSource');
+  const providerKey = rateSourceSelect?.value || 'frankfurter';
+  const provider = RATE_PROVIDERS[providerKey] || RATE_PROVIDERS.frankfurter;
+  const notify = options.notify === true;
   exchangeInfo.innerText = 'Pobieranie kursu...';
 
   const ebayPriceValue = parseNumber(ebayPriceInput.value);
@@ -660,78 +656,142 @@ function fetchExchangeRate(currency) {
   const oldCurrency = lastCurrency;
   lastCurrency = currency;
 
-  fetch(`https://api.frankfurter.app/latest?from=PLN&to=${currency}`)
+  const applyRate = (rate, providerLabel, providerKeyUsed) => {
+    exchangeRateInp.value = rate.toFixed(4);
+    currentExchangeRate = rate;
+    const now = new Date();
+    exchangeInfo.innerText = `Kurs PLN/${currency}: ${rate.toFixed(4)} (${now.toLocaleString('pl-PL')})`;
+    if (notify && providerLabel) {
+      showMainToast(`Kurs pobrany z: ${providerLabel}`, 'info');
+    }
+    if (rateSourceSelect && providerKeyUsed && rateSourceSelect.value !== providerKeyUsed) {
+      rateSourceSelect.value = providerKeyUsed;
+    }
+    updateBaseMultiplier();
+
+    if (convertEbayPriceNeeded) {
+      const newEbayPrice = convertEbayPrice(rate);
+      if (newEbayPrice !== null) {
+        ebayPriceInput.value = newEbayPrice.toFixed(2);
+        if (originalCurrency === currency) {
+          ebayPriceInput.value = originalEbayPrice.toFixed(2);
+        }
+        lastChanged = 'ebayPrice';
+        syncFields('ebayPrice');
+      }
+    } else if (updateFromNettoOrBrutto) {
+      updateEbayPriceFromNettoOrBrutto();
+      syncFields(lastChanged);
+    } else if (Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice') {
+      syncFields('ebayPrice');
+    } else if (isPresetApplied || lastChanged === 'vatRate') {
+      syncFields('vatRate');
+      if (isPresetApplied) {
+        addHistoryEntry('preset');
+      }
+    } else {
+      calculatePrice();
+    }
+    isPresetApplied = false;
+  };
+
+  const fetchRateFrom = (providerToUse) => fetch(providerToUse.buildUrl(currency))
     .then(response => {
       if (!response.ok) throw new Error('Błąd sieci');
       return response.json();
     })
     .then(data => {
-      const rate = data.rates[currency];
+      const rate = providerToUse.readRate(data, currency);
       if (!rate) throw new Error('Brak kursu dla wybranej waluty');
-      exchangeRateInp.value = rate.toFixed(4);
-      currentExchangeRate = rate;
-      const now = new Date();
-      exchangeInfo.innerText = `Kurs PLN/${currency}: ${rate.toFixed(4)} (${now.toLocaleString('pl-PL')})`;
-      updateBaseMultiplier();
+      return { rate, label: providerToUse.label };
+    });
 
-      if (convertEbayPriceNeeded) {
-        const newEbayPrice = convertEbayPrice(rate);
-        if (newEbayPrice !== null) {
-          ebayPriceInput.value = newEbayPrice.toFixed(2);
-          if (originalCurrency === currency) {
-            ebayPriceInput.value = originalEbayPrice.toFixed(2);
-          }
-          lastChanged = 'ebayPrice';
-          syncFields('ebayPrice');
-        }
-      } else if (updateFromNettoOrBrutto) {
-        updateEbayPriceFromNettoOrBrutto();
-        syncFields(lastChanged);
-      } else if (Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice') {
-        syncFields('ebayPrice');
-      } else if (isPresetApplied || lastChanged === 'vatRate') {
-        syncFields('vatRate');
-        if (isPresetApplied) {
-          addHistoryEntry('preset');
-        }
-      } else {
-        calculatePrice();
-      }
-      isPresetApplied = false;
+  fetchRateFrom(provider)
+    .then(({ rate, label }) => {
+      applyRate(rate, label, providerKey);
     })
-    .catch(error => {
-      console.error('Błąd pobierania kursu:', error);
+    .catch(() => {
+      const fallbackProvider = RATE_PROVIDERS.frankfurter;
+      if (providerKey !== 'frankfurter' && fallbackProvider) {
+        fetchRateFrom(fallbackProvider)
+          .then(({ rate, label }) => {
+            applyRate(rate, label, 'frankfurter');
+            if (notify) {
+              showMainToast(`Źródło ${provider.label} niedostępne. Użyto ${label}.`, 'warn');
+            }
+          })
+          .catch(error => {
+            console.error('Błąd pobierania kursu:', error);
+            const fallbackRate = DEFAULT_RATES[currency] || 4.3;
+            exchangeRateInp.value = fallbackRate.toFixed(4);
+            currentExchangeRate = fallbackRate;
+            exchangeInfo.innerText = `Błąd pobierania kursu. Użyto domyślnego kursu PLN/${currency}: ${fallbackRate.toFixed(4)}`;
+            if (notify) {
+              showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
+            }
+            updateBaseMultiplier();
+            calculatePrice();
+            isPresetApplied = false;
+          });
+        return;
+      }
       const fallbackRate = DEFAULT_RATES[currency] || 4.3;
       exchangeRateInp.value = fallbackRate.toFixed(4);
       currentExchangeRate = fallbackRate;
       exchangeInfo.innerText = `Błąd pobierania kursu. Użyto domyślnego kursu PLN/${currency}: ${fallbackRate.toFixed(4)}`;
-      updateBaseMultiplier();
-
-      if (convertEbayPriceNeeded) {
-        const newEbayPrice = convertEbayPrice(fallbackRate);
-        if (newEbayPrice !== null) {
-          ebayPriceInput.value = newEbayPrice.toFixed(2);
-          if (originalCurrency === currency) {
-            ebayPriceInput.value = originalEbayPrice.toFixed(2);
-          }
-          lastChanged = 'ebayPrice';
-          syncFields('ebayPrice');
-        }
-      } else if (updateFromNettoOrBrutto) {
-        updateEbayPriceFromNettoOrBrutto();
-        syncFields(lastChanged);
-      } else if (Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice') {
-        syncFields('ebayPrice');
-      } else if (isPresetApplied || lastChanged === 'vatRate') {
-        syncFields('vatRate');
-        if (isPresetApplied) {
-          addHistoryEntry('preset');
-        }
-      } else {
-        calculatePrice();
+      if (notify) {
+        showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
       }
+      updateBaseMultiplier();
+      calculatePrice();
       isPresetApplied = false;
     });
+}
+
+function updateRateStatusBadge(key, status) {
+  const container = document.getElementById('rateStatusRow');
+  if (!container) return;
+  const el = container.querySelector(`[data-provider="${key}"]`);
+  if (!el) return;
+  el.classList.remove('is-ok', 'is-fail', 'is-loading');
+  if (status) {
+    el.classList.add(`is-${status}`);
+  }
+}
+
+function fetchWithTimeout(url, ms = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
+function checkRateProvidersStatus(currency) {
+  const now = Date.now();
+  Object.keys(RATE_PROVIDERS).forEach((key) => {
+    const cached = rateStatusCache[key];
+    if (cached && now - cached.ts < 60000) {
+      updateRateStatusBadge(key, cached.status);
+      return;
+    }
+    updateRateStatusBadge(key, 'loading');
+    const provider = RATE_PROVIDERS[key];
+    fetchWithTimeout(provider.buildUrl(currency), 5000)
+      .then((resp) => {
+        if (!resp.ok) throw new Error('status');
+        return resp.json();
+      })
+      .then((data) => {
+        const rate = provider.readRate(data, currency);
+        const status = rate ? 'ok' : 'fail';
+        rateStatusCache[key] = { ts: Date.now(), status };
+        updateRateStatusBadge(key, status);
+      })
+      .catch(() => {
+        rateStatusCache[key] = { ts: Date.now(), status: 'fail' };
+        updateRateStatusBadge(key, 'fail');
+      });
+  });
 }
 
 // STOCK URL button handler
@@ -829,21 +889,28 @@ document.getElementById('currency').addEventListener('change', () => {
   document.getElementById('currencyLabel').innerText = selectedCurrency;
   updateEbayCurrencyLabel();
   hideSelfTestDetails();
-  fetchExchangeRate(selectedCurrency);
+  fetchExchangeRate(selectedCurrency, { notify: false });
+  checkRateProvidersStatus(selectedCurrency);
   addHistoryEntry('currency');
 });
 
 document.getElementById('refreshRateBtn').addEventListener('click', () => {
-  fetchExchangeRate(document.getElementById('currency').value);
+  fetchExchangeRate(document.getElementById('currency').value, { notify: true });
   addHistoryEntry('exchangeRate');
 });
 
-updateEbayCurrencyLabel();
-fetchExchangeRate(document.getElementById('currency').value);
-renderHistory();
-if (window.PN_MAPPINGS_API?.load) {
-  window.PN_MAPPINGS_API.load();
+const rateSourceSelect = document.getElementById('rateSource');
+if (rateSourceSelect) {
+  rateSourceSelect.addEventListener('change', () => {
+    fetchExchangeRate(document.getElementById('currency').value, { notify: true });
+    checkRateProvidersStatus(document.getElementById('currency').value);
+  });
 }
+
+updateEbayCurrencyLabel();
+fetchExchangeRate(document.getElementById('currency').value, { notify: false });
+renderHistory();
+checkRateProvidersStatus(document.getElementById('currency').value);
 
 document.getElementById('historyList').addEventListener('click', (event) => {
   const target = event.target;
@@ -917,24 +984,14 @@ if (partNumberInput) {
   let lastSearchQuery = '';
   const searchStatus = document.getElementById('searchStatus');
   const pnSuggestion = document.getElementById('pnSuggestion');
-
-  const inferManufacturer = (value) => {
-    const normalized = value.replace(/\s+/g, '').toUpperCase();
-    if (/^\d{6}-\d{3}$/.test(normalized)) return 'HPE';
-    const data = window.PN_MAPPINGS_API?.get?.() || { exact: {}, patterns: [] };
-    if (data.exact && data.exact[normalized]) return data.exact[normalized];
-    if (normalized.length < 5) return '';
-    if (Array.isArray(data.patterns) && window.PN_MAPPINGS_API?.matchPattern) {
-      const sorted = [...data.patterns].sort((a, b) => (b?.pattern?.length || 0) - (a?.pattern?.length || 0));
-      for (const rule of sorted) {
-        if (rule?.pattern && rule?.vendor && window.PN_MAPPINGS_API.matchPattern(rule.pattern, normalized)) {
-          return rule.vendor;
-        }
-      }
-    }
-    if (normalized.length === 5) return 'Dell';
-    if (normalized.length === 6 && normalized.startsWith('0')) return 'Dell';
-    return '';
+  const searchClearBtn = document.getElementById('searchClearBtn');
+  const sourceGoogle = document.getElementById('sourceGoogle');
+  const sourceAllegro = document.getElementById('sourceAllegro');
+  const sourceEbay = document.getElementById('sourceEbay');
+  const clearSearchStatus = () => {
+    if (!searchStatus) return;
+    searchStatus.textContent = '';
+    searchStatus.classList.remove('is-warn');
   };
 
   const updatePnSuggestion = () => {
@@ -944,7 +1001,8 @@ if (partNumberInput) {
       if (pnSuggestion) pnSuggestion.textContent = '';
       return;
     }
-    const manufacturer = inferManufacturer(raw);
+    const resolved = resolvePnManufacturer(raw);
+    const manufacturer = resolved.vendor || '';
     const suggestionValue = manufacturer && !raw.toLowerCase().startsWith(manufacturer.toLowerCase())
       ? `${manufacturer} ${raw}`
       : '';
@@ -964,26 +1022,62 @@ if (partNumberInput) {
       }
     }
   };
+  const clearSearchInput = () => {
+    if (partNumberInput.value.trim()) {
+      partNumberInput.value = '';
+      updatePnSuggestion();
+      lastSearchQuery = '';
+    }
+  };
   const runSearchAll = () => {
     const query = partNumberInput.value.trim();
-    if (!query || query === lastSearchQuery) {
-      if (searchStatus) {
-        searchStatus.textContent = 'To samo zapytanie — pomijam.';
-        searchStatus.classList.add('is-warn');
-      }
-      return;
+    const sources = [];
+    if (sourceGoogle?.checked) sources.push('google');
+    if (sourceEbay?.checked) sources.push('ebay');
+    if (sourceAllegro?.checked) sources.push('allegro');
+    if (!sources.length) {
+      showMainToast('Wybierz minimum jedno źródło wyszukiwania.', 'warn');
+      return false;
+    }
+    if (!query) {
+      showMainToast('Wpisz Part Number, aby wyszukać.', 'warn');
+      return false;
+    }
+    if (query === lastSearchQuery) {
+      showMainToast('To samo zapytanie — pomijam.', 'warn');
+      return false;
     }
     lastSearchQuery = query;
-    if (searchStatus) {
-      searchStatus.textContent = '';
-      searchStatus.classList.remove('is-warn');
+    clearSearchStatus();
+    if (sources.includes('google')) {
+      openSearch('https://www.google.com/search?q=', `"${query}"`);
     }
-    openSearch('https://www.google.com/search?q=', `"${query}"`);
-    openSearch('https://www.ebay.com/sch/58058/i.html?_oac=1&_from=R40&_nkw=', query);
-    openSearch('https://allegro.pl/kategoria/komputery?string=', query);
+    if (sources.includes('ebay')) {
+      openSearch('https://www.ebay.com/sch/58058/i.html?_oac=1&_from=R40&_nkw=', query);
+    }
+    if (sources.includes('allegro')) {
+      openSearch('https://allegro.pl/kategoria/komputery?string=', query);
+    }
+    logActivity('search', { query, sources });
+    return true;
   };
   document.getElementById('searchAllBtn').addEventListener('click', () => {
-    runSearchAll();
+    if (runSearchAll()) {
+      clearSearchInput();
+    }
+  });
+  if (searchClearBtn) {
+    searchClearBtn.addEventListener('click', () => {
+      clearSearchInput();
+      clearSearchStatus();
+      partNumberInput.focus();
+    });
+  }
+  [sourceGoogle, sourceAllegro, sourceEbay].forEach((checkbox) => {
+    if (!checkbox) return;
+    checkbox.addEventListener('change', () => {
+      clearSearchStatus();
+    });
   });
   partNumberInput.addEventListener('keydown', (event) => {
     if (event.key === 'Tab') {
@@ -992,30 +1086,43 @@ if (partNumberInput) {
         event.preventDefault();
         partNumberInput.value = suggestionValue;
         updatePnSuggestion();
-        runSearchAll();
-        if (partNumberInput.value.trim()) {
-          partNumberInput.value = '';
-          updatePnSuggestion();
+        if (runSearchAll()) {
+          clearSearchInput();
         }
       }
       return;
     }
     if (event.key === 'Enter') {
       event.preventDefault();
-      runSearchAll();
-      if (partNumberInput.value.trim()) {
-        partNumberInput.value = '';
-        updatePnSuggestion();
+      if (runSearchAll()) {
+        clearSearchInput();
       }
     }
   });
 
   partNumberInput.addEventListener('input', () => {
     updatePnSuggestion();
+    clearSearchStatus();
   });
   updatePnSuggestion();
+  if (window.PN_MAPPINGS_API?.load) {
+    window.PN_MAPPINGS_API.load().then(() => {
+      updatePnSuggestion();
+    }).catch(() => {});
+  }
 }
 
 
 // Start
-fetchExchangeRate('EUR');
+
+const adminKeys = new Set();
+window.addEventListener('keydown', (event) => {
+  adminKeys.add(event.key.toLowerCase());
+  if (adminKeys.has('a') && adminKeys.has('d') && adminKeys.has('m')) {
+    adminKeys.clear();
+    window.open('admin.html', '_blank', 'noopener');
+  }
+});
+window.addEventListener('keyup', (event) => {
+  adminKeys.delete(event.key.toLowerCase());
+});

@@ -13,6 +13,43 @@ const DEFAULT_PN_DATA = {
 };
 let pnCache = null;
 
+function getClientFingerprint() {
+  try {
+    if (typeof navigator === 'undefined') return 'unknown';
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'na';
+    const screenSize = typeof screen !== 'undefined' ? `${screen.width}x${screen.height}` : 'na';
+    const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? String(window.devicePixelRatio) : '1';
+    const parts = [
+      navigator.userAgent || '',
+      navigator.language || '',
+      navigator.platform || '',
+      tz,
+      screenSize,
+      dpr
+    ];
+    const raw = parts.join('|');
+    let hash = 5381;
+    for (let i = 0; i < raw.length; i += 1) {
+      hash = ((hash << 5) + hash) + raw.charCodeAt(i);
+    }
+    return `fp-${(hash >>> 0).toString(16)}`;
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
+const CLIENT_FP = getClientFingerprint();
+
+function buildHeaders(extra = {}) {
+  return Object.assign(
+    {
+      'X-Auth-Token': PN_MAPPINGS_API_TOKEN,
+      'X-Client-FP': CLIENT_FP
+    },
+    extra
+  );
+}
+
 function normalizePnKey(value) {
   return value.replace(/\s+/g, '').toUpperCase();
 }
@@ -25,12 +62,33 @@ function normalizeData(raw) {
   if (!raw || typeof raw !== 'object') {
     return structuredClone(DEFAULT_PN_DATA);
   }
+  let exactSource = raw.exact;
+  let patternsSource = raw.patterns;
   if (!raw.exact && !raw.patterns) {
-    return { exact: raw, patterns: structuredClone(DEFAULT_PN_DATA.patterns) };
+    exactSource = raw;
+    patternsSource = structuredClone(DEFAULT_PN_DATA.patterns);
   }
+
+  const exact = {};
+  if (exactSource && typeof exactSource === 'object') {
+    for (const [key, vendor] of Object.entries(exactSource)) {
+      const normalizedKey = normalizePnKey(String(key || ''));
+      if (!normalizedKey || !vendor) continue;
+      exact[normalizedKey] = vendor;
+    }
+  }
+
+  const patterns = Array.isArray(patternsSource) ? patternsSource : [];
+  const normalizedPatterns = patterns
+    .map((rule) => ({
+      pattern: normalizePattern(String(rule?.pattern || '')),
+      vendor: String(rule?.vendor || '').trim()
+    }))
+    .filter((rule) => rule.pattern && rule.vendor);
+
   return {
-    exact: raw.exact || {},
-    patterns: Array.isArray(raw.patterns) ? raw.patterns : []
+    exact,
+    patterns: normalizedPatterns
   };
 }
 
@@ -52,17 +110,16 @@ function getPnData() {
 }
 
 function setPnData(data) {
-  pnCache = data;
-  localStorage.setItem(PN_MAPPINGS_STORAGE_KEY, JSON.stringify(data));
-  syncPnData(data);
+  const normalized = normalizeData(data);
+  pnCache = normalized;
+  localStorage.setItem(PN_MAPPINGS_STORAGE_KEY, JSON.stringify(normalized));
+  syncPnData(normalized);
 }
 
 async function loadPnData() {
   try {
     const resp = await fetch(PN_MAPPINGS_API_URL, {
-      headers: {
-        'X-Auth-Token': PN_MAPPINGS_API_TOKEN
-      }
+      headers: buildHeaders()
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -78,10 +135,7 @@ async function syncPnData(data) {
   try {
     await fetch(PN_MAPPINGS_API_URL, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Auth-Token': PN_MAPPINGS_API_TOKEN
-      },
+      headers: buildHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(data)
     });
   } catch (error) {
@@ -100,8 +154,8 @@ function matchPattern(pattern, value) {
   const escaped = placeholders.replace(/[.+^${}()|[\]\\]/g, '\\$&');
   const regexPattern = escaped
     .replace(/__X__/g, '\\d')
-    .replace(/__STAR__/g, '[A-Z0-9-]')
-    .replace(/__PLUS__/g, '[A-Z0-9-]+');
+    .replace(/__STAR__/g, '[^\\s]')
+    .replace(/__PLUS__/g, '[^\\s]+');
   const regex = new RegExp(`^${regexPattern}$`, 'i');
   return regex.test(target);
 }
@@ -113,5 +167,9 @@ window.PN_MAPPINGS_API = {
   normalizePattern,
   matchPattern,
   normalizeData,
-  load: loadPnData
+  load: loadPnData,
+  request: (path, options = {}) => {
+    const headers = buildHeaders(options.headers || {});
+    return fetch(`${PN_MAPPINGS_API_URL}${path}`, { ...options, headers });
+  }
 };
