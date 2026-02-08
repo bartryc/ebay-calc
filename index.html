@@ -15,7 +15,26 @@
         <p class="subtitle">Przeliczaj PLN na EUR/USD/GBP z VAT i prowizją, dwukierunkowo.</p>
       </div>
       <div class="top-actions">
-        <button id="themeToggleBtn">Włącz tryb ciemny</button>
+        <nav class="top-menu" aria-label="Główne menu">
+          <a class="top-menu-link is-active" href="index.html" aria-current="page">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img src="resources/icon-calc.svg" alt="">
+            </span>
+            <span>Kalkulator</span>
+          </a>
+          <a class="top-menu-link" href="pn-mappings.html">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img src="resources/icon-mapping.svg" alt="">
+            </span>
+            <span>Mapowania</span>
+          </a>
+          <button id="themeToggleBtn" class="top-menu-toggle icon-only" aria-label="Zmień motyw">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img class="theme-icon theme-icon-dark" src="resources/icon-dark-mode.svg" alt="">
+              <img class="theme-icon theme-icon-light" src="resources/icon-light-mode.svg" alt="">
+            </span>
+          </button>
+        </nav>
       </div>
     </header>
     <div id="result" class="alert-banner info-alert" aria-live="polite"></div>
@@ -120,6 +139,9 @@
             </div>
           </div>
           <div class="pn-suggestion" id="pnSuggestion"></div>
+          <div class="pn-report" id="pnReportWrap" style="display: none;">
+            <button type="button" id="reportMappingBtn">Zgłoś błędne mapowanie</button>
+          </div>
           <div class="search-sources">
             <label class="source-option">
               <input type="checkbox" id="sourceGoogle" checked>
@@ -154,12 +176,29 @@
           </div>
           <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
         </div>
-        <footer>Wersja 1.64<br>Projekt i wykonanie: Codex, z uśmiechem dla <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <a class="mapping-link mapping-link-compact" href="pn-mappings.html">Zarządzaj mapowaniami PN</a></footer>
+        <footer>Wersja 1.7<br>Projekt i wykonanie: Codex, z uśmiechem dla <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <a class="mapping-link mapping-link-compact" href="pn-mappings.html">Zarządzaj mapowaniami PN</a></footer>
       </aside>
     </div>
   </div>
 
   <div id="mainToastStack" class="mapping-toast-stack" role="status" aria-live="polite"></div>
+  <div id="reportModal" class="mapping-modal" style="display: none;">
+    <div class="mapping-modal-card report-modal-card" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
+      <div class="mapping-modal-header">
+        <strong id="reportModalTitle">Zgłoś błędne mapowanie</strong>
+        <button type="button" id="reportModalClose" aria-label="Zamknij">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <div class="report-meta" id="reportModalInfo"></div>
+        <label for="reportReason">Uwagi / powód</label>
+        <textarea id="reportReason" rows="3" maxlength="200" placeholder="Np. powinno być Dell, nie Mellanox"></textarea>
+      </div>
+      <div class="mapping-modal-actions">
+        <button type="button" id="reportModalCancel">Anuluj</button>
+        <button type="button" id="reportModalSubmit">Wyślij zgłoszenie</button>
+      </div>
+    </div>
+  </div>
 
   <script src="pn-mappings.js"></script>
   <script src="script.js"></script>

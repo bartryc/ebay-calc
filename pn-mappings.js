@@ -16,6 +16,7 @@ const LOG_QUEUE = [];
 let logFlushTimer = null;
 const LOG_FLUSH_INTERVAL = 20000;
 const LOG_MAX_BATCH = 50;
+let preferDirectLog = false;
 
 function getClientFingerprint() {
   try {
@@ -58,13 +59,22 @@ async function flushLogQueue() {
   if (!LOG_QUEUE.length) return;
   const batch = LOG_QUEUE.splice(0, LOG_MAX_BATCH);
   try {
-    await fetch(`${PN_MAPPINGS_API_URL}/log-batch`, {
+    if (preferDirectLog) {
+      await sendLogsIndividually(batch);
+      return;
+    }
+    const resp = await fetch(`${PN_MAPPINGS_API_URL}/log-batch`, {
       method: 'POST',
       headers: buildHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ logs: batch })
     });
+    if (!resp.ok) {
+      preferDirectLog = true;
+      await sendLogsIndividually(batch);
+    }
   } catch (error) {
-    LOG_QUEUE.unshift(...batch);
+    preferDirectLog = true;
+    await sendLogsIndividually(batch);
   }
 }
 
@@ -80,12 +90,21 @@ function enqueueLog(type, meta = {}) {
   scheduleLogFlush();
 }
 
+async function sendLogsIndividually(batch) {
+  for (const entry of batch) {
+    try {
+      await fetch(`${PN_MAPPINGS_API_URL}/log`, {
+        method: 'POST',
+        headers: buildHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ type: entry.type, meta: entry.meta })
+      });
+    } catch (error) {
+      // drop if direct logging fails
+    }
+  }
+}
+
 if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', () => {
-    if (!LOG_QUEUE.length) return;
-    const payload = JSON.stringify({ logs: LOG_QUEUE.slice(0, LOG_MAX_BATCH) });
-    navigator.sendBeacon(`${PN_MAPPINGS_API_URL}/log-batch`, payload);
-  });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       flushLogQueue();

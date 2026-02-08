@@ -15,7 +15,32 @@
         <p class="subtitle">Backup i przywracanie mapowań.</p>
       </div>
       <div class="top-actions">
-        <button id="themeToggleBtn">Włącz tryb ciemny</button>
+        <nav class="top-menu" aria-label="Główne menu">
+          <a class="top-menu-link" href="index.html">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img src="resources/icon-calc.svg" alt="">
+            </span>
+            <span>Kalkulator</span>
+          </a>
+          <a class="top-menu-link" href="pn-mappings.html">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img src="resources/icon-mapping.svg" alt="">
+            </span>
+            <span>Mapowania</span>
+          </a>
+          <button id="themeToggleBtn" class="top-menu-toggle icon-only" aria-label="Zmień motyw">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img class="theme-icon theme-icon-dark" src="resources/icon-dark-mode.svg" alt="">
+              <img class="theme-icon theme-icon-light" src="resources/icon-light-mode.svg" alt="">
+            </span>
+          </button>
+        </nav>
+        <div class="top-admin-badge" title="Panel admina" aria-label="Panel admina">
+          <span class="top-menu-icon" aria-hidden="true">
+            <img src="resources/icon-admin.svg" alt="">
+          </span>
+          <span>Admin</span>
+        </div>
       </div>
     </header>
 
@@ -25,10 +50,6 @@
           <div class="eyebrow">Panel narzędzi</div>
           <h2>Kontrola mapowań</h2>
           <p class="subtitle">Backupy, przywracanie i szybkie testy w jednym miejscu.</p>
-        </div>
-        <div class="admin-links">
-          <a class="mapping-link mapping-link-cta" href="pn-mappings.html">Wróć do mapowań</a>
-          <a class="mapping-link mapping-link-cta" href="index.html">Wróć do kalkulatora</a>
         </div>
       </div>
 
@@ -72,43 +93,60 @@
         </div>
 
         <div class="admin-card admin-card-wide">
-          <h3>Historia operacji</h3>
-          <p>Lista ostatnich działań na backupach i zapisach (IP + data).</p>
-          <div class="admin-log-controls">
-            <div class="admin-log-field">
-              <label for="logTypeFilter">Typ</label>
-              <select id="logTypeFilter">
-                <option value="all" selected>Wszystko</option>
-                <option value="backup">Backup</option>
-                <option value="update">Update</option>
-                <option value="mapping">Mapowania</option>
-                <option value="calc">Przeliczenia</option>
-                <option value="search">Wyszukiwania</option>
-              </select>
+          <details id="reportSection">
+            <summary class="report-summary">
+              <span>Zgłoszenia błędnych mapowań</span>
+              <span class="report-count" id="reportCount">0</span>
+            </summary>
+            <p>Raporty z wyszukiwarki PN. Możesz od razu dodać/poprawić mapowanie.</p>
+            <div id="reportList" class="report-list">Brak zgłoszeń.</div>
+          </details>
+        </div>
+
+        <div class="admin-card admin-card-wide">
+          <details id="logSection">
+            <summary class="report-summary">
+              <span>Historia operacji</span>
+              <span class="report-count" id="logCount">0</span>
+            </summary>
+            <p>Lista ostatnich działań na backupach i zapisach (IP + data).</p>
+            <div class="admin-log-controls">
+              <div class="admin-log-field">
+                <label for="logTypeFilter">Typ</label>
+                <select id="logTypeFilter">
+                  <option value="all" selected>Wszystko</option>
+                  <option value="backup">Backup</option>
+                  <option value="update">Update</option>
+                  <option value="mapping">Mapowania</option>
+                  <option value="mapping-report">Zgłoszenia</option>
+                  <option value="calc">Przeliczenia</option>
+                  <option value="search">Wyszukiwania</option>
+                </select>
+              </div>
+              <div class="admin-log-field admin-log-field-wide">
+                <label for="logQuery">Szukaj (IP / FP / UA / miasto)</label>
+                <input type="text" id="logQuery" placeholder="np. 185.152, fp-123, Chrome, Warsaw">
+              </div>
+              <div class="admin-log-field">
+                <label for="logPageSize">Na stronę</label>
+                <select id="logPageSize">
+                  <option value="10">10</option>
+                  <option value="20" selected>20</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+              <div class="admin-log-field">
+                <label>&nbsp;</label>
+                <button type="button" id="logRefreshBtn">Odśwież logi</button>
+              </div>
             </div>
-            <div class="admin-log-field admin-log-field-wide">
-              <label for="logQuery">Szukaj (IP / FP / UA / miasto)</label>
-              <input type="text" id="logQuery" placeholder="np. 185.152, fp-123, Chrome, Warsaw">
+            <div id="adminLogList" class="admin-log-list">Brak danych.</div>
+            <div class="admin-log-pagination">
+              <button type="button" id="logPrevBtn">Wstecz</button>
+              <span id="logPageInfo">Strona 1 / 1</span>
+              <button type="button" id="logNextBtn">Dalej</button>
             </div>
-            <div class="admin-log-field">
-              <label for="logPageSize">Na stronę</label>
-              <select id="logPageSize">
-                <option value="10">10</option>
-                <option value="20" selected>20</option>
-                <option value="50">50</option>
-              </select>
-            </div>
-            <div class="admin-log-field">
-              <label>&nbsp;</label>
-              <button type="button" id="logRefreshBtn">Odśwież logi</button>
-            </div>
-          </div>
-          <div id="adminLogList" class="admin-log-list">Brak danych.</div>
-          <div class="admin-log-pagination">
-            <button type="button" id="logPrevBtn">Wstecz</button>
-            <span id="logPageInfo">Strona 1 / 1</span>
-            <button type="button" id="logNextBtn">Dalej</button>
-          </div>
+          </details>
         </div>
 
         <div class="admin-card admin-card-wide">
@@ -129,25 +167,71 @@
 
   <div id="mappingToastStack" class="mapping-toast-stack" role="status" aria-live="polite"></div>
 
+  <div id="reportConfirmModal" class="mapping-modal" style="display: none;">
+    <div class="mapping-modal-card" role="dialog" aria-modal="true" aria-labelledby="reportConfirmTitle">
+      <div class="mapping-modal-header">
+        <strong id="reportConfirmTitle">Potwierdź mapowanie</strong>
+        <button type="button" id="reportConfirmClose" aria-label="Zamknij">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <div class="report-meta" id="reportConfirmInfo"></div>
+        <label for="reportConfirmKey">PN lub wzorzec</label>
+        <input type="text" id="reportConfirmKey" maxlength="64">
+        <label for="reportConfirmVendor">Producent</label>
+        <input type="text" id="reportConfirmVendor" maxlength="64">
+        <label for="reportConfirmType">Typ wpisu</label>
+        <select id="reportConfirmType">
+          <option value="auto" selected>Auto (PN lub wzorzec)</option>
+          <option value="exact">PN exact</option>
+          <option value="pattern">Wzorzec</option>
+        </select>
+        <label for="reportConfirmNote">Uwagi admina</label>
+        <textarea id="reportConfirmNote" rows="2" placeholder="Opcjonalne uwagi admina"></textarea>
+      </div>
+      <div class="mapping-modal-actions confirm-actions">
+        <button type="button" id="reportConfirmCancel">Anuluj</button>
+        <button type="button" id="reportConfirmApply">Zastosuj</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="reportDismissModal" class="mapping-modal" style="display: none;">
+    <div class="mapping-modal-card" role="dialog" aria-modal="true" aria-labelledby="reportDismissTitle">
+      <div class="mapping-modal-header">
+        <strong id="reportDismissTitle">Usuń zgłoszenie?</strong>
+        <button type="button" id="reportDismissClose" aria-label="Zamknij">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <p id="reportDismissMessage">Czy na pewno chcesz usunąć to zgłoszenie?</p>
+      </div>
+      <div class="mapping-modal-actions confirm-actions">
+        <button type="button" id="reportDismissCancel">Anuluj</button>
+        <button type="button" id="reportDismissApply" class="btn-danger">Usuń</button>
+      </div>
+    </div>
+  </div>
+
   <script src="pn-mappings.js"></script>
   <script>
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const body = document.body;
 
+    function updateThemeToggleLabel(isDark) {
+      const label = isDark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny';
+      themeToggleBtn.setAttribute('aria-label', label);
+      themeToggleBtn.setAttribute('title', label);
+    }
+
     if (localStorage.getItem('theme') === 'dark') {
       body.classList.add('dark-mode');
-      themeToggleBtn.textContent = 'Włącz tryb jasny';
     }
+    updateThemeToggleLabel(body.classList.contains('dark-mode'));
 
     themeToggleBtn.addEventListener('click', () => {
       body.classList.toggle('dark-mode');
-      if (body.classList.contains('dark-mode')) {
-        themeToggleBtn.textContent = 'Włącz tryb jasny';
-        localStorage.setItem('theme', 'dark');
-      } else {
-        themeToggleBtn.textContent = 'Włącz tryb ciemny';
-        localStorage.setItem('theme', 'light');
-      }
+      const isDark = body.classList.contains('dark-mode');
+      updateThemeToggleLabel(isDark);
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
     });
 
     const toastStack = document.getElementById('mappingToastStack');
@@ -164,12 +248,32 @@
     const logNextBtn = document.getElementById('logNextBtn');
     const logPageInfo = document.getElementById('logPageInfo');
     const logRefreshBtn = document.getElementById('logRefreshBtn');
+    const reportList = document.getElementById('reportList');
+    const reportCount = document.getElementById('reportCount');
+    const logCount = document.getElementById('logCount');
+    const reportConfirmModal = document.getElementById('reportConfirmModal');
+    const reportConfirmClose = document.getElementById('reportConfirmClose');
+    const reportConfirmCancel = document.getElementById('reportConfirmCancel');
+    const reportConfirmApply = document.getElementById('reportConfirmApply');
+    const reportConfirmInfo = document.getElementById('reportConfirmInfo');
+    const reportConfirmKey = document.getElementById('reportConfirmKey');
+    const reportConfirmVendor = document.getElementById('reportConfirmVendor');
+    const reportConfirmType = document.getElementById('reportConfirmType');
+    const reportConfirmNote = document.getElementById('reportConfirmNote');
+    const reportDismissModal = document.getElementById('reportDismissModal');
+    const reportDismissClose = document.getElementById('reportDismissClose');
+    const reportDismissCancel = document.getElementById('reportDismissCancel');
+    const reportDismissApply = document.getElementById('reportDismissApply');
+    const reportDismissMessage = document.getElementById('reportDismissMessage');
+    let pendingReportApply = null;
+    let pendingReportDismiss = null;
     const exactCountEl = document.getElementById('exactCount');
     const patternCountEl = document.getElementById('patternCount');
     const totalCountEl = document.getElementById('totalCount');
     const ADMIN_LAST_BACKUP_KEY = 'adminLastBackup';
     const ADMIN_LAST_SYNC_KEY = 'adminLastSync';
     let logsCache = [];
+    let totalLogs = null;
     let logPage = 1;
 
     function showToast(message, variant) {
@@ -288,17 +392,26 @@
     const lastSync = localStorage.getItem(ADMIN_LAST_SYNC_KEY);
     if (lastSyncValue) lastSyncValue.textContent = lastSync || '—';
 
-    async function fetchLogs() {
+    async function fetchLogs({ notifySuccess = false } = {}) {
       if (!adminLogList) return;
       try {
         const resp = await window.PN_MAPPINGS_API.request('/logs?limit=200', { method: 'GET' });
-        if (!resp.ok) throw new Error('Log fetch failed');
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+        }
         const data = await resp.json();
         logsCache = Array.isArray(data.logs) ? data.logs : [];
+        totalLogs = Number.isFinite(data.total) ? data.total : null;
         logPage = 1;
         renderLogs();
+        if (notifySuccess) {
+          showToast('Logi odświeżone.', 'ok');
+        }
       } catch (error) {
         adminLogList.textContent = 'Nie udało się pobrać historii.';
+        const message = error?.message ? `Błąd pobierania logów: ${error.message}` : 'Błąd pobierania logów z workera.';
+        showToast(message, 'warn');
       }
     }
 
@@ -327,6 +440,11 @@
       if (logPage > totalPages) logPage = totalPages;
       const start = (logPage - 1) * pageSize;
       const pageItems = filtered.slice(start, start + pageSize);
+      if (logCount) {
+        const countValue = Number.isFinite(totalLogs) ? totalLogs : filtered.length;
+        logCount.textContent = String(countValue);
+        logCount.classList.toggle('is-bad', countValue > 0);
+      }
       if (!pageItems.length) {
         adminLogList.textContent = 'Brak danych.';
       } else {
@@ -340,12 +458,18 @@
           const place = [geo.city, geo.region, geo.country].filter(Boolean).join(', ') || 'unknown';
           const asn = geo.asn ? `AS${geo.asn}` : 'unknown';
           const ray = entry.ray || '—';
-          const meta = entry.meta ? JSON.stringify(entry.meta) : '';
+          const hasMeta = entry.meta && Object.keys(entry.meta).length > 0;
+          const entryIndex = logsCache.indexOf(entry);
+          const metaId = `meta-${entryIndex}`;
+          const rawMeta = hasMeta ? escapeHtml(JSON.stringify(entry.meta)) : '';
           return `
             <div class="admin-log-item">
               <div class="log-main">
                 <strong>${type}</strong>
-                <span>${ts}</span>
+                <div class="log-actions">
+                  <span>${ts}</span>
+                  ${hasMeta ? `<button type="button" class="log-pretty" data-log-index="${entryIndex}">Prettify</button>` : ''}
+                </div>
               </div>
               <div class="log-sub">
                 <span>IP: ${ip}</span>
@@ -354,7 +478,12 @@
                 <span>${asn}</span>
                 <span>Ray: ${ray}</span>
               </div>
-              ${meta ? `<div class="log-meta">${meta}</div>` : ''}
+              ${hasMeta ? `
+                <div class="log-meta">
+                  <div class="log-meta-raw">${rawMeta}</div>
+                  <pre class="log-pretty-content" id="${metaId}" hidden></pre>
+                </div>
+              ` : ''}
               <div class="log-ua">${ua}</div>
             </div>
           `;
@@ -365,6 +494,259 @@
       }
       if (logPrevBtn) logPrevBtn.disabled = logPage <= 1;
       if (logNextBtn) logNextBtn.disabled = logPage >= totalPages;
+      renderReports();
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatMetaPretty(entry) {
+      const meta = entry.meta || {};
+      const lines = [];
+      if (entry.type) lines.push(`Typ: ${entry.type}`);
+      if (meta.action) lines.push(`Akcja: ${meta.action}`);
+      if (entry.type === 'mapping-report') {
+        const report = meta.report || {
+          query: meta.query,
+          suggestedVendor: meta.suggestedVendor,
+          source: meta.source,
+          detail: meta.detail,
+          reason: meta.reason
+        };
+        if (report && (report.query || report.suggestedVendor || report.source || report.detail || report.reason)) {
+          if (report.query) lines.push(`Zgłoszenie PN: ${report.query}`);
+          if (report.suggestedVendor) lines.push(`Zgłoszony producent: ${report.suggestedVendor}`);
+          if (report.source) lines.push(`Źródło: ${report.source}`);
+          if (report.detail) lines.push(`Wzorzec: ${report.detail}`);
+          if (report.reason) lines.push(`Powód: ${report.reason}`);
+        }
+        if (meta.mapping) {
+          const m = meta.mapping || {};
+          if (m.key) lines.push(`Mapa -> PN/wzorzec: ${m.key}`);
+          if (m.vendor) lines.push(`Mapa -> producent: ${m.vendor}`);
+          if (m.type) lines.push(`Typ wpisu: ${m.type}`);
+          if (m.note) lines.push(`Uwagi admina: ${m.note}`);
+        }
+      } else {
+        const flat = flattenMeta(meta);
+        for (const [key, value] of Object.entries(flat)) {
+          lines.push(`${key}: ${value}`);
+        }
+      }
+      if (!lines.length) return JSON.stringify(meta, null, 2);
+      return lines.join('\n');
+    }
+
+    function flattenMeta(obj, prefix = '', out = {}) {
+      if (!obj || typeof obj !== 'object') return out;
+      for (const [key, value] of Object.entries(obj)) {
+        const nextKey = prefix ? `${prefix}.${key}` : key;
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          flattenMeta(value, nextKey, out);
+        } else {
+          out[nextKey] = Array.isArray(value) ? value.join(', ') : String(value);
+        }
+      }
+      return out;
+    }
+
+    const DISMISSED_REPORTS_KEY = 'adminDismissedReports';
+    let dismissedReports = new Set();
+    try {
+      const stored = JSON.parse(localStorage.getItem(DISMISSED_REPORTS_KEY) || '[]');
+      dismissedReports = new Set(stored);
+    } catch (error) {
+      dismissedReports = new Set();
+    }
+
+    function buildReportKey(entry) {
+      const meta = entry.meta || {};
+      return [
+        entry.ts || '',
+        meta.query || '',
+        meta.suggestedVendor || '',
+        meta.detail || '',
+        meta.reason || ''
+      ].join('|');
+    }
+
+    function persistDismissedReports() {
+      localStorage.setItem(DISMISSED_REPORTS_KEY, JSON.stringify(Array.from(dismissedReports)));
+    }
+
+    function renderReports() {
+      if (!reportList) return;
+      const reports = logsCache.filter((entry) => {
+        if (entry.type !== 'mapping-report') return false;
+        if (entry?.meta?.action) return false;
+        return true;
+      });
+      const visibleReports = reports.filter((entry) => !dismissedReports.has(buildReportKey(entry)));
+      if (reportCount) {
+        reportCount.textContent = String(visibleReports.length);
+        reportCount.classList.toggle('is-bad', visibleReports.length > 0);
+      }
+      if (!visibleReports.length) {
+        reportList.textContent = 'Brak zgłoszeń.';
+        return;
+      }
+      reportList.innerHTML = visibleReports.map((entry, index) => {
+        const meta = entry.meta || {};
+        const query = escapeHtml(meta.query || '');
+        const suggestedVendor = escapeHtml(meta.suggestedVendor || '');
+        const source = escapeHtml(meta.source || '');
+        const detail = escapeHtml(meta.detail || '');
+        const reason = escapeHtml(meta.reason || '');
+        const ts = entry.ts ? new Date(entry.ts).toLocaleString('pl-PL') : '—';
+        const reportKey = escapeHtml(buildReportKey(entry));
+        return `
+          <div class="report-item" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}">
+            <div class="report-header">
+              <strong>${query || '—'}</strong>
+              <span>${ts}</span>
+            </div>
+            <div class="report-meta">
+              <span>Sugestia: <strong>${suggestedVendor || '—'}</strong></span>
+              <span>Źródło: ${source || '—'}</span>
+              ${detail ? `<span>Wzorzec: ${detail}</span>` : ''}
+            </div>
+            ${reason ? `<div class="report-reason">Uwagi: ${reason}</div>` : ''}
+            <div class="report-form">
+              <input type="text" class="report-key" placeholder="PN lub wzorzec" value="${query}">
+              <input type="text" class="report-vendor" placeholder="Producent (np. Dell)" value="${suggestedVendor}">
+              <div class="report-mode">
+                <label>Typ wpisu</label>
+                <select class="report-type">
+                  <option value="auto" selected>Auto (PN lub wzorzec)</option>
+                  <option value="exact">PN exact</option>
+                  <option value="pattern">Wzorzec</option>
+                </select>
+              </div>
+              <textarea class="report-note" rows="2" placeholder="Uwagi admina / powód korekty" disabled>${reason}</textarea>
+              <div class="report-actions">
+                <button type="button" class="report-apply">Dodaj / popraw mapowanie</button>
+                <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function isPatternValue(value) {
+      return /[x*+]/i.test(value);
+    }
+
+    function getReportMetaFromItem(item) {
+      if (!item) return {};
+      return {
+        query: item.getAttribute('data-report-query') || '',
+        suggestedVendor: item.getAttribute('data-report-vendor') || '',
+        source: item.getAttribute('data-report-source') || '',
+        detail: item.getAttribute('data-report-detail') || '',
+        reason: item.getAttribute('data-report-reason') || ''
+      };
+    }
+
+    function applyReportMappingFromData({ rawKey, vendor, note, typeMode }) {
+      if (!rawKey || !vendor) {
+        showToast('Uzupełnij PN/wzorzec i producenta.', 'warn');
+        return;
+      }
+      const data = window.PN_MAPPINGS_API.get();
+      const treatAsPattern = typeMode === 'pattern' || (typeMode === 'auto' && isPatternValue(rawKey));
+      if (treatAsPattern) {
+        const pattern = window.PN_MAPPINGS_API.normalizePattern(rawKey);
+        data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
+        const existing = data.patterns.find((rule) => rule.pattern === pattern);
+        if (existing) {
+          existing.vendor = vendor;
+        } else {
+          data.patterns.push({ pattern, vendor });
+        }
+        window.PN_MAPPINGS_API.set(data);
+        showToast(`Zapisano wzorzec: ${pattern} → ${vendor}`, 'ok');
+        window.PN_MAPPINGS_API.log('mapping', { action: 'apply-report-pattern', pattern, vendor, note });
+      } else {
+        const key = window.PN_MAPPINGS_API.normalize(rawKey);
+        data.exact = data.exact || {};
+        data.exact[key] = vendor;
+        window.PN_MAPPINGS_API.set(data);
+        showToast(`Zapisano PN: ${key} → ${vendor}`, 'ok');
+        window.PN_MAPPINGS_API.log('mapping', { action: 'apply-report-exact', key, vendor, note });
+      }
+      updateStats(window.PN_MAPPINGS_API.get());
+    }
+
+    function logReportAction(meta) {
+      if (window.PN_MAPPINGS_API?.request) {
+        window.PN_MAPPINGS_API.request('/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'mapping-report', meta })
+        }).catch(() => {
+          window.PN_MAPPINGS_API?.log?.('mapping-report', meta);
+        });
+        return;
+      }
+      window.PN_MAPPINGS_API?.log?.('mapping-report', meta);
+    }
+
+    function closeReportConfirmModal() {
+      if (!reportConfirmModal) return;
+      reportConfirmModal.style.display = 'none';
+      pendingReportApply = null;
+    }
+
+    function openReportConfirmModal(item) {
+      if (!item || !reportConfirmModal) return;
+      const keyInput = item.querySelector('.report-key');
+      const vendorInput = item.querySelector('.report-vendor');
+      const noteInput = item.querySelector('.report-note');
+      const typeSelect = item.querySelector('.report-type');
+      const rawKey = keyInput?.value?.trim() || '';
+      const vendor = vendorInput?.value?.trim() || '';
+      const reason = noteInput?.value?.trim() || '';
+      const typeMode = typeSelect?.value || 'auto';
+      if (reportConfirmKey) reportConfirmKey.value = rawKey;
+      if (reportConfirmVendor) reportConfirmVendor.value = vendor;
+      if (reportConfirmType) reportConfirmType.value = typeMode;
+      if (reportConfirmNote) reportConfirmNote.value = '';
+      if (reportConfirmInfo) {
+        reportConfirmInfo.textContent = reason ? `Powód zgłoszenia: ${reason}` : 'Powód zgłoszenia: —';
+      }
+      pendingReportApply = {
+        sourceReason: reason,
+        reportKey: item.getAttribute('data-report-key') || '',
+        reportItem: item,
+        reportMeta: getReportMetaFromItem(item)
+      };
+      reportConfirmModal.style.display = 'flex';
+      reportConfirmKey?.focus();
+    }
+
+    function closeReportDismissModal() {
+      if (!reportDismissModal) return;
+      reportDismissModal.style.display = 'none';
+      pendingReportDismiss = null;
+    }
+
+    function openReportDismissModal(item) {
+      if (!item || !reportDismissModal) return;
+      const key = item.getAttribute('data-report-key') || '';
+      const title = item.querySelector('.report-header strong')?.textContent || 'zgłoszenie';
+      if (reportDismissMessage) {
+        reportDismissMessage.textContent = `Czy na pewno chcesz usunąć zgłoszenie: ${title}?`;
+      }
+      const meta = getReportMetaFromItem(item);
+      pendingReportDismiss = { key, item, meta };
+      reportDismissModal.style.display = 'flex';
     }
 
     [logTypeFilter, logQuery, logPageSize].forEach((el) => {
@@ -380,7 +762,7 @@
     });
     if (logRefreshBtn) {
       logRefreshBtn.addEventListener('click', () => {
-        fetchLogs();
+        fetchLogs({ notifySuccess: true });
       });
     }
     if (logPrevBtn) {
@@ -393,6 +775,108 @@
       logNextBtn.addEventListener('click', () => {
         logPage += 1;
         renderLogs();
+      });
+    }
+    if (adminLogList) {
+      adminLogList.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!target) return;
+        const prettyBtn = target.closest('.log-pretty');
+        if (!prettyBtn) return;
+        const idx = Number(prettyBtn.getAttribute('data-log-index'));
+        if (Number.isNaN(idx)) return;
+        const entry = logsCache[idx];
+        const pre = document.getElementById(`meta-${idx}`);
+        if (!pre || !entry?.meta) return;
+        const raw = pre.closest('.log-meta')?.querySelector('.log-meta-raw');
+        if (pre.hasAttribute('hidden')) {
+          pre.textContent = formatMetaPretty(entry);
+          pre.removeAttribute('hidden');
+          if (raw) raw.setAttribute('hidden', 'hidden');
+          prettyBtn.textContent = 'Ukryj';
+        } else {
+          pre.setAttribute('hidden', 'hidden');
+          if (raw) raw.removeAttribute('hidden');
+          prettyBtn.textContent = 'Prettify';
+        }
+      });
+    }
+    if (reportList) {
+      reportList.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!target) return;
+        const applyBtn = target.closest('.report-apply');
+        if (applyBtn) {
+          const item = applyBtn.closest('.report-item');
+          openReportConfirmModal(item);
+          return;
+        }
+        const dismissBtn = target.closest('.report-dismiss');
+        if (!dismissBtn) return;
+        const item = dismissBtn.closest('.report-item');
+        if (!item) return;
+        openReportDismissModal(item);
+      });
+    }
+
+    if (reportConfirmClose) {
+      reportConfirmClose.addEventListener('click', closeReportConfirmModal);
+    }
+    if (reportConfirmCancel) {
+      reportConfirmCancel.addEventListener('click', closeReportConfirmModal);
+    }
+    if (reportConfirmApply) {
+      reportConfirmApply.addEventListener('click', () => {
+        const rawKey = reportConfirmKey?.value?.trim() || '';
+        const vendor = reportConfirmVendor?.value?.trim() || '';
+        const note = reportConfirmNote?.value?.trim() || '';
+        const typeMode = reportConfirmType?.value || 'auto';
+        applyReportMappingFromData({ rawKey, vendor, note, typeMode });
+        if (pendingReportApply?.reportKey) {
+          dismissedReports.add(pendingReportApply.reportKey);
+          persistDismissedReports();
+        }
+        if (pendingReportApply?.reportItem) {
+          pendingReportApply.reportItem.remove();
+        }
+        logReportAction({
+          action: 'resolved',
+          report: pendingReportApply?.reportMeta || {},
+          mapping: {
+            key: rawKey,
+            vendor,
+            type: typeMode,
+            note
+          }
+        });
+        showToast('Zgłoszenie zamknięte po zapisie mapowania.', 'ok');
+        renderReports();
+        closeReportConfirmModal();
+      });
+    }
+
+    if (reportDismissClose) {
+      reportDismissClose.addEventListener('click', closeReportDismissModal);
+    }
+    if (reportDismissCancel) {
+      reportDismissCancel.addEventListener('click', closeReportDismissModal);
+    }
+    if (reportDismissApply) {
+      reportDismissApply.addEventListener('click', () => {
+        if (pendingReportDismiss?.key) {
+          dismissedReports.add(pendingReportDismiss.key);
+          persistDismissedReports();
+        }
+        if (pendingReportDismiss?.item) {
+          pendingReportDismiss.item.remove();
+        }
+        logReportAction({
+          action: 'dismissed',
+          report: pendingReportDismiss?.meta || {}
+        });
+        showToast('Zgłoszenie usunięte.', 'ok');
+        renderReports();
+        closeReportDismissModal();
       });
     }
 

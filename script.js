@@ -372,21 +372,23 @@ function flushHistoryLog(source) {
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 const body = document.body;
 
+function updateThemeToggleLabel(isDark) {
+  const label = isDark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny';
+  themeToggleBtn.setAttribute('aria-label', label);
+  themeToggleBtn.setAttribute('title', label);
+}
+
 // Load theme from localStorage
 if (localStorage.getItem('theme') === 'dark') {
   body.classList.add('dark-mode');
-  themeToggleBtn.textContent = 'Włącz tryb jasny';
 }
+updateThemeToggleLabel(body.classList.contains('dark-mode'));
 
 themeToggleBtn.addEventListener('click', () => {
   body.classList.toggle('dark-mode');
-  if (body.classList.contains('dark-mode')) {
-    themeToggleBtn.textContent = 'Włącz tryb jasny';
-    localStorage.setItem('theme', 'dark');
-  } else {
-    themeToggleBtn.textContent = 'Włącz tryb ciemny';
-    localStorage.setItem('theme', 'light');
-  }
+  const isDark = body.classList.contains('dark-mode');
+  updateThemeToggleLabel(isDark);
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
 
 // Advanced options toggle
@@ -980,6 +982,14 @@ if (partNumberInput) {
   let lastSearchQuery = '';
   const searchStatus = document.getElementById('searchStatus');
   const pnSuggestion = document.getElementById('pnSuggestion');
+  const pnReportWrap = document.getElementById('pnReportWrap');
+  const reportMappingBtn = document.getElementById('reportMappingBtn');
+  const reportModal = document.getElementById('reportModal');
+  const reportModalClose = document.getElementById('reportModalClose');
+  const reportModalCancel = document.getElementById('reportModalCancel');
+  const reportModalSubmit = document.getElementById('reportModalSubmit');
+  const reportModalInfo = document.getElementById('reportModalInfo');
+  const reportReason = document.getElementById('reportReason');
   const searchClearBtn = document.getElementById('searchClearBtn');
   const sourceGoogle = document.getElementById('sourceGoogle');
   const sourceAllegro = document.getElementById('sourceAllegro');
@@ -1003,6 +1013,9 @@ if (partNumberInput) {
       ? `${manufacturer} ${raw}`
       : '';
     partNumberInput.dataset.suggestion = suggestionValue;
+    partNumberInput.dataset.suggestionVendor = manufacturer || '';
+    partNumberInput.dataset.suggestionSource = resolved.source || '';
+    partNumberInput.dataset.suggestionDetail = resolved.detail || '';
     if (pnSuggestion) {
       pnSuggestion.textContent = '';
       if (suggestionValue) {
@@ -1016,6 +1029,9 @@ if (partNumberInput) {
 
         pnSuggestion.append(label, hint);
       }
+    }
+    if (pnReportWrap) {
+      pnReportWrap.style.display = suggestionValue ? 'flex' : 'none';
     }
   };
   const clearSearchInput = () => {
@@ -1106,6 +1122,85 @@ if (partNumberInput) {
       updatePnSuggestion();
     }).catch(() => {});
   }
+
+  const closeReportModal = () => {
+    if (!reportModal) return;
+    reportModal.style.display = 'none';
+    if (reportReason) reportReason.value = '';
+  };
+  const openReportModal = () => {
+    if (!reportModal) return;
+    const query = partNumberInput.value.trim();
+    const vendor = partNumberInput.dataset.suggestionVendor || '';
+    const source = partNumberInput.dataset.suggestionSource || '';
+    const detail = partNumberInput.dataset.suggestionDetail || '';
+    if (reportModalInfo) {
+      reportModalInfo.innerHTML = `
+        <div><strong>PN:</strong> ${query || '—'}</div>
+        <div><strong>Sugestia:</strong> ${vendor || '—'} ${detail ? `(${detail})` : ''}</div>
+        <div><strong>Źródło:</strong> ${source || '—'}</div>
+      `;
+    }
+    reportModal.style.display = 'flex';
+    if (reportReason) reportReason.focus();
+  };
+
+  if (reportMappingBtn) {
+    reportMappingBtn.addEventListener('click', () => {
+      const suggestionValue = partNumberInput.dataset.suggestion;
+      if (!suggestionValue) {
+        showMainToast('Brak sugestii do zgłoszenia.', 'warn');
+        return;
+      }
+      openReportModal();
+    });
+  }
+  if (reportModalClose) {
+    reportModalClose.addEventListener('click', closeReportModal);
+  }
+  if (reportModalCancel) {
+    reportModalCancel.addEventListener('click', closeReportModal);
+  }
+  if (reportModalSubmit) {
+    reportModalSubmit.addEventListener('click', () => {
+      const query = partNumberInput.value.trim();
+      const vendor = partNumberInput.dataset.suggestionVendor || '';
+      const source = partNumberInput.dataset.suggestionSource || '';
+      const detail = partNumberInput.dataset.suggestionDetail || '';
+      const reason = reportReason?.value?.trim() || '';
+      if (!query || !vendor) {
+        showMainToast('Brak danych do zgłoszenia.', 'warn');
+        return;
+      }
+      const payload = {
+        query,
+        suggestedVendor: vendor,
+        source,
+        detail,
+        reason
+      };
+      const fallbackLog = () => {
+        if (window.PN_MAPPINGS_API?.log) {
+          window.PN_MAPPINGS_API.log('mapping-report', payload);
+        }
+      };
+      if (window.PN_MAPPINGS_API?.request) {
+        window.PN_MAPPINGS_API.request('/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'mapping-report', meta: payload })
+        }).then((resp) => {
+          if (!resp.ok) fallbackLog();
+        }).catch(() => {
+          fallbackLog();
+        });
+      } else {
+        fallbackLog();
+      }
+      showMainToast('Zgłoszenie wysłane do admina.', 'ok');
+      closeReportModal();
+    });
+  }
 }
 
 
@@ -1116,7 +1211,7 @@ window.addEventListener('keydown', (event) => {
   adminKeys.add(event.key.toLowerCase());
   if (adminKeys.has('a') && adminKeys.has('d') && adminKeys.has('m')) {
     adminKeys.clear();
-    window.open('admin.html', '_blank', 'noopener');
+    window.location.href = 'admin.html';
   }
 });
 window.addEventListener('keyup', (event) => {
