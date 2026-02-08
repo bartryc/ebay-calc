@@ -565,15 +565,26 @@
       dismissedReports = new Set();
     }
 
-    function buildReportKey(entry) {
-      const meta = entry.meta || {};
+    function buildReportKeyFromMeta(meta = {}) {
       return [
-        entry.ts || '',
         meta.query || '',
         meta.suggestedVendor || '',
+        meta.source || '',
         meta.detail || '',
         meta.reason || ''
       ].join('|');
+    }
+
+    function buildReportKey(entry) {
+      const meta = entry.meta || {};
+      const report = meta.report || {
+        query: meta.query,
+        suggestedVendor: meta.suggestedVendor,
+        source: meta.source,
+        detail: meta.detail,
+        reason: meta.reason
+      };
+      return buildReportKeyFromMeta(report);
     }
 
     function persistDismissedReports() {
@@ -587,7 +598,27 @@
         if (entry?.meta?.action) return false;
         return true;
       });
-      const visibleReports = reports.filter((entry) => !dismissedReports.has(buildReportKey(entry)));
+      const resolvedKeys = new Set();
+      logsCache.forEach((entry) => {
+        if (entry.type !== 'mapping-report') return;
+        const action = entry?.meta?.action;
+        if (!action) return;
+        const report = entry?.meta?.report || {
+          query: entry?.meta?.query,
+          suggestedVendor: entry?.meta?.suggestedVendor,
+          source: entry?.meta?.source,
+          detail: entry?.meta?.detail,
+          reason: entry?.meta?.reason
+        };
+        const key = buildReportKeyFromMeta(report);
+        if (key) resolvedKeys.add(key);
+      });
+      const visibleReports = reports.filter((entry) => {
+        const key = buildReportKey(entry);
+        if (dismissedReports.has(key)) return false;
+        if (resolvedKeys.has(key)) return false;
+        return true;
+      });
       if (reportCount) {
         reportCount.textContent = String(visibleReports.length);
         reportCount.classList.toggle('is-bad', visibleReports.length > 0);
