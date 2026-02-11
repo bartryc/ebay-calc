@@ -10,8 +10,8 @@
   <div class="page">
     <header class="topbar">
       <div>
-        <div class="eyebrow">Narzędzie sprzedażowe</div>
-        <h1>Przelicznik cen eBay</h1>
+        <div class="eyebrow">E-commerce tool</div>
+        <h1>eBay Calc</h1>
         <p class="subtitle">Przeliczaj PLN na EUR/USD/GBP z VAT i prowizją, dwukierunkowo.</p>
       </div>
       <div class="top-actions">
@@ -120,7 +120,10 @@
 
       <aside class="info-card">
         <div class="info-card search-card">
-          <h3>Wyszukaj ofertę po PN</h3>
+          <div class="search-header">
+            <h3>Wyszukaj ofertę po PN</h3>
+            <button type="button" class="report-quick-btn" id="reportMappingBtn">⚑ Zgłoś</button>
+          </div>
           <div class="search-row">
             <div class="search-input-wrap">
               <input type="text" id="partNumberInput" placeholder="Wpisz Part Number">
@@ -139,21 +142,22 @@
             </div>
           </div>
           <div class="pn-suggestion" id="pnSuggestion"></div>
-          <div class="pn-report" id="pnReportWrap" style="display: none;">
-            <button type="button" id="reportMappingBtn">Zgłoś błędne mapowanie</button>
-          </div>
           <div class="search-sources">
             <label class="source-option">
               <input type="checkbox" id="sourceGoogle" checked>
-              <span>Google</span>
+              <img class="source-icon" src="resources/icon-google.svg" alt="" aria-hidden="true">
             </label>
             <label class="source-option">
               <input type="checkbox" id="sourceAllegro" checked>
-              <span>Allegro</span>
+              <img class="source-icon" src="resources/icon-allegro.svg" alt="" aria-hidden="true">
             </label>
             <label class="source-option">
               <input type="checkbox" id="sourceEbay" checked>
-              <span>eBay</span>
+              <img class="source-icon" src="resources/icon-ebay.svg" alt="" aria-hidden="true">
+            </label>
+            <label class="source-option">
+              <input type="checkbox" id="sourceRenewtech" checked>
+              <img class="source-icon" src="resources/icon-renewtech.webp" data-dark-src="resources/icon-renewtech-white.png" alt="" aria-hidden="true">
             </label>
           </div>
           <div class="search-status" id="searchStatus" aria-live="polite"></div>
@@ -176,7 +180,7 @@
           </div>
           <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
         </div>
-        <footer>Wersja 1.71<br>Projekt i wykonanie: Codex, z uśmiechem dla <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <a class="mapping-link mapping-link-compact" href="pn-mappings.html">Zarządzaj mapowaniami PN</a></footer>
+        <footer>Wersja 1.73<br>Projekt i wykonanie: Codex, z uśmiechem dla <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <a class="mapping-link mapping-link-compact" href="pn-mappings.html">Zarządzaj mapowaniami PN</a></footer>
       </aside>
     </div>
   </div>
@@ -188,11 +192,15 @@
         <strong id="reportModalTitle">Zgłoś błędne mapowanie</strong>
         <button type="button" id="reportModalClose" aria-label="Zamknij">×</button>
       </div>
-      <div class="mapping-modal-body">
-        <div class="report-meta" id="reportModalInfo"></div>
-        <label for="reportReason">Uwagi / powód</label>
-        <textarea id="reportReason" rows="3" maxlength="200" placeholder="Np. powinno być Dell, nie Mellanox"></textarea>
-      </div>
+        <div class="mapping-modal-body">
+          <div class="report-meta" id="reportModalInfo"></div>
+          <label for="reportReason">Uwagi / powód</label>
+          <textarea id="reportReason" rows="3" maxlength="200" placeholder="Np. powinno być Dell, nie Mellanox"></textarea>
+          <label class="report-checkbox">
+            <input type="checkbox" id="reportNonMapping">
+            <span>Bug strony</span>
+          </label>
+        </div>
       <div class="mapping-modal-actions">
         <button type="button" id="reportModalCancel">Anuluj</button>
         <button type="button" id="reportModalSubmit">Wyślij zgłoszenie</button>

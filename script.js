@@ -35,6 +35,7 @@ let restoreHistoryTimer = null;
 const fieldBaselines = {};
 const lastLoggedValues = {};
 const mainToastStack = document.getElementById('mainToastStack');
+const sourceIcons = Array.from(document.querySelectorAll('.source-icon[data-dark-src]'));
 const activityLogCache = {};
 
 function getFieldElement(source) {
@@ -99,7 +100,18 @@ function openSearch(urlBase, query) {
   return true;
 }
 
-function showMainToast(message, variant = 'info') {
+function updateSourceIconsForTheme(isDark) {
+  sourceIcons.forEach((icon) => {
+    const darkSrc = icon.dataset.darkSrc;
+    if (!darkSrc) return;
+    if (!icon.dataset.lightSrc) {
+      icon.dataset.lightSrc = icon.getAttribute('src') || '';
+    }
+    icon.setAttribute('src', isDark ? darkSrc : icon.dataset.lightSrc);
+  });
+}
+
+function showMainToast(message, variant = 'info', durationMs) {
   if (!mainToastStack) return;
   const maxToasts = 6;
   while (mainToastStack.children.length >= maxToasts) {
@@ -110,7 +122,8 @@ function showMainToast(message, variant = 'info') {
   if (variant === 'warn') toast.classList.add('is-warn');
   if (variant === 'info') toast.classList.add('is-info');
   if (variant === 'success' || variant === 'ok') toast.classList.add('is-ok');
-  toast.textContent = message || '';
+  const ms = Number.isFinite(durationMs) ? Math.round(durationMs) : 0;
+  toast.textContent = `${message || ''} (${ms} ms)`;
   mainToastStack.append(toast);
   requestAnimationFrame(() => {
     toast.classList.add('is-visible');
@@ -383,11 +396,13 @@ if (localStorage.getItem('theme') === 'dark') {
   body.classList.add('dark-mode');
 }
 updateThemeToggleLabel(body.classList.contains('dark-mode'));
+updateSourceIconsForTheme(body.classList.contains('dark-mode'));
 
 themeToggleBtn.addEventListener('click', () => {
   body.classList.toggle('dark-mode');
   const isDark = body.classList.contains('dark-mode');
   updateThemeToggleLabel(isDark);
+  updateSourceIconsForTheme(isDark);
   localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
 
@@ -980,9 +995,9 @@ document.getElementById('restoreHistoryBtn').addEventListener('click', () => {
 const partNumberInput = document.getElementById('partNumberInput');
 if (partNumberInput) {
   let lastSearchQuery = '';
+  let lastSuggestedVendor = '';
   const searchStatus = document.getElementById('searchStatus');
   const pnSuggestion = document.getElementById('pnSuggestion');
-  const pnReportWrap = document.getElementById('pnReportWrap');
   const reportMappingBtn = document.getElementById('reportMappingBtn');
   const reportModal = document.getElementById('reportModal');
   const reportModalClose = document.getElementById('reportModalClose');
@@ -990,10 +1005,12 @@ if (partNumberInput) {
   const reportModalSubmit = document.getElementById('reportModalSubmit');
   const reportModalInfo = document.getElementById('reportModalInfo');
   const reportReason = document.getElementById('reportReason');
+  const reportNonMapping = document.getElementById('reportNonMapping');
   const searchClearBtn = document.getElementById('searchClearBtn');
   const sourceGoogle = document.getElementById('sourceGoogle');
   const sourceAllegro = document.getElementById('sourceAllegro');
   const sourceEbay = document.getElementById('sourceEbay');
+  const sourceRenewtech = document.getElementById('sourceRenewtech');
   const clearSearchStatus = () => {
     if (!searchStatus) return;
     searchStatus.textContent = '';
@@ -1013,7 +1030,14 @@ if (partNumberInput) {
       ? `${manufacturer} ${raw}`
       : '';
     partNumberInput.dataset.suggestion = suggestionValue;
-    partNumberInput.dataset.suggestionVendor = manufacturer || '';
+    if (manufacturer) {
+      lastSuggestedVendor = manufacturer;
+      partNumberInput.dataset.suggestionVendor = manufacturer;
+    } else if (lastSuggestedVendor && raw.toLowerCase().startsWith(`${lastSuggestedVendor.toLowerCase()} `)) {
+      partNumberInput.dataset.suggestionVendor = lastSuggestedVendor;
+    } else {
+      partNumberInput.dataset.suggestionVendor = '';
+    }
     partNumberInput.dataset.suggestionSource = resolved.source || '';
     partNumberInput.dataset.suggestionDetail = resolved.detail || '';
     if (pnSuggestion) {
@@ -1030,9 +1054,7 @@ if (partNumberInput) {
         pnSuggestion.append(label, hint);
       }
     }
-    if (pnReportWrap) {
-      pnReportWrap.style.display = suggestionValue ? 'flex' : 'none';
-    }
+    // no dropdown to reset
   };
   const clearSearchInput = () => {
     if (partNumberInput.value.trim()) {
@@ -1047,6 +1069,7 @@ if (partNumberInput) {
     if (sourceGoogle?.checked) sources.push('google');
     if (sourceEbay?.checked) sources.push('ebay');
     if (sourceAllegro?.checked) sources.push('allegro');
+    if (sourceRenewtech?.checked) sources.push('renewtech');
     if (!sources.length) {
       showMainToast('Wybierz minimum jedno źródło wyszukiwania.', 'warn');
       return false;
@@ -1062,13 +1085,47 @@ if (partNumberInput) {
     lastSearchQuery = query;
     clearSearchStatus();
     if (sources.includes('google')) {
-      openSearch('https://www.google.com/search?q=', `"${query}"`);
+      const vendor = partNumberInput.dataset.suggestionVendor || '';
+      let pn = query;
+      if (vendor && pn.toLowerCase().startsWith(`${vendor.toLowerCase()} `)) {
+        pn = pn.slice(vendor.length).trim();
+      }
+      if (!pn) pn = query;
+      const googleQuery = vendor ? `${vendor} "${pn}"` : `"${pn}"`;
+      openSearch('https://www.google.com/search?q=', googleQuery);
     }
     if (sources.includes('ebay')) {
       openSearch('https://www.ebay.com/sch/58058/i.html?_oac=1&_from=R40&_nkw=', query);
     }
     if (sources.includes('allegro')) {
       openSearch('https://allegro.pl/kategoria/komputery?string=', query);
+    }
+    if (sources.includes('renewtech')) {
+      let vendorRaw = partNumberInput.dataset.suggestionVendor || '';
+      const suggestionValue = partNumberInput.dataset.suggestion || '';
+      if (!vendorRaw && suggestionValue) {
+        vendorRaw = suggestionValue.split(/\s+/)[0] || '';
+      }
+      let pn = query;
+      if (vendorRaw && pn.toLowerCase().startsWith(`${vendorRaw.toLowerCase()} `)) {
+        pn = pn.slice(vendorRaw.length).trim();
+      }
+      const vendorSlug = vendorRaw.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const pnSlug = (pn || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9-]/g, '');
+      if (vendorSlug && pnSlug) {
+        const direct = `https://www.renewtech.pl/${vendorSlug}-${pnSlug}.html`;
+        window.open(direct, '_blank', 'noopener');
+      } else {
+        const state = {
+          'hr-search': {
+            search_term: pn || query,
+            filters: [],
+            sorting: [],
+            offsets: { product: 42 }
+          }
+        };
+        openSearch('https://www.renewtech.pl/#', JSON.stringify(state));
+      }
     }
     logActivity('search', { query, sources });
     return true;
@@ -1085,7 +1142,7 @@ if (partNumberInput) {
       partNumberInput.focus();
     });
   }
-  [sourceGoogle, sourceAllegro, sourceEbay].forEach((checkbox) => {
+  [sourceGoogle, sourceAllegro, sourceEbay, sourceRenewtech].forEach((checkbox) => {
     if (!checkbox) return;
     checkbox.addEventListener('change', () => {
       clearSearchStatus();
@@ -1127,6 +1184,8 @@ if (partNumberInput) {
     if (!reportModal) return;
     reportModal.style.display = 'none';
     if (reportReason) reportReason.value = '';
+    if (reportNonMapping) reportNonMapping.checked = false;
+    // no dropdown to reset
   };
   const openReportModal = () => {
     if (!reportModal) return;
@@ -1147,11 +1206,6 @@ if (partNumberInput) {
 
   if (reportMappingBtn) {
     reportMappingBtn.addEventListener('click', () => {
-      const suggestionValue = partNumberInput.dataset.suggestion;
-      if (!suggestionValue) {
-        showMainToast('Brak sugestii do zgłoszenia.', 'warn');
-        return;
-      }
       openReportModal();
     });
   }
@@ -1168,16 +1222,26 @@ if (partNumberInput) {
       const source = partNumberInput.dataset.suggestionSource || '';
       const detail = partNumberInput.dataset.suggestionDetail || '';
       const reason = reportReason?.value?.trim() || '';
-      if (!query || !vendor) {
+      const nonMapping = reportNonMapping?.checked;
+      const inferredUi = !query && !vendor && !!reason;
+      if (nonMapping) {
+        if (!reason) {
+          showMainToast('Dodaj krótki opis problemu.', 'warn');
+          return;
+        }
+      } else if (!query || !vendor) {
         showMainToast('Brak danych do zgłoszenia.', 'warn');
         return;
       }
+      const reportId = `R-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const payload = {
         query,
         suggestedVendor: vendor,
         source,
         detail,
-        reason
+        reason,
+        kind: nonMapping || inferredUi ? 'ui' : 'mapping',
+        reportId
       };
       const fallbackLog = () => {
         if (window.PN_MAPPINGS_API?.log) {
@@ -1211,7 +1275,7 @@ window.addEventListener('keydown', (event) => {
   adminKeys.add(event.key.toLowerCase());
   if (adminKeys.has('a') && adminKeys.has('d') && adminKeys.has('m')) {
     adminKeys.clear();
-    window.location.href = 'admin.html';
+    window.location.href = `admin.html?v=${Date.now()}`;
   }
 });
 window.addEventListener('keyup', (event) => {

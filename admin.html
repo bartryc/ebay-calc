@@ -59,6 +59,7 @@
           <p>Zapisz bieżące mapowania do pliku JSON. Przyda się przed większymi zmianami.</p>
           <div class="admin-actions">
             <button type="button" id="downloadBackupBtn">Pobierz backup JSON</button>
+            <button type="button" id="downloadFullBackupBtn">Pobierz pełny backup</button>
           </div>
           <div class="admin-meta">Ostatni backup: <span id="lastBackupValue">brak</span></div>
         </div>
@@ -95,10 +96,18 @@
         <div class="admin-card admin-card-wide">
           <details id="reportSection">
             <summary class="report-summary">
-              <span>Zgłoszenia błędnych mapowań</span>
+              <span>Zgłoszenia</span>
               <span class="report-count" id="reportCount">0</span>
             </summary>
-            <p>Raporty z wyszukiwarki PN. Możesz od razu dodać/poprawić mapowanie.</p>
+            <p>Raporty z wyszukiwarki PN oraz błędy działania strony.</p>
+            <div class="report-filter">
+              <label for="reportFilter">Filtr zgłoszeń</label>
+              <select id="reportFilter">
+                <option value="all">Wszystkie</option>
+                <option value="mapping">Tylko mapowania</option>
+                <option value="ui" selected>Tylko błędy strony</option>
+              </select>
+            </div>
             <div id="reportList" class="report-list">Brak zgłoszeń.</div>
           </details>
         </div>
@@ -185,6 +194,11 @@
           <option value="exact">PN exact</option>
           <option value="pattern">Wzorzec</option>
         </select>
+        <label for="reportConfirmStatus">Status (dla błędów działania strony)</label>
+        <select id="reportConfirmStatus">
+          <option value="resolved" selected>Resolved</option>
+          <option value="on-hold">On hold</option>
+        </select>
         <label for="reportConfirmNote">Uwagi admina</label>
         <textarea id="reportConfirmNote" rows="2" placeholder="Opcjonalne uwagi admina"></textarea>
       </div>
@@ -207,6 +221,22 @@
       <div class="mapping-modal-actions confirm-actions">
         <button type="button" id="reportDismissCancel">Anuluj</button>
         <button type="button" id="reportDismissApply" class="btn-danger">Usuń</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="reportRetypeModal" class="mapping-modal" style="display: none;">
+    <div class="mapping-modal-card" role="dialog" aria-modal="true" aria-labelledby="reportRetypeTitle">
+      <div class="mapping-modal-header">
+        <strong id="reportRetypeTitle">Zmień typ zgłoszenia</strong>
+        <button type="button" id="reportRetypeClose" aria-label="Zamknij">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <p id="reportRetypeMessage">Czy na pewno chcesz zmienić typ tego zgłoszenia?</p>
+      </div>
+      <div class="mapping-modal-actions confirm-actions">
+        <button type="button" id="reportRetypeCancel">Anuluj</button>
+        <button type="button" id="reportRetypeApply">Zmień typ</button>
       </div>
     </div>
   </div>
@@ -236,6 +266,7 @@
 
     const toastStack = document.getElementById('mappingToastStack');
     const downloadBackupBtn = document.getElementById('downloadBackupBtn');
+    const downloadFullBackupBtn = document.getElementById('downloadFullBackupBtn');
     const restoreBackupBtn = document.getElementById('restoreBackupBtn');
     const backupFileInput = document.getElementById('backupFileInput');
     const lastBackupValue = document.getElementById('lastBackupValue');
@@ -250,6 +281,7 @@
     const logRefreshBtn = document.getElementById('logRefreshBtn');
     const reportList = document.getElementById('reportList');
     const reportCount = document.getElementById('reportCount');
+    const reportFilter = document.getElementById('reportFilter');
     const logCount = document.getElementById('logCount');
     const reportConfirmModal = document.getElementById('reportConfirmModal');
     const reportConfirmClose = document.getElementById('reportConfirmClose');
@@ -259,14 +291,21 @@
     const reportConfirmKey = document.getElementById('reportConfirmKey');
     const reportConfirmVendor = document.getElementById('reportConfirmVendor');
     const reportConfirmType = document.getElementById('reportConfirmType');
+    const reportConfirmStatus = document.getElementById('reportConfirmStatus');
     const reportConfirmNote = document.getElementById('reportConfirmNote');
     const reportDismissModal = document.getElementById('reportDismissModal');
     const reportDismissClose = document.getElementById('reportDismissClose');
     const reportDismissCancel = document.getElementById('reportDismissCancel');
     const reportDismissApply = document.getElementById('reportDismissApply');
     const reportDismissMessage = document.getElementById('reportDismissMessage');
+    const reportRetypeModal = document.getElementById('reportRetypeModal');
+    const reportRetypeClose = document.getElementById('reportRetypeClose');
+    const reportRetypeCancel = document.getElementById('reportRetypeCancel');
+    const reportRetypeApply = document.getElementById('reportRetypeApply');
+    const reportRetypeMessage = document.getElementById('reportRetypeMessage');
     let pendingReportApply = null;
     let pendingReportDismiss = null;
+    let pendingReportRetype = null;
     const exactCountEl = document.getElementById('exactCount');
     const patternCountEl = document.getElementById('patternCount');
     const totalCountEl = document.getElementById('totalCount');
@@ -276,7 +315,7 @@
     let totalLogs = null;
     let logPage = 1;
 
-    function showToast(message, variant) {
+    function showToast(message, variant, durationMs) {
       if (!toastStack) return;
       const maxToasts = 6;
       while (toastStack.children.length >= maxToasts) {
@@ -287,7 +326,8 @@
       if (variant === 'warn') toast.classList.add('is-warn');
       if (variant === 'info') toast.classList.add('is-info');
       if (variant === 'ok') toast.classList.add('is-ok');
-      toast.textContent = message || '';
+      const suffix = ` (${Math.round(Number.isFinite(durationMs) ? durationMs : 0)} ms)`;
+      toast.textContent = `${message || ''}${suffix}`;
       toastStack.append(toast);
       requestAnimationFrame(() => {
         toast.classList.add('is-visible');
@@ -305,9 +345,11 @@
 
     async function downloadBackup() {
       try {
+        const t0 = performance.now();
         const resp = await window.PN_MAPPINGS_API.request('/backup', { method: 'GET' });
         if (!resp.ok) throw new Error('Backup failed');
         const data = await resp.json();
+        const t1 = performance.now();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const now = new Date();
@@ -322,10 +364,38 @@
         const displayStamp = new Date().toLocaleString('pl-PL');
         localStorage.setItem(ADMIN_LAST_BACKUP_KEY, displayStamp);
         if (lastBackupValue) lastBackupValue.textContent = displayStamp;
-        showToast('Backup zapisany do pliku.', 'ok');
+        showToast('Backup zapisany do pliku.', 'ok', t1 - t0);
         fetchLogs();
       } catch (error) {
         showToast('Nie udało się pobrać backupu z serwera.', 'warn');
+      }
+    }
+
+    async function downloadFullBackup() {
+      try {
+        const t0 = performance.now();
+        const resp = await window.PN_MAPPINGS_API.request('/backup/full', { method: 'GET' });
+        if (!resp.ok) throw new Error('Full backup failed');
+        const data = await resp.json();
+        const t1 = performance.now();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const now = new Date();
+        const fileStamp = now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `pn-full-backup-${fileStamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        const displayStamp = new Date().toLocaleString('pl-PL');
+        localStorage.setItem(ADMIN_LAST_BACKUP_KEY, displayStamp);
+        if (lastBackupValue) lastBackupValue.textContent = displayStamp;
+        showToast('Pełny backup zapisany do pliku.', 'ok', t1 - t0);
+        fetchLogs();
+      } catch (error) {
+        showToast('Nie udało się pobrać pełnego backupu.', 'warn');
       }
     }
 
@@ -353,6 +423,11 @@
     downloadBackupBtn.addEventListener('click', () => {
       downloadBackup();
     });
+    if (downloadFullBackupBtn) {
+      downloadFullBackupBtn.addEventListener('click', () => {
+        downloadFullBackup();
+      });
+    }
     restoreBackupBtn.addEventListener('click', () => {
       backupFileInput.click();
     });
@@ -395,18 +470,20 @@
     async function fetchLogs({ notifySuccess = false } = {}) {
       if (!adminLogList) return;
       try {
+        const t0 = performance.now();
         const resp = await window.PN_MAPPINGS_API.request('/logs?limit=200', { method: 'GET' });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
           throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
         }
         const data = await resp.json();
+        const t1 = performance.now();
         logsCache = Array.isArray(data.logs) ? data.logs : [];
         totalLogs = Number.isFinite(data.total) ? data.total : null;
         logPage = 1;
         renderLogs();
         if (notifySuccess) {
-          showToast('Logi odświeżone.', 'ok');
+          showToast('Logi odświeżone.', 'ok', t1 - t0);
         }
       } catch (error) {
         adminLogList.textContent = 'Nie udało się pobrać historii.';
@@ -424,7 +501,17 @@
         if (typeFilter !== 'all' && entry.type !== typeFilter) return false;
         if (!query) return true;
         const geo = entry.geo || {};
+        const meta = entry.meta || {};
+        const metaText = (() => {
+          try {
+            return JSON.stringify(meta);
+          } catch (err) {
+            return '';
+          }
+        })();
         const haystack = [
+          entry.type,
+          entry.ts,
           entry.ip,
           entry.clientFp,
           entry.ua,
@@ -432,7 +519,8 @@
           geo.city,
           geo.region,
           geo.country,
-          geo.asn
+          geo.asn,
+          metaText
         ].join(' ').toLowerCase();
         return haystack.includes(query);
       });
@@ -522,8 +610,6 @@
         if (report && (report.query || report.suggestedVendor || report.source || report.detail || report.reason)) {
           if (report.query) lines.push(`Zgłoszenie PN: ${report.query}`);
           if (report.suggestedVendor) lines.push(`Zgłoszony producent: ${report.suggestedVendor}`);
-          if (report.source) lines.push(`Źródło: ${report.source}`);
-          if (report.detail) lines.push(`Wzorzec: ${report.detail}`);
           if (report.reason) lines.push(`Powód: ${report.reason}`);
         }
         if (meta.mapping) {
@@ -532,6 +618,13 @@
           if (m.vendor) lines.push(`Mapa -> producent: ${m.vendor}`);
           if (m.type) lines.push(`Typ wpisu: ${m.type}`);
           if (m.note) lines.push(`Uwagi admina: ${m.note}`);
+        }
+        if (report && (report.source || report.detail)) {
+          lines.push('');
+          const parts = [];
+          if (report.source) parts.push(`Źródło: ${report.source}`);
+          if (report.detail) parts.push(`Wzorzec: ${report.detail}`);
+          lines.push(`// ${parts.join(' · ')}`);
         }
       } else {
         const flat = flattenMeta(meta);
@@ -566,25 +659,88 @@
     }
 
     function buildReportKeyFromMeta(meta = {}) {
-      return [
+      if (meta.reportId) return meta.reportId;
+      const parts = [
         meta.query || '',
         meta.suggestedVendor || '',
         meta.source || '',
         meta.detail || '',
         meta.reason || ''
-      ].join('|');
+      ];
+      const joined = parts.join('|');
+      if (joined.replace(/\|/g, '').trim() === '') return '';
+      return joined;
+    }
+
+    const reportKindCache = new Map();
+    const reportKindLoading = new Set();
+
+    function getReportKindOverride(reportId) {
+      if (!reportId) return '';
+      return reportKindCache.get(reportId) || '';
+    }
+
+    async function fetchReportKind(reportId) {
+      if (!reportId || reportKindCache.has(reportId) || reportKindLoading.has(reportId)) return;
+      if (!window.PN_MAPPINGS_API?.request) return;
+      reportKindLoading.add(reportId);
+      try {
+        const resp = await window.PN_MAPPINGS_API.request(`/report-kind?id=${encodeURIComponent(reportId)}`, { method: 'GET' });
+        const data = await resp.json().catch(() => ({}));
+        const kind = typeof data.kind === 'string' ? data.kind : '';
+        reportKindCache.set(reportId, kind);
+        requestAnimationFrame(() => {
+          renderReports();
+        });
+      } catch (error) {
+        reportKindCache.set(reportId, '');
+      } finally {
+        reportKindLoading.delete(reportId);
+      }
+    }
+
+    async function setReportKindOverride(reportId, kind) {
+      if (!reportId) return;
+      reportKindCache.set(reportId, kind || '');
+      if (!window.PN_MAPPINGS_API?.request) return;
+      try {
+        if (kind) {
+          await window.PN_MAPPINGS_API.request(`/report-kind?id=${encodeURIComponent(reportId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kind })
+          });
+        } else {
+          await window.PN_MAPPINGS_API.request(`/report-kind?id=${encodeURIComponent(reportId)}`, { method: 'DELETE' });
+        }
+      } catch (error) {
+        // keep cache
+      }
+    }
+
+    function getReportMeta(entry) {
+      if (!entry) return {};
+      const meta = entry.meta || {};
+      return meta.report || meta;
+    }
+
+    function getReportKind(entry) {
+      const meta = getReportMeta(entry);
+      const reportId = buildReportId(entry);
+      const override = getReportKindOverride(reportId);
+      if (override) return override;
+      const inferredUi = !meta.kind && !meta.query && !meta.suggestedVendor && meta.reason;
+      return meta.kind || (inferredUi ? 'ui' : 'mapping');
     }
 
     function buildReportKey(entry) {
       const meta = entry.meta || {};
-      const report = meta.report || {
-        query: meta.query,
-        suggestedVendor: meta.suggestedVendor,
-        source: meta.source,
-        detail: meta.detail,
-        reason: meta.reason
-      };
-      return buildReportKeyFromMeta(report);
+      if (meta.reportId) return meta.reportId;
+      if (meta.report && meta.report.reportId) return meta.report.reportId;
+      const report = meta.report || meta;
+      const metaKey = buildReportKeyFromMeta(report);
+      if (metaKey) return metaKey;
+      return `${entry.ts || ''}|${entry.ray || ''}`;
     }
 
     function persistDismissedReports() {
@@ -593,24 +749,37 @@
 
     function renderReports() {
       if (!reportList) return;
-      const reports = logsCache.filter((entry) => {
-        if (entry.type !== 'mapping-report') return false;
-        if (entry?.meta?.action) return false;
-        return true;
+      const allReports = logsCache.filter((entry) => entry.type === 'mapping-report');
+      const baseReports = allReports.filter((entry) => !entry?.meta?.action);
+      const reportById = new Map();
+      baseReports.forEach((entry) => {
+        const reportId = buildReportId(entry);
+        if (!reportId) return;
+        const prev = reportById.get(reportId);
+        if (!prev) {
+          reportById.set(reportId, entry);
+          return;
+        }
+        const prevTs = prev.ts ? Date.parse(prev.ts) : 0;
+        const nextTs = entry.ts ? Date.parse(entry.ts) : 0;
+        if (nextTs >= prevTs) {
+          reportById.set(reportId, entry);
+        }
+      });
+      const reports = Array.from(reportById.values());
+      const mappingReports = [];
+      const uiReports = [];
+      reports.forEach((entry) => {
+        const kind = getReportKind(entry);
+        if (kind === 'ui') uiReports.push(entry);
+        else mappingReports.push(entry);
       });
       const resolvedKeys = new Set();
       logsCache.forEach((entry) => {
         if (entry.type !== 'mapping-report') return;
         const action = entry?.meta?.action;
-        if (!action) return;
-        const report = entry?.meta?.report || {
-          query: entry?.meta?.query,
-          suggestedVendor: entry?.meta?.suggestedVendor,
-          source: entry?.meta?.source,
-          detail: entry?.meta?.detail,
-          reason: entry?.meta?.reason
-        };
-        const key = buildReportKeyFromMeta(report);
+        if (!action || action === 'on-hold' || action === 'retype') return;
+        const key = buildReportKey(entry);
         if (key) resolvedKeys.add(key);
       });
       const visibleReports = reports.filter((entry) => {
@@ -619,6 +788,8 @@
         if (resolvedKeys.has(key)) return false;
         return true;
       });
+      const visibleMapping = visibleReports.filter((entry) => getReportKind(entry) !== 'ui');
+      const visibleUi = visibleReports.filter((entry) => getReportKind(entry) === 'ui');
       if (reportCount) {
         reportCount.textContent = String(visibleReports.length);
         reportCount.classList.toggle('is-bad', visibleReports.length > 0);
@@ -627,27 +798,96 @@
         reportList.textContent = 'Brak zgłoszeń.';
         return;
       }
-      reportList.innerHTML = visibleReports.map((entry, index) => {
-        const meta = entry.meta || {};
-        const query = escapeHtml(meta.query || '');
-        const suggestedVendor = escapeHtml(meta.suggestedVendor || '');
-        const source = escapeHtml(meta.source || '');
-        const detail = escapeHtml(meta.detail || '');
-        const reason = escapeHtml(meta.reason || '');
-        const ts = entry.ts ? new Date(entry.ts).toLocaleString('pl-PL') : '—';
-        const reportKey = escapeHtml(buildReportKey(entry));
+      const sectionTemplate = (title, entries) => {
+        if (!entries.length) return '';
         return `
-          <div class="report-item" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}">
+          <div class="report-section">
+            <div class="report-section-title">${title}</div>
+            ${entries.map((entry, index) => renderReportItem(entry, index)).join('')}
+          </div>
+        `;
+      };
+
+      const filterValue = reportFilter?.value || 'all';
+      let sections = [];
+      if (filterValue === 'mapping') {
+        sections = [sectionTemplate('Zgłoszenia mapowań', visibleMapping)];
+      } else if (filterValue === 'ui') {
+        sections = [sectionTemplate('Błędy działania strony', visibleUi)];
+      } else {
+        sections = [
+          sectionTemplate('Zgłoszenia mapowań', visibleMapping),
+          sectionTemplate('Błędy działania strony', visibleUi)
+        ];
+      }
+
+      reportList.innerHTML = sections.join('');
+      hydrateAdminNotes();
+      hydrateReportKinds();
+
+      if (!reportList.innerHTML.trim()) {
+        reportList.textContent = 'Brak zgłoszeń.';
+      }
+    }
+
+    function renderReportItem(entry, index) {
+      const meta = getReportMeta(entry);
+      const query = escapeHtml(meta.query || '');
+      const suggestedVendor = escapeHtml(meta.suggestedVendor || '');
+      const source = escapeHtml(meta.source || '');
+      const detail = escapeHtml(meta.detail || '');
+      const reason = escapeHtml(meta.reason || '');
+      const ts = entry.ts ? new Date(entry.ts).toLocaleString('pl-PL') : '—';
+      const reportKey = escapeHtml(buildReportKey(entry));
+      const kind = getReportKind(entry);
+      const kindLabel = kind === 'ui' ? 'Błąd działania strony' : 'Błąd mapowania';
+      const reportId = buildReportId(entry);
+      const storedNote = getAdminNote(reportId);
+      if (kind === 'ui') {
+        return `
+          <div class="report-item report-${kind}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportId}">
+            <div class="report-header">
+              <strong>ID: ${reportId}</strong>
+              <div class="report-header-meta">
+                <span class="report-ts">${ts}</span>
+                <div class="report-meta-row">
+                  <span class="report-kind">${kindLabel}</span>
+                  <button type="button" class="report-kind-toggle" aria-label="Zmień typ zgłoszenia">↔</button>
+                </div>
+              </div>
+            </div>
+            ${reason ? `<div class="report-reason"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
+            <div class="report-form">
+              <textarea class="report-note" rows="2" placeholder="Notatki admina (opcjonalne)">${storedNote}</textarea>
+              <div class="report-actions">
+                <button type="button" class="report-resolve">Resolved</button>
+                <button type="button" class="report-hold">On hold</button>
+                <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
+              </div>
+              ${(source || detail) ? `<div class="report-extra">// ${source ? `Źródło: ${source}` : ''}${detail ? ` · Wzorzec: ${detail}` : ''}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }
+      return `
+          <div class="report-item report-${kind}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportId}">
             <div class="report-header">
               <strong>${query || '—'}</strong>
-              <span>${ts}</span>
+              <div class="report-header-meta">
+                <span class="report-ts">${ts}</span>
+                <div class="report-meta-row">
+                  <span class="report-kind">${kindLabel}</span>
+                  <button type="button" class="report-kind-toggle" aria-label="Zmień typ zgłoszenia">↔</button>
+                  <span class="report-id">ID: ${reportId}</span>
+                </div>
+              </div>
             </div>
             <div class="report-meta">
               <span>Sugestia: <strong>${suggestedVendor || '—'}</strong></span>
               <span>Źródło: ${source || '—'}</span>
               ${detail ? `<span>Wzorzec: ${detail}</span>` : ''}
             </div>
-            ${reason ? `<div class="report-reason">Uwagi: ${reason}</div>` : ''}
+            ${reason ? `<div class="report-reason"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
             <div class="report-form">
               <input type="text" class="report-key" placeholder="PN lub wzorzec" value="${query}">
               <input type="text" class="report-vendor" placeholder="Producent (np. Dell)" value="${suggestedVendor}">
@@ -667,7 +907,78 @@
             </div>
           </div>
         `;
-      }).join('');
+    }
+
+    function buildReportId(entry) {
+      const meta = entry.meta || {};
+      if (meta.reportId) return meta.reportId;
+      if (meta.report && meta.report.reportId) return meta.report.reportId;
+      const report = meta.report || {
+        query: meta.query,
+        suggestedVendor: meta.suggestedVendor,
+        source: meta.source,
+        detail: meta.detail,
+        reason: meta.reason
+      };
+      const raw = [
+        entry.ts || '',
+        entry.ray || '',
+        report.query || '',
+        report.suggestedVendor || '',
+        report.source || '',
+        report.detail || '',
+        report.reason || ''
+      ].join('|');
+      let hash = 5381;
+      for (let i = 0; i < raw.length; i += 1) {
+        hash = ((hash << 5) + hash) + raw.charCodeAt(i);
+      }
+      return `R-${(hash >>> 0).toString(16).slice(0, 8)}`;
+    }
+
+    const adminNotesCache = new Map();
+    const adminNotesLoading = new Set();
+
+    function getAdminNote(reportId) {
+      if (!reportId) return '';
+      return adminNotesCache.get(reportId) || '';
+    }
+
+    async function fetchAdminNote(reportId) {
+      if (!reportId || adminNotesCache.has(reportId) || adminNotesLoading.has(reportId)) return;
+      if (!window.PN_MAPPINGS_API?.request) return;
+      adminNotesLoading.add(reportId);
+      try {
+        const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(reportId)}`, { method: 'GET' });
+        const data = await resp.json().catch(() => ({}));
+        const note = typeof data.note === 'string' ? data.note : '';
+        adminNotesCache.set(reportId, note);
+        const field = document.querySelector(`.report-item[data-report-id="${reportId}"] .report-note`);
+        if (field) field.value = note;
+      } catch (error) {
+        adminNotesCache.set(reportId, '');
+      } finally {
+        adminNotesLoading.delete(reportId);
+      }
+    }
+
+    async function setAdminNote(reportId, note) {
+      if (!reportId) return;
+      adminNotesCache.set(reportId, note || '');
+      if (!window.PN_MAPPINGS_API?.request) return;
+      try {
+        if (note) {
+          await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(reportId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note })
+          });
+        } else {
+          await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(reportId)}`, { method: 'DELETE' });
+        }
+      } catch (error) {
+        // ignore, cache still holds latest note
+      }
     }
 
     function isPatternValue(value) {
@@ -681,8 +992,32 @@
         suggestedVendor: item.getAttribute('data-report-vendor') || '',
         source: item.getAttribute('data-report-source') || '',
         detail: item.getAttribute('data-report-detail') || '',
-        reason: item.getAttribute('data-report-reason') || ''
+        reason: item.getAttribute('data-report-reason') || '',
+        kind: item.getAttribute('data-report-kind') || 'mapping',
+        reportId: item.getAttribute('data-report-id') || ''
       };
+    }
+
+    function hydrateAdminNotes() {
+      const noteFields = Array.from(document.querySelectorAll('.report-item .report-note'));
+      noteFields.forEach((field) => {
+        const reportId = field.closest('.report-item')?.getAttribute('data-report-id') || '';
+        if (!reportId) return;
+        if (!adminNotesCache.has(reportId)) {
+          fetchAdminNote(reportId);
+        }
+      });
+    }
+
+    function hydrateReportKinds() {
+      const items = Array.from(document.querySelectorAll('.report-item'));
+      items.forEach((item) => {
+        const reportId = item.getAttribute('data-report-id') || '';
+        if (!reportId) return;
+        if (!reportKindCache.has(reportId)) {
+          fetchReportKind(reportId);
+        }
+      });
     }
 
     function applyReportMappingFromData({ rawKey, vendor, note, typeMode }) {
@@ -772,12 +1107,34 @@
       if (!item || !reportDismissModal) return;
       const key = item.getAttribute('data-report-key') || '';
       const title = item.querySelector('.report-header strong')?.textContent || 'zgłoszenie';
+      const reportId = item.getAttribute('data-report-id') || '';
       if (reportDismissMessage) {
-        reportDismissMessage.textContent = `Czy na pewno chcesz usunąć zgłoszenie: ${title}?`;
+        const idSuffix = reportId ? ` (${reportId})` : '';
+        reportDismissMessage.textContent = `Czy na pewno chcesz usunąć zgłoszenie: ${title}${idSuffix}?`;
       }
       const meta = getReportMetaFromItem(item);
       pendingReportDismiss = { key, item, meta };
       reportDismissModal.style.display = 'flex';
+    }
+
+    function closeReportRetypeModal() {
+      if (!reportRetypeModal) return;
+      reportRetypeModal.style.display = 'none';
+      pendingReportRetype = null;
+    }
+
+    function openReportRetypeModal(item, nextKind) {
+      if (!item || !reportRetypeModal) return;
+      const title = item.querySelector('.report-header strong')?.textContent || 'zgłoszenie';
+      if (reportRetypeMessage) {
+        const label = nextKind === 'ui' ? 'Błąd działania strony' : 'Błąd mapowania';
+        reportRetypeMessage.textContent = `Zmień typ ${title} na: ${label}?`;
+      }
+      pendingReportRetype = {
+        reportId: item.getAttribute('data-report-id') || '',
+        nextKind
+      };
+      reportRetypeModal.style.display = 'flex';
     }
 
     [logTypeFilter, logQuery, logPageSize].forEach((el) => {
@@ -808,6 +1165,11 @@
         renderLogs();
       });
     }
+    if (reportFilter) {
+      reportFilter.addEventListener('change', () => {
+        renderReports();
+      });
+    }
     if (adminLogList) {
       adminLogList.addEventListener('click', (event) => {
         const target = event.target;
@@ -836,16 +1198,80 @@
       reportList.addEventListener('click', (event) => {
         const target = event.target;
         if (!target) return;
+        const kindToggle = target.closest('.report-kind-toggle');
+        if (kindToggle) {
+          const item = kindToggle.closest('.report-item');
+          if (!item) return;
+          const current = item.getAttribute('data-report-kind') || 'mapping';
+          const next = current === 'ui' ? 'mapping' : 'ui';
+          openReportRetypeModal(item, next);
+          return;
+        }
         const applyBtn = target.closest('.report-apply');
         if (applyBtn) {
           const item = applyBtn.closest('.report-item');
           openReportConfirmModal(item);
           return;
         }
+        const resolveBtn = target.closest('.report-resolve');
+        if (resolveBtn) {
+          const item = resolveBtn.closest('.report-item');
+          if (!item) return;
+          const reportMeta = getReportMetaFromItem(item);
+          reportMeta.kind = 'ui';
+          const adminNote = item.querySelector('.report-note')?.value?.trim() || '';
+          const reportId = item.getAttribute('data-report-id') || '';
+          setAdminNote(reportId, adminNote);
+          logReportAction({
+            action: 'resolved',
+            report: reportMeta,
+            mapping: {
+              key: 'nie dotyczy',
+              vendor: 'nie dotyczy',
+              type: 'działanie strony',
+              note: adminNote || 'nie dotyczy'
+            }
+          });
+          if (reportMeta) {
+            const key = buildReportKeyFromMeta(reportMeta);
+            if (key) {
+              dismissedReports.add(key);
+              persistDismissedReports();
+            }
+          }
+          item.remove();
+          showToast('Zgłoszenie oznaczone jako resolved.', 'ok');
+          renderReports();
+          return;
+        }
+        const holdBtn = target.closest('.report-hold');
+        if (holdBtn) {
+          const item = holdBtn.closest('.report-item');
+          if (!item) return;
+          const reportMeta = getReportMetaFromItem(item);
+          reportMeta.kind = 'ui';
+          const adminNote = item.querySelector('.report-note')?.value?.trim() || '';
+          const reportId = item.getAttribute('data-report-id') || '';
+          setAdminNote(reportId, adminNote);
+          logReportAction({
+            action: 'on-hold',
+            report: reportMeta,
+            mapping: {
+              key: 'nie dotyczy',
+              vendor: 'nie dotyczy',
+              type: 'działanie strony',
+              note: adminNote || 'nie dotyczy'
+            }
+          });
+          showToast('Zgłoszenie oznaczone jako on hold.', 'info');
+          return;
+        }
         const dismissBtn = target.closest('.report-dismiss');
         if (!dismissBtn) return;
         const item = dismissBtn.closest('.report-item');
         if (!item) return;
+        const reportId = item.getAttribute('data-report-id') || '';
+        setAdminNote(reportId, '');
         openReportDismissModal(item);
       });
     }
@@ -862,25 +1288,48 @@
         const vendor = reportConfirmVendor?.value?.trim() || '';
         const note = reportConfirmNote?.value?.trim() || '';
         const typeMode = reportConfirmType?.value || 'auto';
-        applyReportMappingFromData({ rawKey, vendor, note, typeMode });
-        if (pendingReportApply?.reportKey) {
-          dismissedReports.add(pendingReportApply.reportKey);
-          persistDismissedReports();
-        }
-        if (pendingReportApply?.reportItem) {
-          pendingReportApply.reportItem.remove();
-        }
-        logReportAction({
-          action: 'resolved',
-          report: pendingReportApply?.reportMeta || {},
-          mapping: {
-            key: rawKey,
-            vendor,
-            type: typeMode,
-            note
+        const uiStatus = reportConfirmStatus?.value || 'resolved';
+        if (rawKey && vendor) {
+          applyReportMappingFromData({ rawKey, vendor, note, typeMode });
+          logReportAction({
+            action: 'resolved',
+            report: pendingReportApply?.reportMeta || {},
+            mapping: {
+              key: rawKey,
+              vendor,
+              type: typeMode,
+              note
+            }
+          });
+          showToast('Zgłoszenie zamknięte po zapisie mapowania.', 'ok');
+        } else {
+          const reportMeta = pendingReportApply?.reportMeta || {};
+          reportMeta.kind = 'ui';
+          logReportAction({
+            action: uiStatus === 'on-hold' ? 'on-hold' : 'resolved',
+            report: reportMeta,
+            mapping: {
+              key: 'nie dotyczy',
+              vendor: 'nie dotyczy',
+              type: 'działanie strony',
+              note: note || 'nie dotyczy'
+            }
+          });
+          if (uiStatus === 'on-hold') {
+            showToast('Zgłoszenie oznaczone jako on hold.', 'info');
+          } else {
+            showToast('Zgłoszenie zamknięte jako problem działania strony.', 'ok');
           }
-        });
-        showToast('Zgłoszenie zamknięte po zapisie mapowania.', 'ok');
+        }
+        if (uiStatus !== 'on-hold') {
+          if (pendingReportApply?.reportKey) {
+            dismissedReports.add(pendingReportApply.reportKey);
+            persistDismissedReports();
+          }
+          if (pendingReportApply?.reportItem) {
+            pendingReportApply.reportItem.remove();
+          }
+        }
         renderReports();
         closeReportConfirmModal();
       });
@@ -908,6 +1357,36 @@
         showToast('Zgłoszenie usunięte.', 'ok');
         renderReports();
         closeReportDismissModal();
+      });
+    }
+
+    if (reportRetypeClose) {
+      reportRetypeClose.addEventListener('click', closeReportRetypeModal);
+    }
+    if (reportRetypeCancel) {
+      reportRetypeCancel.addEventListener('click', closeReportRetypeModal);
+    }
+    if (reportRetypeApply) {
+      reportRetypeApply.addEventListener('click', () => {
+        if (!pendingReportRetype) return;
+        const { reportId, nextKind } = pendingReportRetype;
+        if (!reportId) {
+          closeReportRetypeModal();
+          return;
+        }
+        setReportKindOverride(reportId, nextKind);
+        const entry = logsCache.find((log) => buildReportId(log) === reportId);
+        if (entry && entry.meta) {
+          entry.meta.kind = nextKind;
+        }
+        logReportAction({
+          action: 'retype',
+          report: entry?.meta || { reportId },
+          newKind: nextKind
+        });
+        showToast('Zmieniono typ zgłoszenia.', 'ok');
+        renderReports();
+        closeReportRetypeModal();
       });
     }
 

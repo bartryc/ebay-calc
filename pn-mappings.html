@@ -186,7 +186,7 @@
       }
     }
 
-    function showToast(message, variant) {
+    function showToast(message, variant, durationMs) {
       if (!toastStack) return;
       const maxToasts = 6;
       while (toastStack.children.length >= maxToasts) {
@@ -196,7 +196,8 @@
       toast.className = 'mapping-toast';
       if (variant === 'warn') toast.classList.add('is-warn');
       if (variant === 'ok') toast.classList.add('is-ok');
-      toast.textContent = message || '';
+      const ms = Number.isFinite(durationMs) ? Math.round(durationMs) : 0;
+      toast.textContent = `${message || ''} (${ms} ms)`;
       toastStack.append(toast);
       requestAnimationFrame(() => {
         toast.classList.add('is-visible');
