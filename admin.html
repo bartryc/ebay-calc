@@ -28,6 +28,12 @@
             </span>
             <span>Mapowania</span>
           </a>
+          <a class="top-menu-link" href="mapping-builder.html">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img src="resources/icon-mapping.svg" alt="">
+            </span>
+            <span>Kreator</span>
+          </a>
           <button id="themeToggleBtn" class="top-menu-toggle icon-only" aria-label="Zmień motyw">
             <span class="top-menu-icon" aria-hidden="true">
               <img class="theme-icon theme-icon-dark" src="resources/icon-dark-mode.svg" alt="">
@@ -65,12 +71,33 @@
         </div>
 
         <div class="admin-card">
+          <h3>Backup logów</h3>
+          <p>Bezpieczna kopia historii działań w KV. Pozwala szybko odtworzyć logi.</p>
+          <div class="backup-status">Status: <strong id="logsBackupStatus">Sprawdzam…</strong></div>
+          <div class="admin-actions">
+            <button type="button" id="logsBackupRefreshBtn">Utwórz backup teraz</button>
+            <button type="button" id="logsBackupRestoreBtn">Przywróć z backupu</button>
+          </div>
+          <div class="admin-meta">Ostatni backup logów: <span id="logsBackupTs">brak</span></div>
+        </div>
+
+        <div class="admin-card">
           <h3>Przywracanie</h3>
           <p>Wczytaj plik JSON i nadpisz mapowania w bazie.</p>
           <div class="admin-actions">
             <button type="button" id="restoreBackupBtn">Przywróć z pliku</button>
           </div>
           <div class="admin-meta warn">Uwaga: przywrócenie backupu nadpisuje bieżące mapowania.</div>
+        </div>
+
+        <div class="admin-card">
+          <h3>Aktualizacja logów</h3>
+          <p>Podnieś starsze zgłoszenia do nowego formatu (kind/reportId).</p>
+          <div class="admin-actions">
+            <button type="button" id="migrateLogsBtn">Migracja logów</button>
+            <button type="button" id="dedupLogsBtn">Scal duplikaty</button>
+          </div>
+          <div class="admin-meta">Pokaże listę zmian przed zapisaniem.</div>
         </div>
 
 
@@ -124,7 +151,11 @@
                 <label for="logTypeFilter">Typ</label>
                 <select id="logTypeFilter">
                   <option value="all" selected>Wszystko</option>
+                  <option value="backup-all">Backup (wszystkie)</option>
                   <option value="backup">Backup</option>
+                  <option value="backup-full">Backup pełny</option>
+                  <option value="backup-logs">Backup logów</option>
+                  <option value="restore-logs">Przywrócenie logów</option>
                   <option value="update">Update</option>
                   <option value="mapping">Mapowania</option>
                   <option value="mapping-report">Zgłoszenia</option>
@@ -241,6 +272,23 @@
     </div>
   </div>
 
+  <div id="migrateLogsModal" class="mapping-modal" style="display: none;">
+    <div class="mapping-modal-card" role="dialog" aria-modal="true" aria-labelledby="migrateLogsTitle">
+      <div class="mapping-modal-header">
+        <strong id="migrateLogsTitle">Migracja logów</strong>
+        <button type="button" id="migrateLogsClose" aria-label="Zamknij">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <p id="migrateLogsSummary">Ładuję podgląd zmian…</p>
+        <div id="migrateLogsList" class="migrate-list"></div>
+      </div>
+      <div class="mapping-modal-actions confirm-actions">
+        <button type="button" id="migrateLogsCancel">Anuluj</button>
+        <button type="button" id="migrateLogsApply">Zastosuj migrację</button>
+      </div>
+    </div>
+  </div>
+
   <script src="pn-mappings.js"></script>
   <script>
     const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -268,6 +316,11 @@
     const downloadBackupBtn = document.getElementById('downloadBackupBtn');
     const downloadFullBackupBtn = document.getElementById('downloadFullBackupBtn');
     const restoreBackupBtn = document.getElementById('restoreBackupBtn');
+    const migrateLogsBtn = document.getElementById('migrateLogsBtn');
+    const logsBackupStatus = document.getElementById('logsBackupStatus');
+    const logsBackupTs = document.getElementById('logsBackupTs');
+    const logsBackupRefreshBtn = document.getElementById('logsBackupRefreshBtn');
+    const logsBackupRestoreBtn = document.getElementById('logsBackupRestoreBtn');
     const backupFileInput = document.getElementById('backupFileInput');
     const lastBackupValue = document.getElementById('lastBackupValue');
     const lastSyncValue = document.getElementById('lastSyncValue');
@@ -303,6 +356,23 @@
     const reportRetypeCancel = document.getElementById('reportRetypeCancel');
     const reportRetypeApply = document.getElementById('reportRetypeApply');
     const reportRetypeMessage = document.getElementById('reportRetypeMessage');
+    const migrateLogsModal = document.getElementById('migrateLogsModal');
+    const migrateLogsClose = document.getElementById('migrateLogsClose');
+    const migrateLogsCancel = document.getElementById('migrateLogsCancel');
+    const migrateLogsApply = document.getElementById('migrateLogsApply');
+    const migrateLogsSummary = document.getElementById('migrateLogsSummary');
+    const migrateLogsList = document.getElementById('migrateLogsList');
+    const dedupLogsBtn = document.getElementById('dedupLogsBtn');
+    const patternSeedInput = document.getElementById('patternSeedInput');
+    const patternGenerateBtn = document.getElementById('patternGenerateBtn');
+    const patternSuggestions = document.getElementById('patternSuggestions');
+    const patternResult = document.getElementById('patternResult');
+    const patternVendorSelect = document.getElementById('patternVendorSelect');
+    const patternVendor = document.getElementById('patternVendor');
+    const patternApplyBtn = document.getElementById('patternApplyBtn');
+    const patternStripSpecial = document.getElementById('patternStripSpecial');
+    const patternPreferPlus = document.getElementById('patternPreferPlus');
+    let migrateMode = 'full';
     let pendingReportApply = null;
     let pendingReportDismiss = null;
     let pendingReportRetype = null;
@@ -312,8 +382,181 @@
     const ADMIN_LAST_BACKUP_KEY = 'adminLastBackup';
     const ADMIN_LAST_SYNC_KEY = 'adminLastSync';
     let logsCache = [];
+    let reportsCache = [];
     let totalLogs = null;
     let logPage = 1;
+    let logsBackupCache = null;
+
+    function normalizePn(value) {
+      return String(value || '').replace(/\s+/g, '').toUpperCase();
+    }
+
+    function normalizeSeed(value, stripSpecial) {
+      const base = normalizePn(value);
+      if (!stripSpecial) return base;
+      return base.replace(/[^A-Z0-9-]/g, '');
+    }
+
+    function longestCommonPrefix(values) {
+      if (!values.length) return '';
+      let prefix = values[0];
+      for (let i = 1; i < values.length; i += 1) {
+        const val = values[i];
+        let j = 0;
+        while (j < prefix.length && j < val.length && prefix[j] === val[j]) j += 1;
+        prefix = prefix.slice(0, j);
+        if (!prefix) break;
+      }
+      return prefix;
+    }
+
+    function buildPositionalPattern(values) {
+      if (!values.length) return '';
+      const length = values[0].length;
+      if (!values.every((v) => v.length === length)) return '';
+      const chars = [];
+      for (let i = 0; i < length; i += 1) {
+        const column = values.map((v) => v[i]);
+        const allSame = column.every((c) => c === column[0]);
+        if (allSame) {
+          chars.push(column[0]);
+          continue;
+        }
+        const allDigits = column.every((c) => /\d/.test(c));
+        chars.push(allDigits ? 'x' : '*');
+      }
+      return chars.join('');
+    }
+
+    function buildPrefixPattern(values) {
+      const prefix = longestCommonPrefix(values);
+      if (prefix.length < 2) return '';
+      return `${prefix}+`;
+    }
+
+    function longestCommonSuffix(values) {
+      if (!values.length) return '';
+      let suffix = values[0];
+      for (let i = 1; i < values.length; i += 1) {
+        const val = values[i];
+        let j = 0;
+        while (j < suffix.length && j < val.length && suffix[suffix.length - 1 - j] === val[val.length - 1 - j]) {
+          j += 1;
+        }
+        suffix = suffix.slice(suffix.length - j);
+        if (!suffix) break;
+      }
+      return suffix;
+    }
+
+    function buildSuffixPattern(values) {
+      const suffix = longestCommonSuffix(values);
+      if (suffix.length < 2) return '';
+      return `+${suffix}`;
+    }
+
+    function buildSegmentPattern(values) {
+      const parts = values.map((v) => v.split('-'));
+      const lengths = new Set(parts.map((p) => p.length));
+      if (lengths.size !== 1) return '';
+      const segCount = parts[0].length;
+      const segments = [];
+      for (let i = 0; i < segCount; i += 1) {
+        const column = parts.map((p) => p[i]);
+        const allSame = column.every((c) => c === column[0]);
+        if (allSame) {
+          segments.push(column[0]);
+          continue;
+        }
+        const allDigits = column.every((c) => /^\d+$/.test(c));
+        segments.push(allDigits ? 'x'.repeat(column[0].length) : '*'.repeat(column[0].length));
+      }
+      return segments.join('-');
+    }
+
+    function matchPatternLocal(pattern, value) {
+      if (window.PN_MAPPINGS_API?.matchPattern) {
+        return window.PN_MAPPINGS_API.matchPattern(pattern, value);
+      }
+      const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+      const regex = escaped
+        .replace(/x/gi, '\\d')
+        .replace(/\*/g, '.')
+        .replace(/\+/g, '.+');
+      return new RegExp(`^${regex}$`, 'i').test(value);
+    }
+
+    function generatePatternSuggestions(rawList, options = {}) {
+      const stripSpecial = options.stripSpecial === true;
+      const preferPlus = options.preferPlus !== false;
+      const values = rawList.map((val) => normalizeSeed(val, stripSpecial)).filter(Boolean);
+      const suggestions = [];
+      const positional = buildPositionalPattern(values);
+      if (positional) suggestions.push(positional);
+      if (preferPlus) {
+        const prefix = buildPrefixPattern(values);
+        if (prefix) suggestions.push(prefix);
+        const suffix = buildSuffixPattern(values);
+        if (suffix) suggestions.push(suffix);
+      }
+      const segmented = buildSegmentPattern(values);
+      if (segmented) suggestions.push(segmented);
+      const unique = Array.from(new Set(suggestions));
+      return unique.map((pattern) => {
+        const matched = values.filter((v) => matchPatternLocal(pattern, v));
+        return {
+          pattern,
+          count: matched.length,
+          total: values.length,
+          examples: matched.slice(0, 3),
+          confidence: Math.round((matched.length / values.length) * 100)
+        };
+      }).sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return b.pattern.length - a.pattern.length;
+      });
+    }
+
+    function renderPatternSuggestions(list) {
+      if (!patternSuggestions) return;
+      if (!list.length) {
+        patternSuggestions.innerHTML = '<div class="pattern-suggestion"><span>Brak propozycji. Sprawdź listę PN.</span></div>';
+        return;
+      }
+      patternSuggestions.innerHTML = list.map((item) => `
+        <div class="pattern-suggestion">
+          <div>
+            <strong>${item.pattern}</strong>
+            <span class="pattern-badge ${item.confidence >= 80 ? 'is-high' : item.confidence >= 50 ? 'is-mid' : 'is-low'}">${item.confidence}%</span>
+            <small> • ${item.count}/${item.total}</small>
+            ${item.examples.length ? `<div><small>Przykład: ${item.examples.join(', ')}</small></div>` : ''}
+          </div>
+          <button type="button" data-pattern="${item.pattern}">Użyj</button>
+        </div>
+      `).join('');
+    }
+
+    function refreshVendorOptions() {
+      if (!patternVendorSelect || !window.PN_MAPPINGS_API?.get) return;
+      const data = window.PN_MAPPINGS_API.get();
+      const vendors = new Set();
+      const exact = data?.exact || {};
+      Object.values(exact).forEach((val) => {
+        if (val) vendors.add(String(val).trim());
+      });
+      const patterns = Array.isArray(data?.patterns) ? data.patterns : [];
+      patterns.forEach((p) => {
+        if (p?.vendor) vendors.add(String(p.vendor).trim());
+      });
+      const sorted = Array.from(vendors).filter(Boolean).sort((a, b) => a.localeCompare(b));
+      const current = patternVendorSelect.value;
+      patternVendorSelect.innerHTML = `
+        <option value="">Wybierz producenta</option>
+        <option value="__custom__">Wpisz własnego…</option>
+        ${sorted.map((v) => `<option value="${v}">${v}</option>`).join('')}
+      `;
+      patternVendorSelect.value = sorted.includes(current) ? current : (current === '__custom__' ? current : '');
+    }
 
     function showToast(message, variant, durationMs) {
       if (!toastStack) return;
@@ -428,6 +671,169 @@
         downloadFullBackup();
       });
     }
+
+    async function fetchLogsBackupStatus() {
+      if (!logsBackupStatus || !logsBackupTs) return;
+      logsBackupStatus.textContent = 'Sprawdzam…';
+      logsBackupStatus.classList.remove('is-ok', 'is-warn');
+      try {
+        const [logsResp, backupResp] = await Promise.all([
+          window.PN_MAPPINGS_API.request('/logs?limit=20&offset=0', { method: 'GET' }),
+          window.PN_MAPPINGS_API.request('/logs/backup', { method: 'GET' })
+        ]);
+        if (!logsResp.ok || !backupResp.ok) {
+          const t1 = logsResp.ok ? '' : await logsResp.text().catch(() => '');
+          const t2 = backupResp.ok ? '' : await backupResp.text().catch(() => '');
+          throw new Error(`HTTP ${logsResp.status}${t1 ? `: ${t1}` : ''} / ${backupResp.status}${t2 ? `: ${t2}` : ''}`);
+        }
+        const logsData = await logsResp.json();
+        const backupData = await backupResp.json();
+        const recentLogs = Array.isArray(logsData.logs) ? logsData.logs : [];
+        const ignoredTypes = new Set(['backup-logs', 'restore-logs']);
+        const latestNonBackup = recentLogs.find((entry) => entry && !ignoredTypes.has(entry.type || ''))?.ts || '';
+        const backupLogs = Array.isArray(backupData.logs) ? backupData.logs : [];
+        logsBackupCache = backupData;
+        const backupLatest = backupLogs.length ? backupLogs[backupLogs.length - 1].ts : '';
+        const same = backupLatest && latestNonBackup
+          ? Date.parse(backupLatest) >= Date.parse(latestNonBackup)
+          : backupLogs.length === 0;
+        logsBackupStatus.textContent = same ? 'Backup aktualny' : 'Backup nieaktualny';
+        logsBackupStatus.classList.toggle('is-ok', same);
+        logsBackupStatus.classList.toggle('is-warn', !same);
+        logsBackupTs.textContent = backupData.ts || (backupLatest ? new Date(backupLatest).toLocaleString('pl-PL') : 'brak');
+      } catch (error) {
+        logsBackupStatus.textContent = 'Błąd';
+        logsBackupStatus.classList.remove('is-ok');
+        logsBackupStatus.classList.add('is-warn');
+      }
+    }
+
+    if (logsBackupRefreshBtn) {
+      logsBackupRefreshBtn.addEventListener('click', async () => {
+        const t0 = performance.now();
+        try {
+          const resp = await window.PN_MAPPINGS_API.request('/logs/backup/update', { method: 'POST' });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+          }
+          await fetchLogsBackupStatus();
+          showToast('Backup logów odświeżony.', 'ok', performance.now() - t0);
+        } catch (error) {
+          showToast(`Błąd backupu logów: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+    }
+
+    if (logsBackupRestoreBtn) {
+      logsBackupRestoreBtn.addEventListener('click', async () => {
+        const t0 = performance.now();
+        try {
+          if (!logsBackupCache) await fetchLogsBackupStatus();
+          const backupLogs = Array.isArray(logsBackupCache?.logs) ? logsBackupCache.logs : [];
+          if (!backupLogs.length) {
+            showToast('Brak backupu logów do przywrócenia.', 'warn');
+            return;
+          }
+          const resp = await window.PN_MAPPINGS_API.request('/logs/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logs: backupLogs })
+          });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+          }
+          await fetchLogs();
+          await fetchLogsBackupStatus();
+          showToast('Logi przywrócone z backupu.', 'ok', performance.now() - t0);
+        } catch (error) {
+          showToast(`Błąd przywracania logów: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+    }
+    if (migrateLogsBtn) {
+      migrateLogsBtn.addEventListener('click', () => {
+        openMigrateLogsModal('full');
+      });
+    }
+    if (dedupLogsBtn) {
+      dedupLogsBtn.addEventListener('click', () => {
+        openMigrateLogsModal('dedup');
+      });
+    }
+
+    if (patternGenerateBtn) {
+      patternGenerateBtn.addEventListener('click', () => {
+        const raw = patternSeedInput?.value || '';
+        const list = raw.split(/\r?\n|,|;/).map((item) => item.trim()).filter(Boolean);
+        const suggestions = generatePatternSuggestions(list, {
+          stripSpecial: patternStripSpecial?.checked,
+          preferPlus: patternPreferPlus?.checked
+        });
+        renderPatternSuggestions(suggestions);
+      });
+    }
+
+    if (patternVendorSelect) {
+      patternVendorSelect.addEventListener('change', () => {
+        const val = patternVendorSelect.value;
+        if (val && val !== '__custom__') {
+          patternVendor.value = val;
+          patternVendor.focus();
+        } else if (val === '__custom__') {
+          patternVendor.value = '';
+          patternVendor.focus();
+        }
+      });
+    }
+
+    if (patternSuggestions) {
+      patternSuggestions.addEventListener('click', (event) => {
+        const btn = event.target.closest('button');
+        if (!btn) return;
+        const pattern = btn.getAttribute('data-pattern');
+        if (patternResult) patternResult.value = pattern || '';
+        patternVendor?.focus();
+      });
+    }
+
+    if (patternApplyBtn) {
+      patternApplyBtn.addEventListener('click', () => {
+        const rawPattern = patternResult?.value || '';
+        const vendor = patternVendor?.value || '';
+        if (!rawPattern || !vendor) {
+          showToast('Uzupełnij wzorzec i producenta.', 'warn');
+          return;
+        }
+        if (!window.PN_MAPPINGS_API?.get || !window.PN_MAPPINGS_API?.set) return;
+        const data = window.PN_MAPPINGS_API.get();
+        const hasPattern = /[xX*+]/.test(rawPattern);
+        if (hasPattern) {
+          const normalized = window.PN_MAPPINGS_API.normalizePattern(rawPattern);
+          const exists = (data.patterns || []).some((p) => window.PN_MAPPINGS_API.normalizePattern(p.pattern) === normalized);
+          if (!exists) {
+            data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
+            data.patterns.push({ pattern: normalized, vendor: vendor.trim() });
+            window.PN_MAPPINGS_API.set(data);
+            window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-pattern', pattern: normalized, vendor: vendor.trim() });
+            showToast('Dodano wzorzec z kreatora.', 'ok');
+            refreshVendorOptions();
+          } else {
+            showToast('Taki wzorzec już istnieje.', 'warn');
+          }
+        } else {
+          const key = window.PN_MAPPINGS_API.normalize(rawPattern);
+          data.exact = data.exact || {};
+          data.exact[key] = vendor.trim();
+          window.PN_MAPPINGS_API.set(data);
+          window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-exact', key, vendor: vendor.trim() });
+          showToast('Dodano PN exact z kreatora.', 'ok');
+          refreshVendorOptions();
+        }
+        updateStats(window.PN_MAPPINGS_API.get());
+      });
+    }
     restoreBackupBtn.addEventListener('click', () => {
       backupFileInput.click();
     });
@@ -445,6 +851,10 @@
           localStorage.setItem(ADMIN_LAST_SYNC_KEY, stamp);
           if (lastSyncValue) lastSyncValue.textContent = stamp;
           fetchLogs();
+          fetchReports();
+          resolveCurrentAppVersion();
+          fetchLogsBackupStatus();
+          refreshVendorOptions();
         })
         .catch(() => {
           showToast('Nie udało się pobrać mapowań z serwera.', 'warn');
@@ -471,7 +881,17 @@
       if (!adminLogList) return;
       try {
         const t0 = performance.now();
-        const resp = await window.PN_MAPPINGS_API.request('/logs?limit=200', { method: 'GET' });
+        const typeFilter = logTypeFilter?.value || 'all';
+        const query = (logQuery?.value || '').trim();
+        const pageSize = Number(logPageSize?.value) || 20;
+        const offset = Math.max(0, (logPage - 1) * pageSize);
+        const params = new URLSearchParams();
+        params.set('limit', String(pageSize));
+        params.set('offset', String(offset));
+        const compositeBackup = typeFilter === 'backup-all' || typeFilter === 'backup';
+        if (typeFilter !== 'all' && !compositeBackup) params.set('type', typeFilter);
+        if (query) params.set('query', query);
+        const resp = await window.PN_MAPPINGS_API.request(`/logs?${params.toString()}`, { method: 'GET' });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
           throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
@@ -480,7 +900,15 @@
         const t1 = performance.now();
         logsCache = Array.isArray(data.logs) ? data.logs : [];
         totalLogs = Number.isFinite(data.total) ? data.total : null;
-        logPage = 1;
+        if (compositeBackup) {
+          const backupTypes = new Set(['backup', 'backup-full', 'backup-logs', 'restore-logs']);
+          logsCache = logsCache.filter((entry) => backupTypes.has(entry.type));
+          totalLogs = logsCache.length;
+        }
+        if (typeFilter === 'mapping-report') {
+          logsCache = logsCache.filter((entry) => isReportLike(entry));
+          totalLogs = logsCache.length;
+        }
         renderLogs();
         if (notifySuccess) {
           showToast('Logi odświeżone.', 'ok', t1 - t0);
@@ -492,44 +920,40 @@
       }
     }
 
+    async function fetchReportKindsForReports(entries) {
+      const ids = entries
+        .map((entry) => buildReportId(entry))
+        .filter(Boolean)
+        .filter((id) => !reportKindCache.has(id));
+      if (!ids.length) return;
+      await Promise.all(ids.map((id) => fetchReportKind(id)));
+    }
+
+    async function fetchReports() {
+      try {
+        const resp = await window.PN_MAPPINGS_API.request('/logs?limit=200&offset=0', { method: 'GET' });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+        }
+        const data = await resp.json();
+        const rawLogs = Array.isArray(data.logs) ? data.logs : [];
+        reportsCache = rawLogs.filter((entry) => isReportLike(entry));
+        await fetchReportKindsForReports(reportsCache);
+        scheduleRenderReports();
+      } catch (error) {
+        // keep existing report list on failure
+      }
+    }
+
     function renderLogs() {
       if (!adminLogList) return;
-      const query = (logQuery?.value || '').trim().toLowerCase();
-      const typeFilter = logTypeFilter?.value || 'all';
       const pageSize = Number(logPageSize?.value) || 20;
-      const filtered = logsCache.filter((entry) => {
-        if (typeFilter !== 'all' && entry.type !== typeFilter) return false;
-        if (!query) return true;
-        const geo = entry.geo || {};
-        const meta = entry.meta || {};
-        const metaText = (() => {
-          try {
-            return JSON.stringify(meta);
-          } catch (err) {
-            return '';
-          }
-        })();
-        const haystack = [
-          entry.type,
-          entry.ts,
-          entry.ip,
-          entry.clientFp,
-          entry.ua,
-          entry.ray,
-          geo.city,
-          geo.region,
-          geo.country,
-          geo.asn,
-          metaText
-        ].join(' ').toLowerCase();
-        return haystack.includes(query);
-      });
-      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      const totalPages = Math.max(1, Math.ceil((totalLogs || logsCache.length) / pageSize));
       if (logPage > totalPages) logPage = totalPages;
-      const start = (logPage - 1) * pageSize;
-      const pageItems = filtered.slice(start, start + pageSize);
+      const pageItems = logsCache;
       if (logCount) {
-        const countValue = Number.isFinite(totalLogs) ? totalLogs : filtered.length;
+        const countValue = Number.isFinite(totalLogs) ? totalLogs : logsCache.length;
         logCount.textContent = String(countValue);
         logCount.classList.toggle('is-bad', countValue > 0);
       }
@@ -582,7 +1006,7 @@
       }
       if (logPrevBtn) logPrevBtn.disabled = logPage <= 1;
       if (logNextBtn) logNextBtn.disabled = logPage >= totalPages;
-      renderReports();
+      // reporty są ładowane osobno
     }
 
     function escapeHtml(value) {
@@ -594,11 +1018,48 @@
         .replace(/'/g, '&#39;');
     }
 
+    function formatPreviewValue(value) {
+      if (value === null || value === undefined) return '';
+      if (typeof value === 'string') return escapeHtml(value);
+      try {
+        return escapeHtml(JSON.stringify(value));
+      } catch (error) {
+        return escapeHtml(String(value));
+      }
+    }
+
+    function isReportLike(entry) {
+      if (!entry) return false;
+      const type = entry.type || '';
+      if (type === 'backup-logs' || type === 'restore-logs') return false;
+      if (type === 'mapping-report') return true;
+      const meta = entry.meta || {};
+      const report = meta.report || {};
+      return !!(
+        meta.reportId ||
+        report.reportId ||
+        meta.reason ||
+        meta.query ||
+        meta.suggestedVendor ||
+        meta.detail ||
+        report.reason ||
+        report.query ||
+        report.suggestedVendor ||
+        report.detail ||
+        meta.kind ||
+        report.kind
+      );
+    }
+
     function formatMetaPretty(entry) {
       const meta = entry.meta || {};
       const lines = [];
+      const usedKeys = new Set();
       if (entry.type) lines.push(`Typ: ${entry.type}`);
-      if (meta.action) lines.push(`Akcja: ${meta.action}`);
+      if (meta.action) {
+        lines.push(`Akcja: ${meta.action}`);
+        usedKeys.add('action');
+      }
       if (entry.type === 'mapping-report') {
         const report = meta.report || {
           query: meta.query,
@@ -611,6 +1072,9 @@
           if (report.query) lines.push(`Zgłoszenie PN: ${report.query}`);
           if (report.suggestedVendor) lines.push(`Zgłoszony producent: ${report.suggestedVendor}`);
           if (report.reason) lines.push(`Powód: ${report.reason}`);
+          usedKeys.add('report.query');
+          usedKeys.add('report.suggestedVendor');
+          usedKeys.add('report.reason');
         }
         if (meta.mapping) {
           const m = meta.mapping || {};
@@ -618,6 +1082,10 @@
           if (m.vendor) lines.push(`Mapa -> producent: ${m.vendor}`);
           if (m.type) lines.push(`Typ wpisu: ${m.type}`);
           if (m.note) lines.push(`Uwagi admina: ${m.note}`);
+          usedKeys.add('mapping.key');
+          usedKeys.add('mapping.vendor');
+          usedKeys.add('mapping.type');
+          usedKeys.add('mapping.note');
         }
         if (report && (report.source || report.detail)) {
           lines.push('');
@@ -625,11 +1093,25 @@
           if (report.source) parts.push(`Źródło: ${report.source}`);
           if (report.detail) parts.push(`Wzorzec: ${report.detail}`);
           lines.push(`// ${parts.join(' · ')}`);
+          usedKeys.add('report.source');
+          usedKeys.add('report.detail');
+        }
+        const flatAll = flattenMeta(meta);
+        const allKeys = Object.keys(flatAll).filter((key) => !usedKeys.has(key));
+        if (allKeys.length) {
+          lines.push('');
+          lines.push('--- Pozostałe pola ---');
+          allKeys.sort().forEach((key) => {
+            lines.push(`${key}: ${flatAll[key]}`);
+          });
         }
       } else {
         const flat = flattenMeta(meta);
-        for (const [key, value] of Object.entries(flat)) {
-          lines.push(`${key}: ${value}`);
+        const keys = Object.keys(flat);
+        if (keys.length) {
+          keys.sort().forEach((key) => {
+            lines.push(`${key}: ${flat[key]}`);
+          });
         }
       }
       if (!lines.length) return JSON.stringify(meta, null, 2);
@@ -689,9 +1171,6 @@
         const data = await resp.json().catch(() => ({}));
         const kind = typeof data.kind === 'string' ? data.kind : '';
         reportKindCache.set(reportId, kind);
-        requestAnimationFrame(() => {
-          renderReports();
-        });
       } catch (error) {
         reportKindCache.set(reportId, '');
       } finally {
@@ -747,9 +1226,46 @@
       localStorage.setItem(DISMISSED_REPORTS_KEY, JSON.stringify(Array.from(dismissedReports)));
     }
 
+    const REPORT_STATUS_KEY = 'adminReportStatus';
+
+    function loadReportStatus() {
+      try {
+        return JSON.parse(localStorage.getItem(REPORT_STATUS_KEY) || '{}');
+      } catch (error) {
+        return {};
+      }
+    }
+
+    function setReportStatus(reportId, status) {
+      if (!reportId) return;
+      const map = loadReportStatus();
+      if (status) {
+        map[reportId] = status;
+      } else {
+        delete map[reportId];
+      }
+      localStorage.setItem(REPORT_STATUS_KEY, JSON.stringify(map));
+    }
+
+    function getReportStatus(reportId) {
+      if (!reportId) return '';
+      const map = loadReportStatus();
+      return map[reportId] || '';
+    }
+
+    let renderReportsScheduled = false;
+    function scheduleRenderReports() {
+      if (renderReportsScheduled) return;
+      renderReportsScheduled = true;
+      requestAnimationFrame(() => {
+        renderReportsScheduled = false;
+        renderReports();
+      });
+    }
+
     function renderReports() {
       if (!reportList) return;
-      const allReports = logsCache.filter((entry) => entry.type === 'mapping-report');
+      const allReports = reportsCache.filter((entry) => entry.type === 'mapping-report');
       const baseReports = allReports.filter((entry) => !entry?.meta?.action);
       const reportById = new Map();
       baseReports.forEach((entry) => {
@@ -775,7 +1291,7 @@
         else mappingReports.push(entry);
       });
       const resolvedKeys = new Set();
-      logsCache.forEach((entry) => {
+      reportsCache.forEach((entry) => {
         if (entry.type !== 'mapping-report') return;
         const action = entry?.meta?.action;
         if (!action || action === 'on-hold' || action === 'retype') return;
@@ -784,6 +1300,8 @@
       });
       const visibleReports = reports.filter((entry) => {
         const key = buildReportKey(entry);
+        const status = getReportStatus(buildReportId(entry));
+        if (status === 'resolved' || status === 'dismissed') return false;
         if (dismissedReports.has(key)) return false;
         if (resolvedKeys.has(key)) return false;
         return true;
@@ -823,7 +1341,7 @@
 
       reportList.innerHTML = sections.join('');
       hydrateAdminNotes();
-      hydrateReportKinds();
+      // overrides są ładowane w batchu przy fetchReports
 
       if (!reportList.innerHTML.trim()) {
         reportList.textContent = 'Brak zgłoszeń.';
@@ -843,9 +1361,10 @@
       const kindLabel = kind === 'ui' ? 'Błąd działania strony' : 'Błąd mapowania';
       const reportId = buildReportId(entry);
       const storedNote = getAdminNote(reportId);
+      const reportStatus = getReportStatus(reportId);
       if (kind === 'ui') {
         return `
-          <div class="report-item report-${kind}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportId}">
+          <div class="report-item report-${kind} ${reportStatus === 'on-hold' ? 'is-on-hold' : ''}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportId}">
             <div class="report-header">
               <strong>ID: ${reportId}</strong>
               <div class="report-header-meta">
@@ -870,7 +1389,7 @@
         `;
       }
       return `
-          <div class="report-item report-${kind}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportId}">
+          <div class="report-item report-${kind} ${reportStatus === 'on-hold' ? 'is-on-hold' : ''}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportId}">
             <div class="report-header">
               <strong>${query || '—'}</strong>
               <div class="report-header-meta">
@@ -1009,16 +1528,7 @@
       });
     }
 
-    function hydrateReportKinds() {
-      const items = Array.from(document.querySelectorAll('.report-item'));
-      items.forEach((item) => {
-        const reportId = item.getAttribute('data-report-id') || '';
-        if (!reportId) return;
-        if (!reportKindCache.has(reportId)) {
-          fetchReportKind(reportId);
-        }
-      });
-    }
+    function hydrateReportKinds() {}
 
     function applyReportMappingFromData({ rawKey, vendor, note, typeMode }) {
       if (!rawKey || !vendor) {
@@ -1141,28 +1651,30 @@
       if (!el) return;
       el.addEventListener('input', () => {
         logPage = 1;
-        renderLogs();
+        fetchLogs();
       });
       el.addEventListener('change', () => {
         logPage = 1;
-        renderLogs();
+        fetchLogs();
       });
     });
     if (logRefreshBtn) {
       logRefreshBtn.addEventListener('click', () => {
         fetchLogs({ notifySuccess: true });
+        fetchReports();
+        fetchLogsBackupStatus();
       });
     }
     if (logPrevBtn) {
       logPrevBtn.addEventListener('click', () => {
         logPage = Math.max(1, logPage - 1);
-        renderLogs();
+        fetchLogs();
       });
     }
     if (logNextBtn) {
       logNextBtn.addEventListener('click', () => {
         logPage += 1;
-        renderLogs();
+        fetchLogs();
       });
     }
     if (reportFilter) {
@@ -1239,6 +1751,8 @@
               persistDismissedReports();
             }
           }
+          if (reportId) setReportStatus(reportId, 'resolved');
+          item.classList.remove('is-on-hold');
           item.remove();
           showToast('Zgłoszenie oznaczone jako resolved.', 'ok');
           renderReports();
@@ -1263,6 +1777,8 @@
               note: adminNote || 'nie dotyczy'
             }
           });
+          if (reportId) setReportStatus(reportId, 'on-hold');
+          item.classList.add('is-on-hold');
           showToast('Zgłoszenie oznaczone jako on hold.', 'info');
           return;
         }
@@ -1301,6 +1817,8 @@
               note
             }
           });
+          const resolvedId = pendingReportApply?.reportItem?.getAttribute('data-report-id') || '';
+          if (resolvedId) setReportStatus(resolvedId, 'resolved');
           showToast('Zgłoszenie zamknięte po zapisie mapowania.', 'ok');
         } else {
           const reportMeta = pendingReportApply?.reportMeta || {};
@@ -1315,6 +1833,8 @@
               note: note || 'nie dotyczy'
             }
           });
+          const resolvedId = pendingReportApply?.reportItem?.getAttribute('data-report-id') || '';
+          if (resolvedId) setReportStatus(resolvedId, uiStatus === 'on-hold' ? 'on-hold' : 'resolved');
           if (uiStatus === 'on-hold') {
             showToast('Zgłoszenie oznaczone jako on hold.', 'info');
           } else {
@@ -1327,8 +1847,11 @@
             persistDismissedReports();
           }
           if (pendingReportApply?.reportItem) {
+            pendingReportApply.reportItem.classList.remove('is-on-hold');
             pendingReportApply.reportItem.remove();
           }
+        } else if (pendingReportApply?.reportItem) {
+          pendingReportApply.reportItem.classList.add('is-on-hold');
         }
         renderReports();
         closeReportConfirmModal();
@@ -1350,6 +1873,8 @@
         if (pendingReportDismiss?.item) {
           pendingReportDismiss.item.remove();
         }
+        const dismissedId = pendingReportDismiss?.item?.getAttribute('data-report-id') || '';
+        if (dismissedId) setReportStatus(dismissedId, 'dismissed');
         logReportAction({
           action: 'dismissed',
           report: pendingReportDismiss?.meta || {}
@@ -1375,6 +1900,9 @@
           return;
         }
         setReportKindOverride(reportId, nextKind);
+        setReportStatus(reportId, '');
+        const retypeItem = reportList?.querySelector(`.report-item[data-report-id="${reportId}"]`);
+        retypeItem?.classList.remove('is-on-hold');
         const entry = logsCache.find((log) => buildReportId(log) === reportId);
         if (entry && entry.meta) {
           entry.meta.kind = nextKind;
@@ -1390,8 +1918,153 @@
       });
     }
 
+    function closeMigrateLogsModal() {
+      if (!migrateLogsModal) return;
+      migrateLogsModal.style.display = 'none';
+    }
+
+    async function resolveCurrentAppVersion() {
+      const cached = localStorage.getItem('appVersion') || '';
+      if (location.protocol === 'file:') {
+        return cached;
+      }
+      try {
+        const resp = await fetch(`index.html?cb=${Date.now()}`);
+        if (!resp.ok) return cached;
+        const html = await resp.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const el = doc.getElementById('appVersion');
+        const fresh = (el?.textContent || '').trim();
+        if (fresh && fresh !== cached) {
+          localStorage.setItem('appVersion', fresh);
+          return fresh;
+        }
+      } catch (error) {
+        // ignore and fallback to cached
+      }
+      return cached;
+    }
+
+    async function openMigrateLogsModal(mode = 'full') {
+      if (!migrateLogsModal) return;
+      migrateMode = mode;
+      const currentVersion = await resolveCurrentAppVersion();
+      if (!currentVersion) {
+        showToast('Brak wersji aplikacji — uruchom najpierw kalkulator.', 'warn');
+        return;
+      }
+      if (migrateLogsSummary) {
+        migrateLogsSummary.textContent = 'Ładuję podgląd zmian…';
+      }
+      if (migrateLogsSummary) migrateLogsSummary.textContent = 'Ładuję podgląd zmian…';
+      if (migrateLogsList) migrateLogsList.innerHTML = '';
+      try {
+        const dedup = false;
+        const resp = await window.PN_MAPPINGS_API.request('/migrate-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            version: currentVersion,
+            dedup,
+            mode,
+            apply: false
+          })
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+        }
+        const data = await resp.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const dedupItems = Array.isArray(data.dedup) ? data.dedup : [];
+        const showItems = mode === 'dedup' ? dedupItems : items;
+        if (!showItems.length) {
+          showToast(mode === 'dedup' ? 'Brak duplikatów do scalenia.' : 'Brak wpisów do migracji.', 'info');
+          return;
+        }
+        migrateLogsModal.style.display = 'flex';
+        if (migrateLogsSummary) {
+          const totalLabel = mode === 'dedup'
+            ? `Duplikaty: ${dedupItems.length}.`
+            : `Do migracji: ${items.length}.`;
+          migrateLogsSummary.textContent = `${totalLabel} Wersja docelowa: ${currentVersion}.`;
+        }
+        if (migrateLogsList) {
+          if (mode === 'dedup') {
+            migrateLogsList.innerHTML = dedupItems.map((item) => `
+              <div class="migrate-item migrate-dedup">
+                <div><strong>${item.id || '—'}</strong> • ${item.ts || '—'}</div>
+                <div class="muted">Duplikat do scalenia.</div>
+              </div>
+            `).join('');
+          } else {
+            const grouped = new Map();
+            items.forEach((item) => {
+              const key = item.id || '—';
+              if (!grouped.has(key)) grouped.set(key, []);
+              grouped.get(key).push(item);
+            });
+            const blocks = [];
+            grouped.forEach((groupItems, id) => {
+              const header = `<div class="migrate-group-title"><strong>${id}</strong> • ${groupItems.length} wpisów</div>`;
+              const rows = groupItems.map((item) => `
+                <div class="migrate-item">
+                  <div><strong>${item.id || '—'}</strong> • ${item.ts || '—'}</div>
+                  <div class="muted migrate-before">${formatPreviewValue(item.before)}</div>
+                  <div class="muted migrate-after">${formatPreviewValue(item.after)}</div>
+                </div>
+              `).join('');
+              blocks.push(`<div class="migrate-group">${header}${rows}</div>`);
+            });
+            migrateLogsList.innerHTML = blocks.join('');
+          }
+        }
+      } catch (error) {
+        if (migrateLogsSummary) {
+          migrateLogsSummary.textContent = 'Nie udało się pobrać podglądu.';
+        }
+      }
+    }
+
+    if (migrateLogsClose) migrateLogsClose.addEventListener('click', closeMigrateLogsModal);
+    if (migrateLogsCancel) migrateLogsCancel.addEventListener('click', closeMigrateLogsModal);
+    if (migrateLogsApply) {
+      migrateLogsApply.addEventListener('click', async () => {
+        if (!migrateLogsSummary) return;
+        migrateLogsSummary.textContent = 'Wykonuję migrację…';
+        try {
+          const currentVersion = await resolveCurrentAppVersion();
+          const dedup = false;
+          const resp = await window.PN_MAPPINGS_API.request('/migrate-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              version: currentVersion,
+              dedup,
+              mode: migrateMode,
+              apply: true
+            })
+          });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+          }
+          const data = await resp.json();
+          const count = Number(data.updated) || 0;
+          migrateLogsSummary.textContent = `Zaktualizowano: ${count}.`;
+          showToast('Migracja zakończona.', 'ok');
+          fetchLogs({ notifySuccess: true });
+          fetchReports();
+        } catch (error) {
+          migrateLogsSummary.textContent = 'Migracja nieudana.';
+          showToast('Nie udało się wykonać migracji.', 'warn');
+        }
+      });
+    }
+
     setInterval(() => {
       fetchLogs();
+      fetchReports();
     }, 30000);
 
   </script>

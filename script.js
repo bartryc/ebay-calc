@@ -37,6 +37,11 @@ const lastLoggedValues = {};
 const mainToastStack = document.getElementById('mainToastStack');
 const sourceIcons = Array.from(document.querySelectorAll('.source-icon[data-dark-src]'));
 const activityLogCache = {};
+const appVersionEl = document.getElementById('appVersion');
+const appVersion = appVersionEl ? appVersionEl.textContent.trim() : '';
+if (appVersion) {
+  localStorage.setItem('appVersion', appVersion);
+}
 
 function getFieldElement(source) {
   const map = {
@@ -136,6 +141,9 @@ function showMainToast(message, variant = 'info', durationMs) {
 
 function logActivity(type, meta = {}) {
   if (!window.PN_MAPPINGS_API?.log) return;
+  if (appVersion && !meta.appVersion) {
+    meta.appVersion = appVersion;
+  }
   const key = `${type}:${JSON.stringify(meta).slice(0, 200)}`;
   const now = Date.now();
   if (activityLogCache[key] && now - activityLogCache[key] < 10000) {
@@ -653,6 +661,7 @@ function updateEbayPriceFromNettoOrBrutto() {
 
 function fetchExchangeRate(currency, options = {}) {
   const exchangeInfo = document.getElementById('exchangeInfo');
+  const exchangeRateTooltip = document.getElementById('exchangeRateTooltip');
   const exchangeRateInp = document.getElementById('exchangeRate');
   const ebayPriceInput = document.getElementById('ebayPrice');
   const rateSourceSelect = document.getElementById('rateSource');
@@ -660,6 +669,7 @@ function fetchExchangeRate(currency, options = {}) {
   const provider = RATE_PROVIDERS[providerKey] || RATE_PROVIDERS.frankfurter;
   const notify = options.notify === true;
   exchangeInfo.innerText = 'Pobieranie kursu...';
+  if (exchangeRateTooltip) exchangeRateTooltip.setAttribute('data-tooltip', '');
 
   const ebayPriceValue = parseNumber(ebayPriceInput.value);
   const convertEbayPriceNeeded = Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice' && lastCurrency !== currency && !isPresetApplied;
@@ -674,6 +684,11 @@ function fetchExchangeRate(currency, options = {}) {
     currentExchangeRate = rate;
     const now = new Date();
     exchangeInfo.innerText = `Kurs PLN/${currency}: ${rate.toFixed(4)} (${now.toLocaleString('pl-PL')})`;
+    if (exchangeRateTooltip && Number.isFinite(rate) && rate > 0) {
+      const inverse = 1 / rate;
+      const label = providerLabel ? ` • ${providerLabel}` : '';
+      exchangeRateTooltip.setAttribute('data-tooltip', `Kurs ${currency}/PLN: ${inverse.toFixed(4)}${label} (${now.toLocaleString('pl-PL')})`);
+    }
     if (notify && providerLabel) {
       showMainToast(`Kurs pobrany z: ${providerLabel}`, 'info');
     }
@@ -739,6 +754,10 @@ function fetchExchangeRate(currency, options = {}) {
             exchangeRateInp.value = fallbackRate.toFixed(4);
             currentExchangeRate = fallbackRate;
             exchangeInfo.innerText = `Błąd pobierania kursu. Użyto domyślnego kursu PLN/${currency}: ${fallbackRate.toFixed(4)}`;
+            if (exchangeRateTooltip) {
+              const inverse = 1 / fallbackRate;
+              exchangeRateTooltip.setAttribute('data-tooltip', `Kurs ${currency}/PLN: ${inverse.toFixed(4)} • domyślny (${now.toLocaleString('pl-PL')})`);
+            }
             if (notify) {
               showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
             }
@@ -752,6 +771,10 @@ function fetchExchangeRate(currency, options = {}) {
       exchangeRateInp.value = fallbackRate.toFixed(4);
       currentExchangeRate = fallbackRate;
       exchangeInfo.innerText = `Błąd pobierania kursu. Użyto domyślnego kursu PLN/${currency}: ${fallbackRate.toFixed(4)}`;
+      if (exchangeRateTooltip) {
+        const inverse = 1 / fallbackRate;
+        exchangeRateTooltip.setAttribute('data-tooltip', `Kurs ${currency}/PLN: ${inverse.toFixed(4)} • domyślny (${now.toLocaleString('pl-PL')})`);
+      }
       if (notify) {
         showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
       }
@@ -1241,7 +1264,8 @@ if (partNumberInput) {
         detail,
         reason,
         kind: nonMapping || inferredUi ? 'ui' : 'mapping',
-        reportId
+        reportId,
+        appVersion
       };
       const fallbackLog = () => {
         if (window.PN_MAPPINGS_API?.log) {

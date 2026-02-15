@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kreator mapowań</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Narzędzie sprzedażowe</div>
+        <h1>Kreator mapowań PN</h1>
+        <p class="subtitle">Z listy PN wygeneruj propozycje wzorców i dodaj mapowanie.</p>
+      </div>
+      <div class="top-actions">
+        <nav class="top-menu" aria-label="Główne menu">
+          <a class="top-menu-link" href="index.html">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img src="resources/icon-calc.svg" alt="">
+            </span>
+            <span>Kalkulator</span>
+          </a>
+          <a class="top-menu-link" href="pn-mappings.html">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img src="resources/icon-mapping.svg" alt="">
+            </span>
+            <span>Mapowania</span>
+          </a>
+          <a class="top-menu-link is-active" href="mapping-builder.html" aria-current="page">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img src="resources/icon-mapping.svg" alt="">
+            </span>
+            <span>Kreator</span>
+          </a>
+          <button id="themeToggleBtn" class="top-menu-toggle icon-only" aria-label="Zmień motyw">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img class="theme-icon theme-icon-dark" src="resources/icon-dark-mode.svg" alt="">
+              <img class="theme-icon theme-icon-light" src="resources/icon-light-mode.svg" alt="">
+            </span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <section class="app-card admin-shell">
+      <div class="admin-header-row">
+        <div>
+          <div class="eyebrow">Kreator wzorców</div>
+          <h2>Generator mapowań</h2>
+          <p class="subtitle">Wklej PN-y, wybierz wzorzec i dodaj mapowanie do bazy.</p>
+        </div>
+      </div>
+
+      <div class="admin-grid">
+        <div class="admin-card admin-card-wide">
+          <h3>Propozycje wzorców</h3>
+          <p>System wykorzystuje x / * / + do budowy wzorców. Producenta wybierasz ręcznie.</p>
+          <textarea id="patternSeedInput" class="admin-textarea" rows="6" placeholder="Wklej PN-y (po jednym w linii)"></textarea>
+          <div class="admin-actions">
+            <button type="button" id="patternGenerateBtn">Generuj propozycje</button>
+          </div>
+          <div id="patternSuggestions" class="pattern-suggestions"></div>
+          <div class="pattern-apply">
+            <input type="text" id="patternResult" placeholder="Wzorzec (np. SR0** lub 100-******)">
+            <div class="pattern-vendor-row">
+              <select id="patternVendorSelect">
+                <option value="" selected>Wybierz producenta</option>
+                <option value="__custom__">Wpisz własnego…</option>
+              </select>
+              <input type="text" id="patternVendor" placeholder="Producent (np. Dell)">
+            </div>
+            <button type="button" id="patternApplyBtn">Dodaj mapowanie</button>
+          </div>
+          <div class="pattern-options">
+            <label><input type="checkbox" id="patternStripSpecial"> Usuń znaki specjalne (poza -)</label>
+            <label><input type="checkbox" id="patternPreferPlus" checked> Preferuj prefiks/sufiks z “+”</label>
+          </div>
+          <div class="admin-meta">Znaki: x = cyfra, * = dowolny znak, + = dowolny ciąg.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="mappingToastStack" class="mapping-toast-stack" role="status" aria-live="polite"></div>
+
+  <script src="pn-mappings.js"></script>
+  <script>
+    const patternSeedInput = document.getElementById('patternSeedInput');
+    const patternGenerateBtn = document.getElementById('patternGenerateBtn');
+    const patternSuggestions = document.getElementById('patternSuggestions');
+    const patternResult = document.getElementById('patternResult');
+    const patternVendorSelect = document.getElementById('patternVendorSelect');
+    const patternVendor = document.getElementById('patternVendor');
+    const patternApplyBtn = document.getElementById('patternApplyBtn');
+    const patternStripSpecial = document.getElementById('patternStripSpecial');
+    const patternPreferPlus = document.getElementById('patternPreferPlus');
+    const toastStack = document.getElementById('mappingToastStack');
+
+    function normalizePn(value) {
+      return String(value || '').replace(/\s+/g, '').toUpperCase();
+    }
+
+    function normalizeSeed(value, stripSpecial) {
+      const base = normalizePn(value);
+      if (!stripSpecial) return base;
+      return base.replace(/[^A-Z0-9-]/g, '');
+    }
+
+    function longestCommonPrefix(values) {
+      if (!values.length) return '';
+      let prefix = values[0];
+      for (let i = 1; i < values.length; i += 1) {
+        const val = values[i];
+        let j = 0;
+        while (j < prefix.length && j < val.length && prefix[j] === val[j]) j += 1;
+        prefix = prefix.slice(0, j);
+        if (!prefix) break;
+      }
+      return prefix;
+    }
+
+    function buildPositionalPattern(values) {
+      if (!values.length) return '';
+      const length = values[0].length;
+      if (!values.every((v) => v.length === length)) return '';
+      const chars = [];
+      for (let i = 0; i < length; i += 1) {
+        const column = values.map((v) => v[i]);
+        const allSame = column.every((c) => c === column[0]);
+        if (allSame) {
+          chars.push(column[0]);
+          continue;
+        }
+        const allDigits = column.every((c) => /\d/.test(c));
+        chars.push(allDigits ? 'x' : '*');
+      }
+      return chars.join('');
+    }
+
+    function buildPrefixPattern(values) {
+      const prefix = longestCommonPrefix(values);
+      if (prefix.length < 2) return '';
+      return `${prefix}+`;
+    }
+
+    function longestCommonSuffix(values) {
+      if (!values.length) return '';
+      let suffix = values[0];
+      for (let i = 1; i < values.length; i += 1) {
+        const val = values[i];
+        let j = 0;
+        while (j < suffix.length && j < val.length && suffix[suffix.length - 1 - j] === val[val.length - 1 - j]) {
+          j += 1;
+        }
+        suffix = suffix.slice(suffix.length - j);
+        if (!suffix) break;
+      }
+      return suffix;
+    }
+
+    function buildSuffixPattern(values) {
+      const suffix = longestCommonSuffix(values);
+      if (suffix.length < 2) return '';
+      return `+${suffix}`;
+    }
+
+    function buildSegmentPattern(values) {
+      const parts = values.map((v) => v.split('-'));
+      const lengths = new Set(parts.map((p) => p.length));
+      if (lengths.size !== 1) return '';
+      const segCount = parts[0].length;
+      const segments = [];
+      for (let i = 0; i < segCount; i += 1) {
+        const column = parts.map((p) => p[i]);
+        const allSame = column.every((c) => c === column[0]);
+        if (allSame) {
+          segments.push(column[0]);
+          continue;
+        }
+        const allDigits = column.every((c) => /^\d+$/.test(c));
+        segments.push(allDigits ? 'x'.repeat(column[0].length) : '*'.repeat(column[0].length));
+      }
+      return segments.join('-');
+    }
+
+    function matchPatternLocal(pattern, value) {
+      if (window.PN_MAPPINGS_API?.matchPattern) {
+        return window.PN_MAPPINGS_API.matchPattern(pattern, value);
+      }
+      const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+      const regex = escaped
+        .replace(/x/gi, '\\d')
+        .replace(/\*/g, '.')
+        .replace(/\+/g, '.+');
+      return new RegExp(`^${regex}$`, 'i').test(value);
+    }
+
+    function generatePatternSuggestions(rawList, options = {}) {
+      const stripSpecial = options.stripSpecial === true;
+      const preferPlus = options.preferPlus !== false;
+      const values = rawList.map((val) => normalizeSeed(val, stripSpecial)).filter(Boolean);
+      const suggestions = [];
+      const positional = buildPositionalPattern(values);
+      if (positional) suggestions.push(positional);
+      if (preferPlus) {
+        const prefix = buildPrefixPattern(values);
+        if (prefix) suggestions.push(prefix);
+        const suffix = buildSuffixPattern(values);
+        if (suffix) suggestions.push(suffix);
+      }
+      const segmented = buildSegmentPattern(values);
+      if (segmented) suggestions.push(segmented);
+      const unique = Array.from(new Set(suggestions));
+      return unique.map((pattern) => {
+        const matched = values.filter((v) => matchPatternLocal(pattern, v));
+        return {
+          pattern,
+          count: matched.length,
+          total: values.length,
+          examples: matched.slice(0, 3),
+          confidence: Math.round((matched.length / values.length) * 100)
+        };
+      }).sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return b.pattern.length - a.pattern.length;
+      });
+    }
+
+    function renderPatternSuggestions(list) {
+      if (!patternSuggestions) return;
+      if (!list.length) {
+        patternSuggestions.innerHTML = '<div class="pattern-suggestion"><span>Brak propozycji. Sprawdź listę PN.</span></div>';
+        return;
+      }
+      patternSuggestions.innerHTML = list.map((item) => `
+        <div class="pattern-suggestion">
+          <div>
+            <strong>${item.pattern}</strong>
+            <span class="pattern-badge ${item.confidence >= 80 ? 'is-high' : item.confidence >= 50 ? 'is-mid' : 'is-low'}">${item.confidence}%</span>
+            <small> • ${item.count}/${item.total}</small>
+            ${item.examples.length ? `<div><small>Przykład: ${item.examples.join(', ')}</small></div>` : ''}
+          </div>
+          <button type="button" data-pattern="${item.pattern}">Użyj</button>
+        </div>
+      `).join('');
+    }
+
+    function refreshVendorOptions() {
+      if (!patternVendorSelect || !window.PN_MAPPINGS_API?.get) return;
+      const data = window.PN_MAPPINGS_API.get();
+      const vendors = new Set();
+      const exact = data?.exact || {};
+      Object.values(exact).forEach((val) => {
+        if (val) vendors.add(String(val).trim());
+      });
+      const patterns = Array.isArray(data?.patterns) ? data.patterns : [];
+      patterns.forEach((p) => {
+        if (p?.vendor) vendors.add(String(p.vendor).trim());
+      });
+      const sorted = Array.from(vendors).filter(Boolean).sort((a, b) => a.localeCompare(b));
+      const current = patternVendorSelect.value;
+      patternVendorSelect.innerHTML = `
+        <option value="">Wybierz producenta</option>
+        <option value="__custom__">Wpisz własnego…</option>
+        ${sorted.map((v) => `<option value="${v}">${v}</option>`).join('')}
+      `;
+      patternVendorSelect.value = sorted.includes(current) ? current : (current === '__custom__' ? current : '');
+    }
+
+    function showToast(message, variant, durationMs) {
+      if (!toastStack) return;
+      const maxToasts = 6;
+      while (toastStack.children.length >= maxToasts) {
+        toastStack.firstElementChild?.remove();
+      }
+      const toast = document.createElement('div');
+      toast.className = 'mapping-toast';
+      if (variant === 'warn') toast.classList.add('is-warn');
+      if (variant === 'info') toast.classList.add('is-info');
+      if (variant === 'ok') toast.classList.add('is-ok');
+      const suffix = ` (${Math.round(Number.isFinite(durationMs) ? durationMs : 0)} ms)`;
+      toast.textContent = `${message || ''}${suffix}`;
+      toastStack.append(toast);
+      requestAnimationFrame(() => {
+        toast.classList.add('is-visible');
+      });
+      setTimeout(() => {
+        toast.classList.remove('is-visible');
+        setTimeout(() => toast.remove(), 200);
+      }, 8000);
+    }
+
+    if (patternGenerateBtn) {
+      patternGenerateBtn.addEventListener('click', () => {
+        const raw = patternSeedInput?.value || '';
+        const list = raw.split(/\r?\n|,|;/).map((item) => item.trim()).filter(Boolean);
+        const suggestions = generatePatternSuggestions(list, {
+          stripSpecial: patternStripSpecial?.checked,
+          preferPlus: patternPreferPlus?.checked
+        });
+        renderPatternSuggestions(suggestions);
+      });
+    }
+
+    if (patternVendorSelect) {
+      patternVendorSelect.addEventListener('change', () => {
+        const val = patternVendorSelect.value;
+        if (val && val !== '__custom__') {
+          patternVendor.value = val;
+          patternVendor.focus();
+        } else if (val === '__custom__') {
+          patternVendor.value = '';
+          patternVendor.focus();
+        }
+      });
+    }
+
+    if (patternSuggestions) {
+      patternSuggestions.addEventListener('click', (event) => {
+        const btn = event.target.closest('button');
+        if (!btn) return;
+        const pattern = btn.getAttribute('data-pattern');
+        if (patternResult) patternResult.value = pattern || '';
+        patternVendor?.focus();
+      });
+    }
+
+    if (patternApplyBtn) {
+      patternApplyBtn.addEventListener('click', () => {
+        const rawPattern = patternResult?.value || '';
+        const vendor = patternVendor?.value || '';
+        if (!rawPattern || !vendor) {
+          showToast('Uzupełnij wzorzec i producenta.', 'warn');
+          return;
+        }
+        if (!window.PN_MAPPINGS_API?.get || !window.PN_MAPPINGS_API?.set) return;
+        const data = window.PN_MAPPINGS_API.get();
+        const hasPattern = /[xX*+]/.test(rawPattern);
+        if (hasPattern) {
+          const normalized = window.PN_MAPPINGS_API.normalizePattern(rawPattern);
+          const exists = (data.patterns || []).some((p) => window.PN_MAPPINGS_API.normalizePattern(p.pattern) === normalized);
+          if (!exists) {
+            data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
+            data.patterns.push({ pattern: normalized, vendor: vendor.trim() });
+            window.PN_MAPPINGS_API.set(data);
+            window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-pattern', pattern: normalized, vendor: vendor.trim() });
+            showToast('Dodano wzorzec z kreatora.', 'ok');
+            refreshVendorOptions();
+          } else {
+            showToast('Taki wzorzec już istnieje.', 'warn');
+          }
+        } else {
+          const key = window.PN_MAPPINGS_API.normalize(rawPattern);
+          data.exact = data.exact || {};
+          data.exact[key] = vendor.trim();
+          window.PN_MAPPINGS_API.set(data);
+          window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-exact', key, vendor: vendor.trim() });
+          showToast('Dodano PN exact z kreatora.', 'ok');
+          refreshVendorOptions();
+        }
+      });
+    }
+
+    if (window.PN_MAPPINGS_API?.load) {
+      window.PN_MAPPINGS_API.load()
+        .then(() => {
+          refreshVendorOptions();
+        })
+        .catch(() => {
+          showToast('Nie udało się pobrać mapowań z serwera.', 'warn');
+        });
+    }
+  </script>
+</body>
+</html>

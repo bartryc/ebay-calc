@@ -46,10 +46,17 @@ function getClientFingerprint() {
 const CLIENT_FP = getClientFingerprint();
 
 function buildHeaders(extra = {}) {
+  let appVersion = '';
+  try {
+    appVersion = (document.getElementById('appVersion')?.textContent || localStorage.getItem('appVersion') || '').trim();
+  } catch (error) {
+    appVersion = '';
+  }
   return Object.assign(
     {
       'X-Auth-Token': PN_MAPPINGS_API_TOKEN,
-      'X-Client-FP': CLIENT_FP
+      'X-Client-FP': CLIENT_FP,
+      ...(appVersion ? { 'X-App-Version': appVersion } : {})
     },
     extra
   );

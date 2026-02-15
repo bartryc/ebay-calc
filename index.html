@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Przelicznik ceny eBay</title>
+  <title>eBay Calc</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -27,6 +27,12 @@
               <img src="resources/icon-mapping.svg" alt="">
             </span>
             <span>Mapowania</span>
+          </a>
+          <a class="top-menu-link" href="mapping-builder.html">
+            <span class="top-menu-icon" aria-hidden="true">
+              <img src="resources/icon-mapping.svg" alt="">
+            </span>
+            <span>Kreator</span>
           </a>
           <button id="themeToggleBtn" class="top-menu-toggle icon-only" aria-label="Zmień motyw">
             <span class="top-menu-icon" aria-hidden="true">
@@ -72,7 +78,9 @@
 
           <label for="exchangeRate">Kurs PLN/<span id="currencyLabel">EUR</span></label>
           <p id="exchangeInfo">Pobieranie kursu...</p>
-          <input type="number" id="exchangeRate" step="0.0001" min="0" required disabled>
+          <div id="exchangeRateTooltip" class="input-tooltip" data-tooltip="">
+            <input type="number" id="exchangeRate" step="0.0001" min="0" required disabled>
+          </div>
 
           <div class="toggle-row">
             <label class="toggle-switch">
@@ -180,7 +188,7 @@
           </div>
           <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
         </div>
-        <footer>Wersja 1.73<br>Projekt i wykonanie: Codex, z uśmiechem dla <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <a class="mapping-link mapping-link-compact" href="pn-mappings.html">Zarządzaj mapowaniami PN</a></footer>
+        <footer>Wersja <span id="appVersion">1.77</span><br>Projekt i wykonanie: Codex 5.2, z uśmiechem dla <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> </footer>
       </aside>
     </div>
   </div>
