@@ -35,7 +35,6 @@ let restoreHistoryTimer = null;
 const fieldBaselines = {};
 const lastLoggedValues = {};
 const mainToastStack = document.getElementById('mainToastStack');
-const sourceIcons = Array.from(document.querySelectorAll('.source-icon[data-dark-src]'));
 const activityLogCache = {};
 const appVersionEl = document.getElementById('appVersion');
 const appVersion = appVersionEl ? appVersionEl.textContent.trim() : '';
@@ -103,17 +102,6 @@ function openSearch(urlBase, query) {
   const url = `${urlBase}${encodeURIComponent(trimmed)}`;
   window.open(url, '_blank', 'noopener');
   return true;
-}
-
-function updateSourceIconsForTheme(isDark) {
-  sourceIcons.forEach((icon) => {
-    const darkSrc = icon.dataset.darkSrc;
-    if (!darkSrc) return;
-    if (!icon.dataset.lightSrc) {
-      icon.dataset.lightSrc = icon.getAttribute('src') || '';
-    }
-    icon.setAttribute('src', isDark ? darkSrc : icon.dataset.lightSrc);
-  });
 }
 
 function showMainToast(message, variant = 'info', durationMs) {
@@ -389,30 +377,9 @@ function flushHistoryLog(source) {
   addHistoryEntry(source);
 }
 
-// Dark mode functionality
-const themeToggleBtn = document.getElementById('themeToggleBtn');
-const body = document.body;
-
-function updateThemeToggleLabel(isDark) {
-  const label = isDark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny';
-  themeToggleBtn.setAttribute('aria-label', label);
-  themeToggleBtn.setAttribute('title', label);
+if (window.UITheme?.init) {
+  window.UITheme.init();
 }
-
-// Load theme from localStorage
-if (localStorage.getItem('theme') === 'dark') {
-  body.classList.add('dark-mode');
-}
-updateThemeToggleLabel(body.classList.contains('dark-mode'));
-updateSourceIconsForTheme(body.classList.contains('dark-mode'));
-
-themeToggleBtn.addEventListener('click', () => {
-  body.classList.toggle('dark-mode');
-  const isDark = body.classList.contains('dark-mode');
-  updateThemeToggleLabel(isDark);
-  updateSourceIconsForTheme(isDark);
-  localStorage.setItem('theme', isDark ? 'dark' : 'light');
-});
 
 // Advanced options toggle
 const advancedOptionsToggle = document.getElementById('advancedOptionsToggle');
@@ -495,10 +462,10 @@ function syncFields(source) {
 
   if (source === 'netto' && Number.isFinite(parseNumber(nettoInput.value))) {
     const netto = parseNumber(nettoInput.value);
-    bruttoInput.value = (netto * (1 + VAT23)).toFixed(2);
+    const brutto = netto * (1 + VAT23);
+    bruttoInput.value = brutto.toFixed(2);
     if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
-      const bruttoClient = netto * (1 + vatRate);
-      const priceInCurrency = bruttoClient * exchangeRate;
+      const priceInCurrency = brutto * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
       ebayPriceInput.value = finalPrice.toFixed(2);
       originalEbayPrice = finalPrice;
@@ -510,8 +477,7 @@ function syncFields(source) {
     const netto = brutto / (1 + VAT23);
     nettoInput.value = netto.toFixed(2);
     if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
-      const bruttoClient = netto * (1 + vatRate);
-      const priceInCurrency = bruttoClient * exchangeRate;
+      const priceInCurrency = brutto * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
       ebayPriceInput.value = finalPrice.toFixed(2);
       originalEbayPrice = finalPrice;
@@ -522,10 +488,10 @@ function syncFields(source) {
     const ebayPrice = parseNumber(ebayPriceInput.value);
     if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
       const priceInCurrency = ebayPrice / (1 + commission);
-      const bruttoClient = priceInCurrency / exchangeRate;
-      const netto = bruttoClient / (1 + vatRate);
+      const brutto = priceInCurrency / exchangeRate;
+      const netto = brutto / (1 + VAT23);
       nettoInput.value = netto.toFixed(2);
-      bruttoInput.value = (netto * (1 + VAT23)).toFixed(2);
+      bruttoInput.value = brutto.toFixed(2);
       originalEbayPrice = ebayPrice;
       originalCurrency = document.getElementById('currency').value;
       originalExchangeRate = exchangeRate;
@@ -534,21 +500,20 @@ function syncFields(source) {
     const vatRatePercent = Math.max(0, Math.min(100, parseNumber(vatRateInput.value)));
     vatRateInput.value = vatRatePercent.toString();
     updateEbayCurrencyLabel();
-    const vatRateDecimal = vatRatePercent / 100;
-    let netto = parseNumber(nettoInput.value);
-    if (!Number.isFinite(netto)) {
-      const brutto = parseNumber(bruttoInput.value);
-      if (Number.isFinite(brutto)) {
-        netto = brutto / (1 + VAT23);
-        nettoInput.value = netto.toFixed(2);
+    let brutto = parseNumber(bruttoInput.value);
+    if (!Number.isFinite(brutto)) {
+      const netto = parseNumber(nettoInput.value);
+      if (Number.isFinite(netto)) {
+        brutto = netto * (1 + VAT23);
+        bruttoInput.value = brutto.toFixed(2);
       }
     }
-    if (Number.isFinite(netto) && netto > 0 && validateInputs(exchangeRate, commission, vatRateDecimal, resultDiv)) {
-      const bruttoClient = netto * (1 + vatRateDecimal);
-      const priceInCurrency = bruttoClient * exchangeRate;
+    if (Number.isFinite(brutto) && brutto > 0 && validateInputs(exchangeRate, commission, vatRatePercent / 100, resultDiv)) {
+      const netto = brutto / (1 + VAT23);
+      nettoInput.value = netto.toFixed(2);
+      const priceInCurrency = brutto * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
       ebayPriceInput.value = finalPrice.toFixed(2);
-      bruttoInput.value = (netto * (1 + VAT23)).toFixed(2);
       originalEbayPrice = finalPrice;
       originalCurrency = document.getElementById('currency').value;
       originalExchangeRate = exchangeRate;
@@ -641,8 +606,9 @@ function updateEbayPriceFromNettoOrBrutto() {
   if (lastChanged === 'netto' && Number.isFinite(parseNumber(nettoInput.value))) {
     const netto = parseNumber(nettoInput.value);
     if (validateInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
-      const bruttoClient = netto * (1 + vatRate);
-      const priceInCurrency = bruttoClient * exchangeRate;
+      const brutto = netto * (1 + VAT23);
+      bruttoInput.value = brutto.toFixed(2);
+      const priceInCurrency = brutto * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
       ebayPriceInput.value = finalPrice.toFixed(2);
     }
@@ -651,8 +617,7 @@ function updateEbayPriceFromNettoOrBrutto() {
     if (validateInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
       const netto = brutto / (1 + VAT23);
       nettoInput.value = netto.toFixed(2);
-      const bruttoClient = netto * (1 + vatRate);
-      const priceInCurrency = bruttoClient * exchangeRate;
+      const priceInCurrency = brutto * exchangeRate;
       const finalPrice = priceInCurrency * (1 + commission);
       ebayPriceInput.value = finalPrice.toFixed(2);
     }

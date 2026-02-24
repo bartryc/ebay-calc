@@ -1024,6 +1024,102 @@ footer a:hover {
   margin: 0;
 }
 
+.builder-page .admin-actions button,
+.builder-page .pattern-suggestion button,
+.builder-page #patternApplyBtn {
+  min-height: 40px;
+  padding: 9px 16px;
+  border-radius: 12px;
+}
+
+.builder-page .admin-actions {
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.builder-page .creator-test-note {
+  margin-top: -2px;
+  margin-bottom: 10px;
+  color: rgba(209, 59, 47, 0.95);
+  font-weight: 600;
+}
+
+.builder-page #patternGenerateBtn,
+.builder-page #patternApplyBtn {
+  border-color: rgba(15, 91, 255, 0.35);
+  background: linear-gradient(135deg, rgba(15, 91, 255, 0.95), rgba(58, 126, 255, 0.95));
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(15, 91, 255, 0.24);
+}
+
+.builder-page #patternGenerateBtn:hover,
+.builder-page #patternApplyBtn:hover {
+  border-color: rgba(15, 91, 255, 0.7);
+  color: #fff;
+  filter: brightness(1.05);
+}
+
+.builder-page .pattern-suggestion button {
+  background: var(--card-2);
+  border-color: rgba(15, 91, 255, 0.28);
+}
+
+.builder-page .pattern-suggestion button:hover {
+  border-color: rgba(15, 91, 255, 0.6);
+  color: var(--accent);
+}
+
+body.dark-mode.builder-page #patternGenerateBtn,
+body.dark-mode.builder-page #patternApplyBtn {
+  box-shadow: 0 10px 24px rgba(10, 42, 109, 0.45);
+}
+
+.builder-page .pattern-apply {
+  grid-template-columns: minmax(260px, 1fr) auto;
+  grid-template-areas:
+    "pattern pattern"
+    "vendor apply";
+  gap: 10px;
+  align-items: end;
+}
+
+.builder-page #patternResult {
+  grid-area: pattern;
+}
+
+.builder-page .pattern-vendor-row {
+  grid-area: vendor;
+}
+
+.builder-page #patternApplyBtn {
+  grid-area: apply;
+  min-width: 170px;
+}
+
+.builder-page .pattern-options {
+  margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+  .builder-page .pattern-apply {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "pattern"
+      "vendor"
+      "apply";
+  }
+
+  .builder-page #patternApplyBtn,
+  .builder-page #patternGenerateBtn {
+    width: 100%;
+  }
+
+  .builder-page .admin-actions {
+    justify-content: stretch;
+  }
+}
+
 .backup-status {
   margin: 6px 0 12px;
   font-size: 0.9em;

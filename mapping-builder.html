@@ -6,7 +6,7 @@
   <title>Kreator mapowań</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="builder-page">
   <div class="page">
     <header class="topbar">
       <div>
@@ -49,7 +49,7 @@
         <div>
           <div class="eyebrow">Kreator wzorców</div>
           <h2>Generator mapowań</h2>
-          <p class="subtitle">Wklej PN-y, wybierz wzorzec i dodaj mapowanie do bazy.</p>
+          <p class="subtitle">Wklej PN-y, wybierz wzorzec i dodaj mapowanie do bazy. <strong>(wersja testowa)</strong></p>
         </div>
       </div>
 
@@ -57,6 +57,10 @@
         <div class="admin-card admin-card-wide">
           <h3>Propozycje wzorców</h3>
           <p>System wykorzystuje x / * / + do budowy wzorców. Producenta wybierasz ręcznie.</p>
+          <div class="admin-actions">
+            <button type="button" id="openCreatorReportBtn">Zglos blad strony</button>
+          </div>
+          <div class="admin-meta creator-test-note">Kreator jest testowy. Zgloszenia z tej strony trafiaja jako blad dzialania strony.</div>
           <textarea id="patternSeedInput" class="admin-textarea" rows="6" placeholder="Wklej PN-y (po jednym w linii)"></textarea>
           <div class="admin-actions">
             <button type="button" id="patternGenerateBtn">Generuj propozycje</button>
@@ -84,7 +88,25 @@
   </div>
 
   <div id="mappingToastStack" class="mapping-toast-stack" role="status" aria-live="polite"></div>
+  <div id="creatorReportModal" class="mapping-modal" style="display:none;">
+    <div class="mapping-modal-card report-modal-card" role="dialog" aria-modal="true" aria-labelledby="creatorReportTitle">
+      <div class="mapping-modal-header">
+        <strong id="creatorReportTitle">Zglos blad dzialania strony</strong>
+        <button type="button" id="creatorReportClose" aria-label="Zamknij">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <div class="report-meta" id="creatorReportInfo"></div>
+        <label for="creatorReportReason">Opis</label>
+        <textarea id="creatorReportReason" rows="3" maxlength="300" placeholder="Opisz problem dzialania strony..."></textarea>
+      </div>
+      <div class="mapping-modal-actions confirm-actions">
+        <button type="button" id="creatorReportCancel">Anuluj</button>
+        <button type="button" id="creatorReportSend">Wyslij zgloszenie</button>
+      </div>
+    </div>
+  </div>
 
+  <script src="ui-theme.js"></script>
   <script src="pn-mappings.js"></script>
   <script>
     const patternSeedInput = document.getElementById('patternSeedInput');
@@ -96,7 +118,16 @@
     const patternApplyBtn = document.getElementById('patternApplyBtn');
     const patternStripSpecial = document.getElementById('patternStripSpecial');
     const patternPreferPlus = document.getElementById('patternPreferPlus');
+    const openCreatorReportBtn = document.getElementById('openCreatorReportBtn');
+    const creatorReportModal = document.getElementById('creatorReportModal');
+    const creatorReportClose = document.getElementById('creatorReportClose');
+    const creatorReportCancel = document.getElementById('creatorReportCancel');
+    const creatorReportSend = document.getElementById('creatorReportSend');
+    const creatorReportInfo = document.getElementById('creatorReportInfo');
+    const creatorReportReason = document.getElementById('creatorReportReason');
     const toastStack = document.getElementById('mappingToastStack');
+
+    if (window.UITheme?.init) window.UITheme.init();
 
     function normalizePn(value) {
       return String(value || '').replace(/\s+/g, '').toUpperCase();
@@ -232,8 +263,10 @@
       if (!patternSuggestions) return;
       if (!list.length) {
         patternSuggestions.innerHTML = '<div class="pattern-suggestion"><span>Brak propozycji. Sprawdź listę PN.</span></div>';
+        showToast('Brak propozycji wzorca dla podanych danych.', 'info');
         return;
       }
+      showToast(`Wygenerowano ${list.length} propozycji.`, 'ok');
       patternSuggestions.innerHTML = list.map((item) => `
         <div class="pattern-suggestion">
           <div>
@@ -292,10 +325,40 @@
       }, 8000);
     }
 
+    function genReportId() {
+      const rnd = Math.random().toString(36).slice(2, 10);
+      return `R-${rnd}`;
+    }
+
+    function openCreatorReportModal() {
+      if (!creatorReportModal) return;
+      const currentPattern = (patternResult?.value || '').trim() || '—';
+      const currentVendor = (patternVendor?.value || '').trim() || '—';
+      if (creatorReportInfo) {
+        creatorReportInfo.innerHTML = `
+          <div><strong>Kreator testowy</strong></div>
+          <div>Wzorzec: <strong>${currentPattern}</strong></div>
+          <div>Producent: <strong>${currentVendor}</strong></div>
+        `;
+      }
+      creatorReportModal.style.display = 'flex';
+      creatorReportReason?.focus();
+    }
+
+    function closeCreatorReportModal() {
+      if (!creatorReportModal) return;
+      creatorReportModal.style.display = 'none';
+      if (creatorReportReason) creatorReportReason.value = '';
+    }
+
     if (patternGenerateBtn) {
       patternGenerateBtn.addEventListener('click', () => {
         const raw = patternSeedInput?.value || '';
         const list = raw.split(/\r?\n|,|;/).map((item) => item.trim()).filter(Boolean);
+        if (!list.length) {
+          showToast('Wklej przynajmniej jeden PN.', 'warn');
+          return;
+        }
         const suggestions = generatePatternSuggestions(list, {
           stripSpecial: patternStripSpecial?.checked,
           preferPlus: patternPreferPlus?.checked
@@ -335,31 +398,90 @@
           showToast('Uzupełnij wzorzec i producenta.', 'warn');
           return;
         }
-        if (!window.PN_MAPPINGS_API?.get || !window.PN_MAPPINGS_API?.set) return;
-        const data = window.PN_MAPPINGS_API.get();
-        const hasPattern = /[xX*+]/.test(rawPattern);
-        if (hasPattern) {
-          const normalized = window.PN_MAPPINGS_API.normalizePattern(rawPattern);
-          const exists = (data.patterns || []).some((p) => window.PN_MAPPINGS_API.normalizePattern(p.pattern) === normalized);
-          if (!exists) {
-            data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
-            data.patterns.push({ pattern: normalized, vendor: vendor.trim() });
-            window.PN_MAPPINGS_API.set(data);
-            window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-pattern', pattern: normalized, vendor: vendor.trim() });
-            showToast('Dodano wzorzec z kreatora.', 'ok');
-            refreshVendorOptions();
-          } else {
-            showToast('Taki wzorzec już istnieje.', 'warn');
-          }
-        } else {
-          const key = window.PN_MAPPINGS_API.normalize(rawPattern);
-          data.exact = data.exact || {};
-          data.exact[key] = vendor.trim();
-          window.PN_MAPPINGS_API.set(data);
-          window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-exact', key, vendor: vendor.trim() });
-          showToast('Dodano PN exact z kreatora.', 'ok');
-          refreshVendorOptions();
+        if (!window.PN_MAPPINGS_API?.get || !window.PN_MAPPINGS_API?.set) {
+          showToast('API mapowań jest niedostępne.', 'warn');
+          return;
         }
+        try {
+          const data = window.PN_MAPPINGS_API.get();
+          const hasPattern = /[xX*+]/.test(rawPattern);
+          if (hasPattern) {
+            const normalized = window.PN_MAPPINGS_API.normalizePattern(rawPattern);
+            const exists = (data.patterns || []).some((p) => window.PN_MAPPINGS_API.normalizePattern(p.pattern) === normalized);
+            if (!exists) {
+              data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
+              data.patterns.push({ pattern: normalized, vendor: vendor.trim() });
+              window.PN_MAPPINGS_API.set(data);
+              window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-pattern', pattern: normalized, vendor: vendor.trim() });
+              showToast('Dodano wzorzec z kreatora.', 'ok');
+              refreshVendorOptions();
+            } else {
+              showToast('Taki wzorzec już istnieje.', 'warn');
+            }
+          } else {
+            const key = window.PN_MAPPINGS_API.normalize(rawPattern);
+            data.exact = data.exact || {};
+            data.exact[key] = vendor.trim();
+            window.PN_MAPPINGS_API.set(data);
+            window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-exact', key, vendor: vendor.trim() });
+            showToast('Dodano PN exact z kreatora.', 'ok');
+            refreshVendorOptions();
+          }
+        } catch (error) {
+          showToast(`Nie udało się zapisać mapowania: ${error?.message || 'unknown'}`, 'warn');
+        }
+      });
+    }
+
+    if (openCreatorReportBtn) {
+      openCreatorReportBtn.addEventListener('click', openCreatorReportModal);
+    }
+    if (creatorReportClose) {
+      creatorReportClose.addEventListener('click', closeCreatorReportModal);
+    }
+    if (creatorReportCancel) {
+      creatorReportCancel.addEventListener('click', closeCreatorReportModal);
+    }
+    if (creatorReportModal) {
+      creatorReportModal.addEventListener('click', (event) => {
+        if (event.target === creatorReportModal) closeCreatorReportModal();
+      });
+    }
+    if (creatorReportSend) {
+      creatorReportSend.addEventListener('click', () => {
+        const reason = (creatorReportReason?.value || '').trim();
+        if (!reason) {
+          showToast('Uzupelnij opis zgloszenia.', 'warn');
+          return;
+        }
+        const reportId = genReportId();
+        const payload = {
+          reportId,
+          kind: 'ui',
+          query: '',
+          suggestedVendor: '',
+          source: 'creator',
+          detail: (patternResult?.value || '').trim(),
+          reason
+        };
+        const fallbackLog = () => {
+          window.PN_MAPPINGS_API?.log?.('mapping-report', payload);
+        };
+        if (window.PN_MAPPINGS_API?.request) {
+          window.PN_MAPPINGS_API.request('/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'mapping-report', meta: payload })
+          }).then((resp) => {
+            if (!resp.ok) fallbackLog();
+          }).catch(() => {
+            fallbackLog();
+          });
+        } else {
+          fallbackLog();
+        }
+        showToast(`Wyslano zgloszenie (${reportId}).`, 'ok');
+        closeCreatorReportModal();
       });
     }
 
