@@ -42,6 +42,315 @@ if (appVersion) {
   localStorage.setItem('appVersion', appVersion);
 }
 
+const INDEX_LAYOUT_STORAGE_KEY = 'indexLayoutOrderV1';
+const INDEX_LAYOUT_COOKIE_KEY = 'indexLayoutOrderV1';
+const layoutGroups = {
+  calc: document.getElementById('calcLayoutContainer'),
+  info: document.getElementById('infoLayoutContainer')
+};
+const layoutCustomizeBtn = document.getElementById('layoutCustomizeBtn');
+const layoutEditBar = document.getElementById('layoutEditBar');
+const layoutSaveBtn = document.getElementById('layoutSaveBtn');
+const layoutResetBtn = document.getElementById('layoutResetBtn');
+const layoutExitBtn = document.getElementById('layoutExitBtn');
+let isLayoutEditMode = false;
+let defaultLayoutOrder = null;
+let preEditLayoutOrder = null;
+let currentDraggedItem = null;
+let currentDraggedEl = null;
+
+function beginLayoutDrag(groupKey, itemId, item, event) {
+  if (!isLayoutEditMode) return;
+  currentDraggedItem = { groupKey, itemId };
+  currentDraggedEl = item;
+  item.classList.add('is-dragging');
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', itemId);
+    event.dataTransfer.setDragImage(item, 24, 18);
+  }
+}
+
+function endLayoutDrag() {
+  document.querySelectorAll('.layout-item.is-drop-target').forEach((el) => el.classList.remove('is-drop-target'));
+  if (currentDraggedEl) {
+    currentDraggedEl.classList.remove('is-dragging');
+  }
+  currentDraggedItem = null;
+  currentDraggedEl = null;
+  if (isLayoutEditMode) {
+    renderLayoutItemControls();
+    updateLayoutDiffHighlight();
+  }
+}
+
+function layoutGetCookieValue(name) {
+  const prefix = `${name}=`;
+  const parts = (document.cookie || '').split(';').map((item) => item.trim());
+  for (const part of parts) {
+    if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length));
+  }
+  return '';
+}
+
+function layoutSetCookieValue(name, value, days = 365) {
+  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
+function getCurrentLayoutOrder() {
+  const order = {};
+  Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
+    if (!groupEl) return;
+    order[groupKey] = Array.from(groupEl.children)
+      .map((child) => child.getAttribute('data-layout-item'))
+      .filter(Boolean);
+  });
+  return order;
+}
+
+function normalizeLayoutOrder(rawOrder) {
+  const normalized = {};
+  Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
+    if (!groupEl) return;
+    const available = Array.from(groupEl.children)
+      .map((child) => child.getAttribute('data-layout-item'))
+      .filter(Boolean);
+    const seen = new Set();
+    const requested = Array.isArray(rawOrder?.[groupKey]) ? rawOrder[groupKey] : [];
+    const finalOrder = [];
+    requested.forEach((id) => {
+      if (!id || seen.has(id) || !available.includes(id)) return;
+      seen.add(id);
+      finalOrder.push(id);
+    });
+    available.forEach((id) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      finalOrder.push(id);
+    });
+    normalized[groupKey] = finalOrder;
+  });
+  return normalized;
+}
+
+function applyLayoutOrder(orderMap) {
+  const normalized = normalizeLayoutOrder(orderMap);
+  Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
+    if (!groupEl) return;
+    const allChildren = Array.from(groupEl.children);
+    const movableChildren = allChildren.filter((child) => child.getAttribute('data-layout-item'));
+    const staticChildren = allChildren.filter((child) => !child.getAttribute('data-layout-item'));
+    const byId = new Map();
+    movableChildren.forEach((child) => {
+      const id = child.getAttribute('data-layout-item');
+      if (id) byId.set(id, child);
+    });
+    (normalized[groupKey] || []).forEach((id) => {
+      const child = byId.get(id);
+      if (child) groupEl.appendChild(child);
+    });
+    staticChildren.forEach((child) => {
+      groupEl.appendChild(child);
+    });
+  });
+  if (isLayoutEditMode) {
+    renderLayoutItemControls();
+  }
+}
+
+function loadSavedLayoutOrder() {
+  const raw = localStorage.getItem(INDEX_LAYOUT_STORAGE_KEY) || layoutGetCookieValue(INDEX_LAYOUT_COOKIE_KEY);
+  if (!raw) return null;
+  try {
+    return normalizeLayoutOrder(JSON.parse(raw));
+  } catch (error) {
+    return null;
+  }
+}
+
+function saveLayoutOrder(orderMap) {
+  const normalized = normalizeLayoutOrder(orderMap);
+  const payload = JSON.stringify(normalized);
+  localStorage.setItem(INDEX_LAYOUT_STORAGE_KEY, payload);
+  layoutSetCookieValue(INDEX_LAYOUT_COOKIE_KEY, payload);
+}
+
+function clearSavedLayoutOrder() {
+  localStorage.removeItem(INDEX_LAYOUT_STORAGE_KEY);
+  document.cookie = `${INDEX_LAYOUT_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+}
+
+function updateLayoutDiffHighlight() {
+  const baseline = normalizeLayoutOrder(preEditLayoutOrder || {});
+  const current = getCurrentLayoutOrder();
+  Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
+    if (!groupEl) return;
+    const baseOrder = Array.isArray(baseline[groupKey]) ? baseline[groupKey] : [];
+    const currOrder = Array.isArray(current[groupKey]) ? current[groupKey] : [];
+    const baseIndex = new Map();
+    baseOrder.forEach((id, index) => {
+      baseIndex.set(id, index);
+    });
+    Array.from(groupEl.children).forEach((item) => {
+      const id = item.getAttribute('data-layout-item');
+      if (!id) return;
+      const nowIndex = currOrder.indexOf(id);
+      const prevIndex = baseIndex.has(id) ? baseIndex.get(id) : nowIndex;
+      item.classList.toggle('is-layout-modified', nowIndex !== prevIndex);
+    });
+  });
+}
+
+function removeLayoutItemControls() {
+  document.querySelectorAll('.layout-item-controls').forEach((el) => el.remove());
+  Object.values(layoutGroups).forEach((groupEl) => {
+    if (!groupEl) return;
+    Array.from(groupEl.children).forEach((item) => {
+      if (!item.classList.contains('layout-item')) return;
+      item.removeAttribute('draggable');
+      item.classList.remove('is-layout-draggable', 'is-dragging', 'is-drop-target', 'is-layout-modified');
+      item.ondragstart = null;
+      item.ondragend = null;
+      item.ondragover = null;
+      item.ondragleave = null;
+      item.ondrop = null;
+    });
+  });
+}
+
+function moveLayoutItem(groupKey, itemId, direction) {
+  const groupEl = layoutGroups[groupKey];
+  if (!groupEl || !itemId) return;
+  const order = getCurrentLayoutOrder();
+  const list = Array.isArray(order[groupKey]) ? order[groupKey].slice() : [];
+  const index = list.indexOf(itemId);
+  if (index < 0) return;
+  const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= list.length) return;
+  [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
+  order[groupKey] = list;
+  applyLayoutOrder(order);
+  updateLayoutDiffHighlight();
+}
+
+function renderLayoutItemControls() {
+  removeLayoutItemControls();
+  Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
+    if (!groupEl) return;
+    const items = Array.from(groupEl.children).filter((child) => child.getAttribute('data-layout-item'));
+    items.forEach((item, index) => {
+      const itemId = item.getAttribute('data-layout-item');
+      if (!itemId) return;
+      item.classList.add('is-layout-draggable');
+      item.ondragover = (event) => {
+        if (!isLayoutEditMode || !currentDraggedItem || currentDraggedItem.groupKey !== groupKey) return;
+        event.preventDefault();
+        if (currentDraggedItem.itemId === itemId) return;
+        item.classList.add('is-drop-target');
+        if (!currentDraggedEl || currentDraggedEl === item || currentDraggedEl.parentElement !== groupEl) return;
+        const rect = item.getBoundingClientRect();
+        const insertAfter = event.clientY > rect.top + rect.height / 2;
+        if (insertAfter) {
+          if (item.nextElementSibling !== currentDraggedEl) {
+            groupEl.insertBefore(currentDraggedEl, item.nextElementSibling);
+            updateLayoutDiffHighlight();
+          }
+        } else if (item !== currentDraggedEl.nextElementSibling) {
+          groupEl.insertBefore(currentDraggedEl, item);
+          updateLayoutDiffHighlight();
+        }
+      };
+      item.ondragleave = () => {
+        item.classList.remove('is-drop-target');
+      };
+      item.ondrop = (event) => {
+        event.preventDefault();
+        item.classList.remove('is-drop-target');
+        if (!isLayoutEditMode || !currentDraggedItem || currentDraggedItem.groupKey !== groupKey) return;
+        renderLayoutItemControls();
+        updateLayoutDiffHighlight();
+      };
+      const controls = document.createElement('div');
+      controls.className = 'layout-item-controls';
+      const handle = document.createElement('button');
+      handle.type = 'button';
+      handle.className = 'layout-item-handle';
+      handle.textContent = '::';
+      handle.setAttribute('aria-label', 'Przeciągnij sekcję');
+      handle.setAttribute('title', 'Przeciągnij, aby zmienić kolejność');
+      handle.setAttribute('draggable', 'true');
+      handle.addEventListener('dragstart', (event) => {
+        beginLayoutDrag(groupKey, itemId, item, event);
+      });
+      handle.addEventListener('dragend', () => {
+        endLayoutDrag();
+      });
+      const upBtn = document.createElement('button');
+      upBtn.type = 'button';
+      upBtn.className = 'layout-item-move';
+      upBtn.textContent = '↑';
+      upBtn.setAttribute('aria-label', 'Przesuń wyżej');
+      upBtn.disabled = index === 0;
+      upBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        moveLayoutItem(groupKey, itemId, 'up');
+      });
+      const downBtn = document.createElement('button');
+      downBtn.type = 'button';
+      downBtn.className = 'layout-item-move';
+      downBtn.textContent = '↓';
+      downBtn.setAttribute('aria-label', 'Przesuń niżej');
+      downBtn.disabled = index === items.length - 1;
+      downBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        moveLayoutItem(groupKey, itemId, 'down');
+      });
+      controls.append(handle, upBtn, downBtn);
+      const detailsSummary = item.tagName === 'DETAILS'
+        ? item.querySelector('.collapsible-summary')
+        : null;
+      const controlsHost = detailsSummary || item;
+      controlsHost.appendChild(controls);
+    });
+  });
+  if (isLayoutEditMode) {
+    updateLayoutDiffHighlight();
+  }
+}
+
+function blockDetailsToggleInLayoutMode(event) {
+  if (!isLayoutEditMode) return;
+  const summary = event.target?.closest('details.layout-item > .collapsible-summary');
+  if (!summary) return;
+  const controlButton = event.target?.closest('.layout-item-controls button');
+  if (controlButton) return;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function setLayoutEditMode(enabled) {
+  isLayoutEditMode = !!enabled;
+  document.body.classList.toggle('layout-edit-mode', isLayoutEditMode);
+  if (layoutEditBar) {
+    layoutEditBar.hidden = !isLayoutEditMode;
+  }
+  if (layoutCustomizeBtn) {
+    layoutCustomizeBtn.classList.toggle('is-active', isLayoutEditMode);
+  }
+  if (isLayoutEditMode) {
+    preEditLayoutOrder = getCurrentLayoutOrder();
+    renderLayoutItemControls();
+    updateLayoutDiffHighlight();
+    showMainToast('Tryb edycji układu aktywny.', 'info');
+    return;
+  }
+  currentDraggedItem = null;
+  removeLayoutItemControls();
+}
+
 function getFieldElement(source) {
   const map = {
     netto: 'plnNetto',
@@ -72,8 +381,47 @@ function formatCurrency(value) {
   return value.toFixed(2);
 }
 
+function updateMinSaleByMarkup() {
+  const purchaseEl = document.getElementById('purchaseAmount');
+  const markupEl = document.getElementById('minMarkup');
+  const minSalePlnEl = document.getElementById('minSalePln');
+  const minSaleEbayEl = document.getElementById('minSaleEbay');
+  const minSaleCurrencyLabelEl = document.getElementById('minSaleCurrencyLabel');
+  const currencyEl = document.getElementById('currency');
+  if (!purchaseEl || !markupEl || !minSalePlnEl || !minSaleEbayEl || !currencyEl) return;
+
+  const purchase = parseNumber(purchaseEl.value);
+  const markupPercent = parseNumber(markupEl.value);
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
+  const commissionRaw = advancedOptionsToggle?.checked
+    ? parseNumber(document.getElementById('commission')?.value)
+    : 15;
+  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+  const currency = currencyEl.value || 'EUR';
+
+  if (minSaleCurrencyLabelEl) minSaleCurrencyLabelEl.textContent = currency;
+
+  if (!Number.isFinite(purchase) || purchase <= 0 || !Number.isFinite(markupPercent) || markupPercent < 0) {
+    minSalePlnEl.textContent = '—';
+    minSaleEbayEl.textContent = '—';
+    return;
+  }
+
+  const minSalePlnBrutto = purchase * (1 + (markupPercent / 100));
+  minSalePlnEl.textContent = `${minSalePlnBrutto.toFixed(2)} PLN`;
+
+  if (!Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
+    minSaleEbayEl.textContent = '—';
+    return;
+  }
+
+  const minSaleEbay = minSalePlnBrutto * exchangeRate * (1 + commission);
+  minSaleEbayEl.textContent = `${minSaleEbay.toFixed(2)} ${currency}`;
+}
+
 function updateBaseMultiplier() {
   const multiplierEl = document.getElementById('baseMultiplierValue');
+  const multiplierSummaryEl = document.getElementById('baseMultiplierSummaryValue');
   if (!multiplierEl) return;
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
   const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
@@ -84,6 +432,7 @@ function updateBaseMultiplier() {
   if (!Number.isFinite(exchangeRate) || !Number.isFinite(commission) || !Number.isFinite(vatRate)) {
     multiplierEl.textContent = '—';
     multiplierEl.dataset.value = '';
+    if (multiplierSummaryEl) multiplierSummaryEl.textContent = '—';
     return;
   }
 
@@ -94,6 +443,7 @@ function updateBaseMultiplier() {
   const formatted = multiplierBrutto.toFixed(4);
   multiplierEl.textContent = formatted;
   multiplierEl.dataset.value = formatted;
+  if (multiplierSummaryEl) multiplierSummaryEl.textContent = formatted;
 }
 
 function openSearch(urlBase, query) {
@@ -115,16 +465,30 @@ function showMainToast(message, variant = 'info', durationMs) {
   if (variant === 'warn') toast.classList.add('is-warn');
   if (variant === 'info') toast.classList.add('is-info');
   if (variant === 'success' || variant === 'ok') toast.classList.add('is-ok');
-  const ms = Number.isFinite(durationMs) ? Math.round(durationMs) : 0;
-  toast.textContent = `${message || ''} (${ms} ms)`;
+  const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
+  const ms = hasTiming ? Math.round(durationMs) : 0;
+  const toastText = document.createElement('span');
+  toastText.className = 'mapping-toast-text';
+  toastText.textContent = hasTiming ? `${message || ''} (${ms} ms)` : `${message || ''}`;
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'mapping-toast-close';
+  closeBtn.setAttribute('aria-label', 'Zamknij komunikat');
+  closeBtn.textContent = '×';
+  toast.append(toastText, closeBtn);
   mainToastStack.append(toast);
   requestAnimationFrame(() => {
     toast.classList.add('is-visible');
   });
-  setTimeout(() => {
+  let isClosed = false;
+  const closeToast = () => {
+    if (isClosed) return;
+    isClosed = true;
     toast.classList.remove('is-visible');
     setTimeout(() => toast.remove(), 200);
-  }, 6000);
+  };
+  closeBtn.addEventListener('click', closeToast);
+  setTimeout(closeToast, 6000);
 }
 
 function logActivity(type, meta = {}) {
@@ -151,11 +515,13 @@ function getBestPatternMatch(patterns, normalized) {
   for (const rule of patterns) {
     if (!rule?.pattern || !rule?.vendor) continue;
     if (!window.PN_MAPPINGS_API.matchPattern(rule.pattern, normalized)) continue;
-    const pattern = String(rule.pattern).toUpperCase();
+    const pattern = window.PN_MAPPINGS_API.normalizePattern
+      ? window.PN_MAPPINGS_API.normalizePattern(String(rule.pattern))
+      : String(rule.pattern);
     let literalCount = 0;
     let wildcardCount = 0;
     for (const char of pattern) {
-      if (char === 'X' || char === '*' || char === '+') {
+      if (char === 'x' || char === '*' || char === '+') {
         wildcardCount += 1;
       } else {
         literalCount += 1;
@@ -247,6 +613,69 @@ function renderHistory() {
     ))
     .join('');
 }
+
+defaultLayoutOrder = getCurrentLayoutOrder();
+const savedLayoutOrder = loadSavedLayoutOrder();
+if (savedLayoutOrder) {
+  applyLayoutOrder(savedLayoutOrder);
+}
+
+if (layoutCustomizeBtn) {
+  layoutCustomizeBtn.addEventListener('click', () => {
+    if (isLayoutEditMode) {
+      if (preEditLayoutOrder) {
+        applyLayoutOrder(preEditLayoutOrder);
+      }
+      setLayoutEditMode(false);
+      showMainToast('Anulowano zmiany układu.', 'info');
+      return;
+    }
+    setLayoutEditMode(true);
+  });
+}
+
+if (layoutSaveBtn) {
+  layoutSaveBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const order = getCurrentLayoutOrder();
+    saveLayoutOrder(order);
+    preEditLayoutOrder = order;
+    setLayoutEditMode(false);
+    showMainToast('Układ zapisany.', 'ok');
+  });
+}
+
+if (layoutResetBtn) {
+  layoutResetBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!defaultLayoutOrder) return;
+    applyLayoutOrder(defaultLayoutOrder);
+    clearSavedLayoutOrder();
+    preEditLayoutOrder = getCurrentLayoutOrder();
+    showMainToast('Przywrócono domyślny układ.', 'ok');
+  });
+}
+
+if (layoutExitBtn) {
+  layoutExitBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (preEditLayoutOrder) {
+      applyLayoutOrder(preEditLayoutOrder);
+    }
+    setLayoutEditMode(false);
+    showMainToast('Wyjście z edycji bez zapisu.', 'info');
+  });
+}
+
+document.addEventListener('click', blockDetailsToggleInLayoutMode, true);
+document.addEventListener('keydown', (event) => {
+  if (!isLayoutEditMode) return;
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  blockDetailsToggleInLayoutMode(event);
+}, true);
 
 const baseMultiplierValue = document.getElementById('baseMultiplierValue');
 if (baseMultiplierValue) {
@@ -413,6 +842,9 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   document.getElementById('ebayPrice').value = '';
   document.getElementById('vatRate').value = '23';
   document.getElementById('commission').value = '15';
+  document.getElementById('purchaseAmount').value = '';
+  document.getElementById('minMarkup').value = '';
+  updateMinSaleByMarkup();
   document.getElementById('productId').value = '';
   document.getElementById('currency').value = 'EUR';
   document.getElementById('currencyLabel').innerText = 'EUR';
@@ -565,6 +997,7 @@ function calculatePrice() {
   const multiplierNetto = finalPriceMultiplier;
   const multiplierBrutto = finalPriceMultiplier / (1 + VAT23);
   updateBaseMultiplier();
+  updateMinSaleByMarkup();
 
   let resultHTML = ``;
 
@@ -661,6 +1094,7 @@ function fetchExchangeRate(currency, options = {}) {
       rateSourceSelect.value = providerKeyUsed;
     }
     updateBaseMultiplier();
+    updateMinSaleByMarkup();
 
     if (convertEbayPriceNeeded) {
       const newEbayPrice = convertEbayPrice(rate);
@@ -727,6 +1161,7 @@ function fetchExchangeRate(currency, options = {}) {
               showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
             }
             updateBaseMultiplier();
+            updateMinSaleByMarkup();
             calculatePrice();
             isPresetApplied = false;
           });
@@ -744,6 +1179,7 @@ function fetchExchangeRate(currency, options = {}) {
         showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
       }
       updateBaseMultiplier();
+      updateMinSaleByMarkup();
       calculatePrice();
       isPresetApplied = false;
     });
@@ -875,6 +1311,7 @@ document.getElementById('vatRate').addEventListener('blur', () => {
       calculatePrice();
     }
     updateBaseMultiplier();
+    updateMinSaleByMarkup();
     scheduleHistoryLog(id);
   });
   document.getElementById(id).addEventListener('focus', () => {
@@ -892,7 +1329,17 @@ document.getElementById('currency').addEventListener('change', () => {
   hideSelfTestDetails();
   fetchExchangeRate(selectedCurrency, { notify: false });
   checkRateProvidersStatus(selectedCurrency);
+  updateMinSaleByMarkup();
   addHistoryEntry('currency');
+});
+
+['purchaseAmount', 'minMarkup'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    enforceTwoDecimals(el);
+    updateMinSaleByMarkup();
+  });
 });
 
 document.getElementById('refreshRateBtn').addEventListener('click', () => {
@@ -912,6 +1359,7 @@ updateEbayCurrencyLabel();
 fetchExchangeRate(document.getElementById('currency').value, { notify: false });
 renderHistory();
 checkRateProvidersStatus(document.getElementById('currency').value);
+updateMinSaleByMarkup();
 
 document.getElementById('historyList').addEventListener('click', (event) => {
   const target = event.target;
@@ -984,6 +1432,12 @@ const partNumberInput = document.getElementById('partNumberInput');
 if (partNumberInput) {
   let lastSearchQuery = '';
   let lastSuggestedVendor = '';
+  let mappingsRefreshTimer = null;
+  let mappingsRefreshSeq = 0;
+  let mappingsAppliedSeq = 0;
+  let lastSyncedPnKey = '';
+  const SEARCH_SOURCES_STORAGE_KEY = 'searchSources';
+  const SEARCH_SOURCES_COOKIE_KEY = 'searchSources';
   const searchStatus = document.getElementById('searchStatus');
   const pnSuggestion = document.getElementById('pnSuggestion');
   const reportMappingBtn = document.getElementById('reportMappingBtn');
@@ -999,6 +1453,46 @@ if (partNumberInput) {
   const sourceAllegro = document.getElementById('sourceAllegro');
   const sourceEbay = document.getElementById('sourceEbay');
   const sourceRenewtech = document.getElementById('sourceRenewtech');
+  const getCookieValue = (name) => {
+    const prefix = `${name}=`;
+    const parts = (document.cookie || '').split(';').map((item) => item.trim());
+    for (const part of parts) {
+      if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length));
+    }
+    return '';
+  };
+  const setCookieValue = (name, value, days = 365) => {
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+  };
+  const getSourcesState = () => ({
+    google: !!sourceGoogle?.checked,
+    allegro: !!sourceAllegro?.checked,
+    ebay: !!sourceEbay?.checked,
+    renewtech: !!sourceRenewtech?.checked
+  });
+  const applySourcesState = (state) => {
+    if (!state || typeof state !== 'object') return;
+    if (sourceGoogle && typeof state.google === 'boolean') sourceGoogle.checked = state.google;
+    if (sourceAllegro && typeof state.allegro === 'boolean') sourceAllegro.checked = state.allegro;
+    if (sourceEbay && typeof state.ebay === 'boolean') sourceEbay.checked = state.ebay;
+    if (sourceRenewtech && typeof state.renewtech === 'boolean') sourceRenewtech.checked = state.renewtech;
+  };
+  const persistSourcesState = () => {
+    const state = getSourcesState();
+    const payload = JSON.stringify(state);
+    localStorage.setItem(SEARCH_SOURCES_STORAGE_KEY, payload);
+    setCookieValue(SEARCH_SOURCES_COOKIE_KEY, payload);
+  };
+  const restoreSourcesState = () => {
+    const raw = localStorage.getItem(SEARCH_SOURCES_STORAGE_KEY) || getCookieValue(SEARCH_SOURCES_COOKIE_KEY);
+    if (!raw) return;
+    try {
+      applySourcesState(JSON.parse(raw));
+    } catch (error) {
+      // ignore broken payload
+    }
+  };
   const clearSearchStatus = () => {
     if (!searchStatus) return;
     searchStatus.textContent = '';
@@ -1049,7 +1543,34 @@ if (partNumberInput) {
       partNumberInput.value = '';
       updatePnSuggestion();
       lastSearchQuery = '';
+      lastSyncedPnKey = '';
     }
+  };
+  const syncMappingsForCurrentPn = async () => {
+    if (!window.PN_MAPPINGS_API?.load) return;
+    const raw = partNumberInput.value.trim();
+    if (!raw || raw.length < 3) return;
+    const pnKey = normalizePnValue(raw);
+    if (!pnKey || pnKey === lastSyncedPnKey) return;
+    const seq = ++mappingsRefreshSeq;
+    try {
+      await window.PN_MAPPINGS_API.load();
+      if (seq < mappingsAppliedSeq) return;
+      mappingsAppliedSeq = seq;
+      lastSyncedPnKey = pnKey;
+      updatePnSuggestion();
+    } catch (error) {
+      // Keep current suggestion on transient fetch failure.
+    }
+  };
+  const scheduleMappingsSync = () => {
+    if (mappingsRefreshTimer) {
+      clearTimeout(mappingsRefreshTimer);
+    }
+    mappingsRefreshTimer = setTimeout(() => {
+      mappingsRefreshTimer = null;
+      syncMappingsForCurrentPn();
+    }, 350);
   };
   const runSearchAll = () => {
     const query = partNumberInput.value.trim();
@@ -1079,7 +1600,10 @@ if (partNumberInput) {
         pn = pn.slice(vendor.length).trim();
       }
       if (!pn) pn = query;
-      const googleQuery = vendor ? `${vendor} "${pn}"` : `"${pn}"`;
+      const hasSpaces = /\s/.test(pn);
+      const googleQuery = vendor
+        ? (hasSpaces ? `${vendor} ${pn}` : `${vendor} "${pn}"`)
+        : (hasSpaces ? pn : `"${pn}"`);
       openSearch('https://www.google.com/search?q=', googleQuery);
     }
     if (sources.includes('ebay')) {
@@ -1134,6 +1658,7 @@ if (partNumberInput) {
     if (!checkbox) return;
     checkbox.addEventListener('change', () => {
       clearSearchStatus();
+      persistSourcesState();
     });
   });
   partNumberInput.addEventListener('keydown', (event) => {
@@ -1160,8 +1685,10 @@ if (partNumberInput) {
   partNumberInput.addEventListener('input', () => {
     updatePnSuggestion();
     clearSearchStatus();
+    scheduleMappingsSync();
   });
   updatePnSuggestion();
+  restoreSourcesState();
   if (window.PN_MAPPINGS_API?.load) {
     window.PN_MAPPINGS_API.load().then(() => {
       updatePnSuggestion();
@@ -1210,8 +1737,7 @@ if (partNumberInput) {
       const source = partNumberInput.dataset.suggestionSource || '';
       const detail = partNumberInput.dataset.suggestionDetail || '';
       const reason = reportReason?.value?.trim() || '';
-      const nonMapping = reportNonMapping?.checked;
-      const inferredUi = !query && !vendor && !!reason;
+      const nonMapping = !!(reportNonMapping && reportNonMapping.checked);
       if (nonMapping) {
         if (!reason) {
           showMainToast('Dodaj krótki opis problemu.', 'warn');
@@ -1228,7 +1754,7 @@ if (partNumberInput) {
         source,
         detail,
         reason,
-        kind: nonMapping || inferredUi ? 'ui' : 'mapping',
+        kind: nonMapping ? 'ui' : 'mapping',
         reportId,
         appVersion
       };

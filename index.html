@@ -4,9 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>eBay Calc</title>
+  <link rel="icon" href="resources/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-page-title="Kalkulator">
   <div class="page">
     <header class="topbar">
       <div>
@@ -16,12 +17,20 @@
       </div>
       <div class="top-actions">
         <nav class="top-menu" aria-label="Główne menu">
-          <a class="top-menu-link is-active" href="index.html" aria-current="page">
-            <span class="top-menu-icon" aria-hidden="true">
-              <img src="resources/icon-calc.svg" alt="">
-            </span>
-            <span>Kalkulator</span>
-          </a>
+          <div class="top-menu-group has-dropdown">
+            <a class="top-menu-link is-active" href="index.html" aria-current="page">
+              <span class="top-menu-icon" aria-hidden="true">
+                <img src="resources/icon-calc.svg" alt="">
+              </span>
+              <span>Kalkulator</span>
+              <span class="top-menu-caret" aria-hidden="true">▾</span>
+            </a>
+            <div class="top-menu-dropdown" role="menu" aria-label="Opcje kalkulatora">
+              <button type="button" id="layoutCustomizeBtn" class="top-menu-dropdown-item" role="menuitem">
+                Układ
+              </button>
+            </div>
+          </div>
           <a class="top-menu-link" href="pn-mappings.html">
             <span class="top-menu-icon" aria-hidden="true">
               <img src="resources/icon-mapping.svg" alt="">
@@ -48,78 +57,134 @@
     <div class="layout">
       <section class="app-card">
         <h2>Panel przeliczeń</h2>
-
-        <div class="preset-buttons">
-          <button type="button" onclick="applyPreset('USD', 0)">USD VAT 0%</button>
-          <button type="button" onclick="applyPreset('EUR', 0)">EUR VAT 0%</button>
-          <button type="button" onclick="applyPreset('EUR', 23)">EUR VAT 23%</button>
-          <button type="button" onclick="applyPreset('GBP', 0)">GBP VAT 0%</button>
-        </div>
-
         <form id="priceForm">
-          <label for="plnNetto">Kwota netto w PLN</label>
-          <input type="number" id="plnNetto" step="0.01" min="0" placeholder="Wprowadź kwotę netto">
-
-          <label for="plnBrutto">Kwota brutto w PLN (z VAT 23%)</label>
-          <input type="number" id="plnBrutto" step="0.01" min="0" placeholder="Wprowadź lub przeliczana z netto">
-
-          <label for="ebayPrice">Docelowa cena na eBay w <span id="ebayCurrencyLabel">EUR (z VAT 23%)</span></label>
-          <input type="number" id="ebayPrice" step="0.01" min="0" placeholder="Wprowadź docelową cenę na eBay">
-
-          <label for="currency">Waluta docelowa</label>
-          <div class="currency-row">
-            <select id="currency">
-              <option value="EUR" selected>EUR</option>
-              <option value="USD">USD</option>
-              <option value="GBP">GBP</option>
-            </select>
-            <button type="button" id="refreshRateBtn">Odśwież kurs</button>
-          </div>
-
-          <label for="exchangeRate">Kurs PLN/<span id="currencyLabel">EUR</span></label>
-          <p id="exchangeInfo">Pobieranie kursu...</p>
-          <div id="exchangeRateTooltip" class="input-tooltip" data-tooltip="">
-            <input type="number" id="exchangeRate" step="0.0001" min="0" required disabled>
-          </div>
-
-          <div class="toggle-row">
-            <label class="toggle-switch">
-            <input type="checkbox" id="advancedOptionsToggle">
-            <span class="slider"></span>
-            </label>
-            <span class="toggle-label">Opcje zaawansowane</span>
-          </div>
-
-          <div id="advancedOptions" class="advanced-options" style="display: none;">
-            <label for="commission">Prowizja (%)</label>
-            <input type="number" id="commission" value="15" step="0.1" min="0" max="100" required>
-
-            <label for="productId">ID produktu w STOCK</label>
-            <div class="currency-row">
-              <input type="number" id="productId" min="1" placeholder="Wprowadź ID produktu (1-6 cyfr)">
-              <button type="button" id="stockUrlBtn">Otwórz w STOCK</button>
+          <div id="calcLayoutContainer">
+            <div class="preset-buttons layout-item" data-layout-item="calc-presets">
+              <button type="button" onclick="applyPreset('USD', 0)">USD VAT 0%</button>
+              <button type="button" onclick="applyPreset('EUR', 0)">EUR VAT 0%</button>
+              <button type="button" onclick="applyPreset('EUR', 23)">EUR VAT 23%</button>
+              <button type="button" onclick="applyPreset('GBP', 0)">GBP VAT 0%</button>
             </div>
-                        <div class="rate-source-row">
-                                      <label for="rateSource">Źródło kursu</label>
 
-              <select id="rateSource">
-                <option value="frankfurter" selected>Frankfurter</option>
-                <option value="exchangerate">exchangerate.host</option>
-                <option value="erapi">open.er-api.com</option>
-              </select>
+            <div class="layout-item" data-layout-item="calc-netto">
+              <label for="plnNetto" class="field-label">Kwota netto w PLN
+                <span class="field-help" tabindex="0" data-tooltip="Netto ERP. Kalkulator przelicza na brutto stałym VAT 23%: brutto = netto × 1.23." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="plnNetto" step="0.01" min="0" placeholder="Wprowadź kwotę netto">
             </div>
-            <div class="rate-status-row" id="rateStatusRow">
-              <span class="rate-status" data-provider="frankfurter"><span class="dot"></span>Frankfurter</span>
-              <span class="rate-status" data-provider="exchangerate"><span class="dot"></span>exchangerate.host</span>
-              <span class="rate-status" data-provider="erapi"><span class="dot"></span>open.er-api.com</span>
+
+            <div class="layout-item" data-layout-item="calc-brutto">
+              <label for="plnBrutto" class="field-label">Kwota brutto w PLN (z VAT 23%)
+                <span class="field-help" tabindex="0" data-tooltip="Brutto ERP (punkt bazowy dla wyceny eBay). Netto = brutto / 1.23." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="plnBrutto" step="0.01" min="0" placeholder="Wprowadź lub przeliczana z netto">
             </div>
-          </div>
 
-          <label for="vatRate">Stawka VAT dla klienta (%)</label>
-          <input type="number" id="vatRate" value="23" min="0" max="100" required>
+            <div class="layout-item" data-layout-item="calc-ebay">
+              <label for="ebayPrice" class="field-label">Docelowa cena na eBay w <span id="ebayCurrencyLabel">EUR (z VAT 23%)</span>
+                <span class="field-help" tabindex="0" data-tooltip="Cena końcowa dla klienta w wybranej walucie. Gdy wpiszesz tę wartość ręcznie, kalkulator liczy wstecz ERP brutto/netto." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="ebayPrice" step="0.01" min="0" placeholder="Wprowadź docelową cenę na eBay">
+            </div>
 
-          <div class="action-row">
-            <button type="button" id="clearBtn">Wyczyść</button>
+            <div class="layout-item" data-layout-item="calc-currency">
+              <label for="currency" class="field-label">Waluta docelowa
+                <span class="field-help" tabindex="0" data-tooltip="Waluta sprzedaży eBay (EUR/USD/GBP). Zmiana waluty przelicza cenę wg kursu PLN→waluta." aria-label="Pomoc">?</span>
+              </label>
+              <div class="currency-row">
+                <select id="currency">
+                  <option value="EUR" selected>EUR</option>
+                  <option value="USD">USD</option>
+                  <option value="GBP">GBP</option>
+                </select>
+                <button type="button" id="refreshRateBtn">Odśwież kurs</button>
+              </div>
+            </div>
+
+            <div class="layout-item" data-layout-item="calc-rate">
+              <label for="exchangeRate" class="field-label">Kurs PLN  /<span id="currencyLabel">EUR</span>
+                <span class="field-help" tabindex="0" data-tooltip="Ile jednostek waluty docelowej dostajesz za 1 PLN (np. 1 PLN = 0.2372 EUR)." aria-label="Pomoc">?</span>
+              </label>
+              <p id="exchangeInfo">Pobieranie kursu...</p>
+              <div id="exchangeRateTooltip" class="input-tooltip" data-tooltip="">
+                <input type="number" id="exchangeRate" step="0.0001" min="0" required disabled>
+              </div>
+            </div>
+
+            <div class="layout-item" data-layout-item="calc-vat">
+              <label for="vatRate" class="field-label">Stawka VAT dla klienta (%)
+                <span class="field-help" tabindex="0" data-tooltip="W aktualnej logice wpływa na etykiety i mnożnik Base. Nie zmienia bezpośrednio przeliczenia ERP↔eBay (to idzie od ERP brutto + kurs + prowizja)." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="vatRate" value="23" min="0" max="100" required>
+            </div>
+
+            <div class="layout-item" data-layout-item="calc-min-markup">
+              <label for="purchaseAmount" class="field-label">Kwota zakupu (PLN brutto)
+                <span class="field-help" tabindex="0" data-tooltip="Twój koszt zakupu brutto. Podstawa do wyliczenia minimalnej ceny sprzedaży." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="purchaseAmount" step="0.01" min="0" placeholder="Np. 1200.00">
+
+              <label for="minMarkup" class="field-label">Minimalny narzut (%)
+                <span class="field-help" tabindex="0" data-tooltip="Narzut liczony wzorem: (sprzedaż - zakup) / zakup × 100%. Minimalna sprzedaż = zakup × (1 + narzut/100)." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="minMarkup" step="0.1" min="0" value="30" placeholder="Np. 18">
+
+              <div class="min-price-box" id="minPriceBox">
+                <div><strong>Minimalna cena sprzedaży (PLN brutto):</strong> <span id="minSalePln">—</span>
+                  <span class="field-help inline-help" tabindex="0" data-tooltip="Najniższa cena brutto w PLN spełniająca zadany narzut." aria-label="Pomoc">?</span>
+                </div>
+                <div><strong>Minimalna cena na eBay (<span id="minSaleCurrencyLabel">EUR</span>):</strong> <span id="minSaleEbay">—</span>
+                  <span class="field-help inline-help" tabindex="0" data-tooltip="Przeliczenie minimalnej ceny PLN na walutę eBay z prowizją: min_eBay = min_PLN × kurs × (1 + prowizja)." aria-label="Pomoc">?</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="layout-item" data-layout-item="calc-advanced">
+              <div class="toggle-row">
+                <label class="toggle-switch">
+                <input type="checkbox" id="advancedOptionsToggle">
+                <span class="slider"></span>
+                </label>
+                <span class="toggle-label">Opcje zaawansowane</span>
+              </div>
+
+              <div id="advancedOptions" class="advanced-options" style="display: none;">
+                <label for="commission" class="field-label">Prowizja (%)
+                  <span class="field-help" tabindex="0" data-tooltip="Marża platformy doliczana do ceny eBay. eBay = ERP_brutto × kurs × (1 + prowizja/100). Gdy opcje zaawansowane są wyłączone, używane jest domyślne 15%." aria-label="Pomoc">?</span>
+                </label>
+                <input type="number" id="commission" value="15" step="0.1" min="0" max="100" required>
+
+                <label for="productId" class="field-label">ID produktu w STOCK
+                  <span class="field-help" tabindex="0" data-tooltip="Pole pomocnicze do szybkiego otwarcia karty produktu w STOCK." aria-label="Pomoc">?</span>
+                </label>
+                <div class="currency-row">
+                  <input type="number" id="productId" min="1" placeholder="Wprowadź ID produktu (1-6 cyfr)">
+                  <button type="button" id="stockUrlBtn">Otwórz w STOCK</button>
+                </div>
+                <div class="rate-source-row">
+                  <label for="rateSource" class="field-label">Źródło kursu
+                    <span class="field-help" tabindex="0" data-tooltip="Wybór API kursowego. Gdy źródło nie odpowiada, aplikacja używa fallbacku." aria-label="Pomoc">?</span>
+                  </label>
+
+                  <select id="rateSource">
+                    <option value="frankfurter" selected>Frankfurter</option>
+                    <option value="exchangerate">exchangerate.host</option>
+                    <option value="erapi">open.er-api.com</option>
+                  </select>
+                </div>
+                <div class="rate-status-row" id="rateStatusRow">
+                  <span class="rate-status" data-provider="frankfurter"><span class="dot"></span>Frankfurter</span>
+                  <span class="rate-status" data-provider="exchangerate"><span class="dot"></span>exchangerate.host</span>
+                  <span class="rate-status" data-provider="erapi"><span class="dot"></span>open.er-api.com</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="calc-actions-fixed">
+              <div class="action-row">
+                <button type="button" id="clearBtn">Wyczyść</button>
+              </div>
+            </div>
           </div>
           
         </form>
@@ -127,7 +192,8 @@
       </section>
 
       <aside class="info-card">
-        <div class="info-card search-card">
+        <div id="infoLayoutContainer">
+        <div class="info-card search-card layout-item" data-layout-item="search-card">
           <div class="search-header">
             <h3>Wyszukaj ofertę po PN</h3>
             <button type="button" class="report-quick-btn" id="reportMappingBtn">⚑ Zgłoś</button>
@@ -170,26 +236,50 @@
           </div>
           <div class="search-status" id="searchStatus" aria-live="polite"></div>
         </div>
-        <div class="history-header">
-          <div>
-            <h3>Historia działań</h3>
-            <p>Krótki zapis tego, co przeliczałeś w tej sesji.</p>
+        <details class="info-card collapsible-card history-collapsible layout-item" id="historyCard" data-layout-item="history-card">
+          <summary class="collapsible-summary">
+            <div class="history-header">
+              <div>
+                <h3>Historia działań</h3>
+              </div>
+            </div>
+            <span class="collapsible-chevron" aria-hidden="true">▾</span>
+          </summary>
+          <div class="collapsible-body">
+            <div id="historyList" class="history-list"></div>
+            <div class="history-actions">
+              <button type="button" id="clearHistoryBtn">Wyczyść historię</button>
+              <button type="button" id="restoreHistoryBtn" style="display: none;">Cofnij</button>
+            </div>
           </div>
-        </div>
-        <div id="historyList" class="history-list"></div>
-        <div class="history-actions">
-          <button type="button" id="clearHistoryBtn">Wyczyść historię</button>
-          <button type="button" id="restoreHistoryBtn" style="display: none;">Cofnij</button>
-        </div>
-        <div class="info-card highlight-card">
-          <h3>Mnożnik dla <a class="highlight-link-inline" href="https://panel-e.baselinker.com/inventory_settings#price_groups" target="_blank" rel="noopener noreferrer">Base</a></h3>
-          <div class="highlight-value">
-            <button type="button" id="baseMultiplierValue" class="highlight-copy" aria-label="Kopiuj mnożnik" title="Kliknij, aby skopiować">—</button>
+        </details>
+        <details class="info-card highlight-card collapsible-card base-collapsible layout-item" id="baseCard" data-layout-item="base-card">
+          <summary class="collapsible-summary">
+            <h3>Mnożnik dla <a class="highlight-link-inline" href="https://panel-e.baselinker.com/inventory_settings#price_groups" target="_blank" rel="noopener noreferrer">Base</a></h3>
+            <div class="collapsible-summary-right">
+              <span id="baseMultiplierSummaryValue" class="collapsible-summary-value">—</span>
+              <span class="collapsible-chevron" aria-hidden="true">▾</span>
+            </div>
+          </summary>
+          <div class="collapsible-body">
+            <div class="highlight-value">
+              <button type="button" id="baseMultiplierValue" class="highlight-copy" aria-label="Kopiuj mnożnik" title="Kliknij, aby skopiować">—</button>
+            </div>
+            <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
           </div>
-          <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
+        </details>
         </div>
-        <footer>Wersja <span id="appVersion">1.8</span><br>Projekt i wykonanie: Codex 5.2, z uśmiechem dla <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> </footer>
+        <footer>Wersja <span id="appVersion">1.90</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
       </aside>
+    </div>
+  </div>
+
+  <div id="layoutEditBar" class="layout-edit-bar" hidden>
+    <strong>Tryb edycji układu</strong>
+    <div class="layout-edit-actions">
+      <button type="button" id="layoutSaveBtn">Zapisz</button>
+      <button type="button" id="layoutResetBtn">Domyślny</button>
+      <button type="button" id="layoutExitBtn">Wyjdź</button>
     </div>
   </div>
 
@@ -203,7 +293,7 @@
         <div class="mapping-modal-body">
           <div class="report-meta" id="reportModalInfo"></div>
           <label for="reportReason">Uwagi / powód</label>
-          <textarea id="reportReason" rows="3" maxlength="200" placeholder="Np. powinno być Dell, nie Mellanox"></textarea>
+          <textarea id="reportReason" rows="3" maxlength="10000" placeholder="Np. powinno być Dell, nie Mellanox"></textarea>
           <label class="report-checkbox">
             <input type="checkbox" id="reportNonMapping">
             <span>Bug strony</span>

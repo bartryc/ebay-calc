@@ -4,9 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin PN</title>
+  <link rel="icon" href="resources/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-page-title="Admin">
   <div class="page">
     <header class="topbar">
       <div>
@@ -354,6 +355,7 @@
     const patternApplyBtn = document.getElementById('patternApplyBtn');
     const patternStripSpecial = document.getElementById('patternStripSpecial');
     const patternPreferPlus = document.getElementById('patternPreferPlus');
+    let patternLiveTimer = null;
     let migrateMode = 'full';
     let pendingReportApply = null;
     let pendingReportDismiss = null;
@@ -475,12 +477,10 @@
       const suggestions = [];
       const positional = buildPositionalPattern(values);
       if (positional) suggestions.push(positional);
-      if (preferPlus) {
-        const prefix = buildPrefixPattern(values);
-        if (prefix) suggestions.push(prefix);
-        const suffix = buildSuffixPattern(values);
-        if (suffix) suggestions.push(suffix);
-      }
+      const prefix = buildPrefixPattern(values);
+      if (prefix) suggestions.push(prefix);
+      const suffix = buildSuffixPattern(values);
+      if (suffix) suggestions.push(suffix);
       const segmented = buildSegmentPattern(values);
       if (segmented) suggestions.push(segmented);
       const unique = Array.from(new Set(suggestions));
@@ -488,12 +488,18 @@
         const matched = values.filter((v) => matchPatternLocal(pattern, v));
         return {
           pattern,
+          isPlusPattern: pattern.includes('+'),
           count: matched.length,
           total: values.length,
           examples: matched.slice(0, 3),
           confidence: Math.round((matched.length / values.length) * 100)
         };
       }).sort((a, b) => {
+        if (a.isPlusPattern !== b.isPlusPattern) {
+          return preferPlus
+            ? (a.isPlusPattern ? -1 : 1)
+            : (a.isPlusPattern ? 1 : -1);
+        }
         if (b.count !== a.count) return b.count - a.count;
         return b.pattern.length - a.pattern.length;
       });
@@ -551,16 +557,55 @@
       if (variant === 'warn') toast.classList.add('is-warn');
       if (variant === 'info') toast.classList.add('is-info');
       if (variant === 'ok') toast.classList.add('is-ok');
-      const suffix = ` (${Math.round(Number.isFinite(durationMs) ? durationMs : 0)} ms)`;
-      toast.textContent = `${message || ''}${suffix}`;
+      const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
+      const suffix = hasTiming ? ` (${Math.round(durationMs)} ms)` : '';
+      const toastText = document.createElement('span');
+      toastText.className = 'mapping-toast-text';
+      toastText.textContent = `${message || ''}${suffix}`;
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'mapping-toast-close';
+      closeBtn.setAttribute('aria-label', 'Zamknij komunikat');
+      closeBtn.textContent = '×';
+      toast.append(toastText, closeBtn);
       toastStack.append(toast);
       requestAnimationFrame(() => {
         toast.classList.add('is-visible');
       });
-      setTimeout(() => {
+      let isClosed = false;
+      const closeToast = () => {
+        if (isClosed) return;
+        isClosed = true;
         toast.classList.remove('is-visible');
         setTimeout(() => toast.remove(), 200);
-      }, 8000);
+      };
+      closeBtn.addEventListener('click', closeToast);
+      setTimeout(closeToast, 8000);
+    }
+
+    async function copyTextToClipboard(text) {
+      const content = String(text || '').trim();
+      if (!content) return false;
+      try {
+        await navigator.clipboard.writeText(content);
+        return true;
+      } catch (error) {
+        try {
+          const fallback = document.createElement('textarea');
+          fallback.value = content;
+          fallback.setAttribute('readonly', 'readonly');
+          fallback.style.position = 'fixed';
+          fallback.style.opacity = '0';
+          fallback.style.pointerEvents = 'none';
+          document.body.appendChild(fallback);
+          fallback.select();
+          const ok = document.execCommand('copy');
+          fallback.remove();
+          return !!ok;
+        } catch (innerError) {
+          return false;
+        }
+      }
     }
 
     function logAdminAction(action, meta = {}) {
@@ -747,14 +792,102 @@
 
     if (patternGenerateBtn) {
       patternGenerateBtn.addEventListener('click', () => {
-        const raw = patternSeedInput?.value || '';
-        const list = raw.split(/\r?\n|,|;/).map((item) => item.trim()).filter(Boolean);
+        const list = String(patternSeedInput?.value || '')
+          .split(/[\s,;]+/g)
+          .map((item) => item.trim())
+          .filter(Boolean);
         const suggestions = generatePatternSuggestions(list, {
           stripSpecial: patternStripSpecial?.checked,
           preferPlus: patternPreferPlus?.checked
         });
         renderPatternSuggestions(suggestions);
       });
+    }
+
+    if (patternSeedInput) {
+      const splitToLineTokens = (raw) => String(raw || '')
+        .split(/[\s,;]+/g)
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      const normalizePatternSeedTextarea = () => {
+        const tokens = splitToLineTokens(patternSeedInput.value);
+        const normalized = tokens.join('\n');
+        if (patternSeedInput.value !== normalized) {
+          patternSeedInput.value = normalized;
+        }
+      };
+      const refreshPatternSuggestionsLive = () => {
+        const list = splitToLineTokens(patternSeedInput.value);
+        const suggestions = generatePatternSuggestions(list, {
+          stripSpecial: patternStripSpecial?.checked,
+          preferPlus: patternPreferPlus?.checked
+        });
+        renderPatternSuggestions(suggestions);
+      };
+      const scheduleRefreshPatternSuggestions = () => {
+        if (patternLiveTimer) clearTimeout(patternLiveTimer);
+        patternLiveTimer = setTimeout(() => {
+          patternLiveTimer = null;
+          refreshPatternSuggestionsLive();
+        }, 180);
+      };
+      const pushNewLineAtCursor = () => {
+        const start = patternSeedInput.selectionStart;
+        const end = patternSeedInput.selectionEnd;
+        const value = patternSeedInput.value;
+        const before = value.slice(0, start).replace(/[ \t,;]+$/g, '');
+        const after = value.slice(end).replace(/^[ \t,;]+/g, '');
+        const shouldAddBreak = before.length > 0 && !before.endsWith('\n');
+        const next = `${before}${shouldAddBreak ? '\n' : ''}${after}`;
+        const caret = (before + (shouldAddBreak ? '\n' : '')).length;
+        patternSeedInput.value = next;
+        patternSeedInput.setSelectionRange(caret, caret);
+      };
+      patternSeedInput.addEventListener('beforeinput', (event) => {
+        if (event.inputType !== 'insertText') return;
+        const token = event.data || '';
+        if (!/^[\s,;]$/.test(token)) return;
+        event.preventDefault();
+        pushNewLineAtCursor();
+      });
+      patternSeedInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === 'NumpadEnter' || event.key === ' ' || event.key === 'Spacebar' || event.key === 'Tab' || event.key === ',' || event.key === ';') {
+          event.preventDefault();
+          pushNewLineAtCursor();
+        }
+      });
+      patternSeedInput.addEventListener('input', () => {
+        normalizePatternSeedTextarea();
+        scheduleRefreshPatternSuggestions();
+      });
+      patternSeedInput.addEventListener('paste', (event) => {
+        event.preventDefault();
+        const text = event.clipboardData?.getData('text') || '';
+        const tokens = splitToLineTokens(text);
+        const start = patternSeedInput.selectionStart;
+        const end = patternSeedInput.selectionEnd;
+        const value = patternSeedInput.value;
+        const before = value.slice(0, start);
+        const after = value.slice(end);
+        const insertCore = tokens.join('\n');
+        const needLeadingBreak = before.length > 0 && !before.endsWith('\n');
+        const needTrailingBreak = after.length > 0 && !after.startsWith('\n');
+        const insert = `${needLeadingBreak ? '\n' : ''}${insertCore}${needTrailingBreak ? '\n' : ''}`;
+        patternSeedInput.setRangeText(insert, start, end, 'end');
+        normalizePatternSeedTextarea();
+        scheduleRefreshPatternSuggestions();
+      });
+      if (patternStripSpecial) {
+        patternStripSpecial.addEventListener('change', () => {
+          scheduleRefreshPatternSuggestions();
+        });
+      }
+      if (patternPreferPlus) {
+        patternPreferPlus.addEventListener('change', () => {
+          scheduleRefreshPatternSuggestions();
+        });
+      }
     }
 
     if (patternVendorSelect) {
@@ -791,6 +924,7 @@
         if (!window.PN_MAPPINGS_API?.get || !window.PN_MAPPINGS_API?.set) return;
         const data = window.PN_MAPPINGS_API.get();
         const hasPattern = /[xX*+]/.test(rawPattern);
+        let saved = false;
         if (hasPattern) {
           const normalized = window.PN_MAPPINGS_API.normalizePattern(rawPattern);
           const exists = (data.patterns || []).some((p) => window.PN_MAPPINGS_API.normalizePattern(p.pattern) === normalized);
@@ -801,6 +935,7 @@
             window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-pattern', pattern: normalized, vendor: vendor.trim() });
             showToast('Dodano wzorzec z kreatora.', 'ok');
             refreshVendorOptions();
+            saved = true;
           } else {
             showToast('Taki wzorzec już istnieje.', 'warn');
           }
@@ -812,6 +947,15 @@
           window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-exact', key, vendor: vendor.trim() });
           showToast('Dodano PN exact z kreatora.', 'ok');
           refreshVendorOptions();
+          saved = true;
+        }
+        if (saved) {
+          if (patternResult) patternResult.value = '';
+          if (patternVendor) patternVendor.value = '';
+          if (patternVendorSelect) patternVendorSelect.value = '';
+          if (patternSeedInput) patternSeedInput.value = '';
+          if (patternSuggestions) patternSuggestions.innerHTML = '';
+          patternResult?.focus();
         }
         updateStats(window.PN_MAPPINGS_API.get());
       });
@@ -826,12 +970,16 @@
     });
 
     if (window.PN_MAPPINGS_API?.load) {
+      const dbLoadStart = performance.now();
+      showToast('Ładowanie bazy danych…', 'info', 0);
       window.PN_MAPPINGS_API.load()
         .then((data) => {
+          const dbLoadEnd = performance.now();
           updateStats(data);
           const stamp = new Date().toLocaleString('pl-PL');
           localStorage.setItem(ADMIN_LAST_SYNC_KEY, stamp);
           if (lastSyncValue) lastSyncValue.textContent = stamp;
+          showToast('Baza danych załadowana.', 'ok', dbLoadEnd - dbLoadStart);
           fetchLogs();
           fetchReports();
           resolveCurrentAppVersion();
@@ -839,7 +987,8 @@
           refreshVendorOptions();
         })
         .catch(() => {
-          showToast('Nie udało się pobrać mapowań z serwera.', 'warn');
+          const dbLoadEnd = performance.now();
+          showToast('Nie udało się pobrać mapowań z serwera.', 'warn', dbLoadEnd - dbLoadStart);
           updateStats(window.PN_MAPPINGS_API.get());
         });
     }
@@ -913,14 +1062,37 @@
 
     async function fetchReports() {
       try {
-        const resp = await window.PN_MAPPINGS_API.request('/logs?limit=200&offset=0', { method: 'GET' });
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '');
-          throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+        const pageSize = 200;
+        let offset = 0;
+        let total = null;
+        const allLogs = [];
+        let pageGuard = 0;
+        const maxPages = 100;
+
+        while (pageGuard < maxPages) {
+          const resp = await window.PN_MAPPINGS_API.request(
+            `/logs?limit=${pageSize}&offset=${offset}&type=mapping-report`,
+            { method: 'GET' }
+          );
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+          }
+          const data = await resp.json();
+          const pageItems = Array.isArray(data.logs) ? data.logs : [];
+          if (Number.isFinite(data.total)) {
+            total = data.total;
+          }
+          allLogs.push(...pageItems);
+          offset += pageItems.length;
+          pageGuard += 1;
+
+          if (!pageItems.length) break;
+          if (Number.isFinite(total) && offset >= total) break;
+          if (pageItems.length < pageSize) break;
         }
-        const data = await resp.json();
-        const rawLogs = Array.isArray(data.logs) ? data.logs : [];
-        reportsCache = rawLogs.filter((entry) => isReportLike(entry));
+
+        reportsCache = allLogs.filter((entry) => isReportLike(entry));
         await fetchReportKindsForReports(reportsCache);
         scheduleRenderReports();
       } catch (error) {
@@ -1357,7 +1529,7 @@
                 </div>
               </div>
             </div>
-            ${reason ? `<div class="report-reason"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
+            ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować treść uwagi"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
             <div class="report-form">
               <textarea class="report-note" rows="2" placeholder="Notatki admina (opcjonalne)">${storedNote}</textarea>
               <div class="report-actions">
@@ -1388,7 +1560,7 @@
               <span>Źródło: ${source || '—'}</span>
               ${detail ? `<span>Wzorzec: ${detail}</span>` : ''}
             </div>
-            ${reason ? `<div class="report-reason"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
+            ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować treść uwagi"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
             <div class="report-form">
               <input type="text" class="report-key" placeholder="PN lub wzorzec" value="${query}">
               <input type="text" class="report-vendor" placeholder="Producent (np. Dell)" value="${suggestedVendor}">
@@ -1692,6 +1864,21 @@
       reportList.addEventListener('click', (event) => {
         const target = event.target;
         if (!target) return;
+        const reasonBlock = target.closest('.report-reason.is-copyable');
+        if (reasonBlock) {
+          const reasonText = reasonBlock.querySelector('strong')?.textContent?.trim() || '';
+          if (!reasonText) return;
+          const t0 = performance.now();
+          copyTextToClipboard(reasonText).then((ok) => {
+            const t1 = performance.now();
+            if (ok) {
+              showToast('Skopiowano treść uwagi.', 'ok', t1 - t0);
+            } else {
+              showToast('Nie udało się skopiować uwagi.', 'warn', t1 - t0);
+            }
+          });
+          return;
+        }
         const kindToggle = target.closest('.report-kind-toggle');
         if (kindToggle) {
           const item = kindToggle.closest('.report-item');

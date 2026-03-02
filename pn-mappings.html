@@ -4,9 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Mapowania PN</title>
+  <link rel="icon" href="resources/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-page-title="Zapisane mapowania">
   <div class="page">
     <header class="topbar">
       <div>
@@ -46,7 +47,7 @@
 
     <section class="app-card">
       <div class="mapping-help">
-        <strong>Wzorce:</strong> `x` = jedna cyfra, `*` = jeden dowolny znak, `+` = dowolny ciąg znaków.
+        <strong>Wzorce:</strong> `x` (małe) = jedna cyfra, `*` = jeden dowolny znak, `+` = dowolny ciąg znaków.
         <span class="mapping-help-examples">Przykłady: `xxxxx`, `0xxxxx`, `******-***`, `AFBR+`</span>
       </div>
       <div class="search-row">
@@ -184,16 +185,30 @@
       toast.className = 'mapping-toast';
       if (variant === 'warn') toast.classList.add('is-warn');
       if (variant === 'ok') toast.classList.add('is-ok');
-      const ms = Number.isFinite(durationMs) ? Math.round(durationMs) : 0;
-      toast.textContent = `${message || ''} (${ms} ms)`;
+      const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
+      const ms = hasTiming ? Math.round(durationMs) : 0;
+      const toastText = document.createElement('span');
+      toastText.className = 'mapping-toast-text';
+      toastText.textContent = hasTiming ? `${message || ''} (${ms} ms)` : `${message || ''}`;
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'mapping-toast-close';
+      closeBtn.setAttribute('aria-label', 'Zamknij komunikat');
+      closeBtn.textContent = '×';
+      toast.append(toastText, closeBtn);
       toastStack.append(toast);
       requestAnimationFrame(() => {
         toast.classList.add('is-visible');
       });
-      setTimeout(() => {
+      let isClosed = false;
+      const closeToast = () => {
+        if (isClosed) return;
+        isClosed = true;
         toast.classList.remove('is-visible');
         setTimeout(() => toast.remove(), 200);
-      }, 10000);
+      };
+      closeBtn.addEventListener('click', closeToast);
+      setTimeout(closeToast, 10000);
     }
 
     function logMappingAction(action, meta = {}) {
@@ -207,7 +222,7 @@
     }
 
     function shouldTreatAsPattern(value) {
-      return /[x*+]/i.test(value);
+      return /[x*+]/.test(value);
     }
 
     function downloadBackup() {
@@ -310,7 +325,7 @@
       const isPattern = shouldTreatAsPattern(rawKey);
       if (isPattern) {
         if (!isValidPattern(rawKey)) {
-          showToast('Wzorzec może zawierać tylko litery, cyfry, x, *, + i -.', 'warn');
+          showToast('Wzorzec może zawierać tylko litery/cyfry oraz x (małe), *, + i -.', 'warn');
           return;
         }
         const pattern = window.PN_MAPPINGS_API.normalizePattern(rawKey);
@@ -484,7 +499,7 @@
         data.exact[newKey] = vendor;
       } else if (nextMode === 'pattern') {
         if (!isValidPattern(rawKey)) {
-          showToast('Wzorzec może zawierać tylko litery, cyfry, x, *, + i -.', 'warn');
+          showToast('Wzorzec może zawierać tylko litery/cyfry oraz x (małe), *, + i -.', 'warn');
           return;
         }
         const index = parseInt(modal.dataset.patternIndex, 10);

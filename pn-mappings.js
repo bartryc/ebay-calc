@@ -16,7 +16,15 @@ const LOG_QUEUE = [];
 let logFlushTimer = null;
 const LOG_FLUSH_INTERVAL = 20000;
 const LOG_MAX_BATCH = 50;
+const LOG_MAX_QUEUE = 300;
+const LOG_DEDUP_WINDOW_MS = 5000;
+const LOG_MAX_META_CHARS = 3500;
+const LOG_MAX_STRING_CHARS = 1200;
+const LOG_MAX_ARRAY_ITEMS = 20;
+const LOG_MAX_OBJECT_KEYS = 40;
 let preferDirectLog = false;
+let isLogFlushInProgress = false;
+const recentLogMap = new Map();
 
 function getClientFingerprint() {
   try {
@@ -63,7 +71,8 @@ function buildHeaders(extra = {}) {
 }
 
 async function flushLogQueue() {
-  if (!LOG_QUEUE.length) return;
+  if (!LOG_QUEUE.length || isLogFlushInProgress) return;
+  isLogFlushInProgress = true;
   const batch = LOG_QUEUE.splice(0, LOG_MAX_BATCH);
   try {
     if (preferDirectLog) {
@@ -82,6 +91,13 @@ async function flushLogQueue() {
   } catch (error) {
     preferDirectLog = true;
     await sendLogsIndividually(batch);
+  } finally {
+    isLogFlushInProgress = false;
+    if (LOG_QUEUE.length) {
+      setTimeout(() => {
+        flushLogQueue();
+      }, 0);
+    }
   }
 }
 
@@ -92,9 +108,86 @@ function scheduleLogFlush() {
   }, LOG_FLUSH_INTERVAL);
 }
 
+function truncateString(value, maxLength = LOG_MAX_STRING_CHARS) {
+  const text = String(value ?? '');
+  return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
+}
+
+function sanitizeMetaValue(value, depth = 0) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') return truncateString(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (depth >= 3) return truncateString(JSON.stringify(value));
+
+  if (Array.isArray(value)) {
+    return value.slice(0, LOG_MAX_ARRAY_ITEMS).map((item) => sanitizeMetaValue(item, depth + 1));
+  }
+
+  if (typeof value === 'object') {
+    const out = {};
+    const keys = Object.keys(value).slice(0, LOG_MAX_OBJECT_KEYS);
+    for (const key of keys) {
+      out[key] = sanitizeMetaValue(value[key], depth + 1);
+    }
+    return out;
+  }
+
+  return truncateString(value);
+}
+
+function sanitizeLogMeta(meta = {}) {
+  const safe = sanitizeMetaValue(meta, 0) || {};
+  try {
+    let serialized = JSON.stringify(safe);
+    if (serialized.length <= LOG_MAX_META_CHARS) return safe;
+    const compact = {};
+    for (const [key, val] of Object.entries(safe)) {
+      if (typeof val === 'string') {
+        compact[key] = truncateString(val, 300);
+      } else if (val && typeof val === 'object') {
+        compact[key] = truncateString(JSON.stringify(val), 500);
+      } else {
+        compact[key] = val;
+      }
+    }
+    serialized = JSON.stringify(compact);
+    if (serialized.length <= LOG_MAX_META_CHARS) return compact;
+    return { note: truncateString(serialized, LOG_MAX_META_CHARS) };
+  } catch (error) {
+    return { note: truncateString(String(meta), 500) };
+  }
+}
+
+function buildLogFingerprint(type, meta) {
+  try {
+    return `${type}|${JSON.stringify(meta).slice(0, 500)}`;
+  } catch (error) {
+    return `${type}|unserializable`;
+  }
+}
+
 function enqueueLog(type, meta = {}) {
-  LOG_QUEUE.push({ type, meta, ts: Date.now() });
+  const safeMeta = sanitizeLogMeta(meta);
+  const fingerprint = buildLogFingerprint(type, safeMeta);
+  const now = Date.now();
+  const lastTs = recentLogMap.get(fingerprint) || 0;
+  if (now - lastTs < LOG_DEDUP_WINDOW_MS) return;
+  recentLogMap.set(fingerprint, now);
+  if (recentLogMap.size > 300) {
+    const threshold = now - (LOG_DEDUP_WINDOW_MS * 2);
+    for (const [key, ts] of recentLogMap.entries()) {
+      if (ts < threshold) recentLogMap.delete(key);
+    }
+  }
+
+  LOG_QUEUE.push({ type, meta: safeMeta, ts: now });
+  if (LOG_QUEUE.length > LOG_MAX_QUEUE) {
+    LOG_QUEUE.splice(0, LOG_QUEUE.length - LOG_MAX_QUEUE);
+  }
   scheduleLogFlush();
+  if (LOG_QUEUE.length >= LOG_MAX_BATCH) {
+    flushLogQueue();
+  }
 }
 
 async function sendLogsIndividually(batch) {
@@ -124,7 +217,20 @@ function normalizePnKey(value) {
 }
 
 function normalizePattern(value) {
-  return value.replace(/\s+/g, '').toUpperCase();
+  const raw = value.replace(/\s+/g, '');
+  let out = '';
+  for (const ch of raw) {
+    if (ch === 'x' || ch === '*' || ch === '+' || ch === '-' || /\d/.test(ch)) {
+      out += ch;
+      continue;
+    }
+    if (/[a-z]/.test(ch)) {
+      out += ch.toUpperCase();
+      continue;
+    }
+    out += ch;
+  }
+  return out;
 }
 
 function normalizeData(raw) {
@@ -217,7 +323,7 @@ function matchPattern(pattern, value) {
   const target = normalizePnKey(value);
   if (!normalized) return false;
   const placeholders = normalized
-    .replace(/x/gi, '__X__')
+    .replace(/x/g, '__X__')
     .replace(/\*/g, '__STAR__')
     .replace(/\+/g, '__PLUS__');
   const escaped = placeholders.replace(/[.+^${}()|[\]\\]/g, '\\$&');
@@ -225,7 +331,7 @@ function matchPattern(pattern, value) {
     .replace(/__X__/g, '\\d')
     .replace(/__STAR__/g, '[^\\s]')
     .replace(/__PLUS__/g, '[^\\s]+');
-  const regex = new RegExp(`^${regexPattern}$`, 'i');
+  const regex = new RegExp(`^${regexPattern}$`);
   return regex.test(target);
 }
 

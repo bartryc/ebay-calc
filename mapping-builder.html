@@ -4,9 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Kreator mapowań</title>
+  <link rel="icon" href="resources/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="builder-page">
+<body class="builder-page" data-page-title="Kreator mapowania">
   <div class="page">
     <header class="topbar">
       <div>
@@ -79,9 +80,9 @@
           </div>
           <div class="pattern-options">
             <label><input type="checkbox" id="patternStripSpecial"> Usuń znaki specjalne (poza -)</label>
-            <label><input type="checkbox" id="patternPreferPlus" checked> Preferuj prefiks/sufiks z “+”</label>
+            <label><input type="checkbox" id="patternPreferPlus"> Preferuj prefiks/sufiks z “+”</label>
           </div>
-          <div class="admin-meta">Znaki: x = cyfra, * = dowolny znak, + = dowolny ciąg.</div>
+          <div class="admin-meta">Znaki: x (małe) = cyfra, * = dowolny znak, + = dowolny ciąg.</div>
         </div>
       </div>
     </section>
@@ -97,7 +98,7 @@
       <div class="mapping-modal-body">
         <div class="report-meta" id="creatorReportInfo"></div>
         <label for="creatorReportReason">Opis</label>
-        <textarea id="creatorReportReason" rows="3" maxlength="300" placeholder="Opisz problem dzialania strony..."></textarea>
+        <textarea id="creatorReportReason" rows="3" maxlength="10000" placeholder="Opisz problem dzialania strony..."></textarea>
       </div>
       <div class="mapping-modal-actions confirm-actions">
         <button type="button" id="creatorReportCancel">Anuluj</button>
@@ -126,6 +127,7 @@
     const creatorReportInfo = document.getElementById('creatorReportInfo');
     const creatorReportReason = document.getElementById('creatorReportReason');
     const toastStack = document.getElementById('mappingToastStack');
+    let patternLiveTimer = null;
 
     if (window.UITheme?.init) window.UITheme.init();
 
@@ -137,6 +139,22 @@
       const base = normalizePn(value);
       if (!stripSpecial) return base;
       return base.replace(/[^A-Z0-9-]/g, '');
+    }
+
+    function toPnLineList(raw) {
+      return String(raw || '')
+        .split(/[\s,;]+/g)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    function normalizeSeedTextarea() {
+      if (!patternSeedInput) return;
+      const tokens = toPnLineList(patternSeedInput.value);
+      const normalized = tokens.join('\n');
+      if (patternSeedInput.value !== normalized) {
+        patternSeedInput.value = normalized;
+      }
     }
 
     function longestCommonPrefix(values) {
@@ -222,10 +240,10 @@
       }
       const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
       const regex = escaped
-        .replace(/x/gi, '\\d')
+        .replace(/x/g, '\\d')
         .replace(/\*/g, '.')
         .replace(/\+/g, '.+');
-      return new RegExp(`^${regex}$`, 'i').test(value);
+      return new RegExp(`^${regex}$`).test(String(value || '').toUpperCase());
     }
 
     function generatePatternSuggestions(rawList, options = {}) {
@@ -235,12 +253,10 @@
       const suggestions = [];
       const positional = buildPositionalPattern(values);
       if (positional) suggestions.push(positional);
-      if (preferPlus) {
-        const prefix = buildPrefixPattern(values);
-        if (prefix) suggestions.push(prefix);
-        const suffix = buildSuffixPattern(values);
-        if (suffix) suggestions.push(suffix);
-      }
+      const prefix = buildPrefixPattern(values);
+      if (prefix) suggestions.push(prefix);
+      const suffix = buildSuffixPattern(values);
+      if (suffix) suggestions.push(suffix);
       const segmented = buildSegmentPattern(values);
       if (segmented) suggestions.push(segmented);
       const unique = Array.from(new Set(suggestions));
@@ -248,25 +264,32 @@
         const matched = values.filter((v) => matchPatternLocal(pattern, v));
         return {
           pattern,
+          isPlusPattern: pattern.includes('+'),
           count: matched.length,
           total: values.length,
           examples: matched.slice(0, 3),
           confidence: Math.round((matched.length / values.length) * 100)
         };
       }).sort((a, b) => {
+        if (a.isPlusPattern !== b.isPlusPattern) {
+          return preferPlus
+            ? (a.isPlusPattern ? -1 : 1)
+            : (a.isPlusPattern ? 1 : -1);
+        }
         if (b.count !== a.count) return b.count - a.count;
         return b.pattern.length - a.pattern.length;
       });
     }
 
-    function renderPatternSuggestions(list) {
+    function renderPatternSuggestions(list, options = {}) {
+      const notify = options.notify === true;
       if (!patternSuggestions) return;
       if (!list.length) {
         patternSuggestions.innerHTML = '<div class="pattern-suggestion"><span>Brak propozycji. Sprawdź listę PN.</span></div>';
-        showToast('Brak propozycji wzorca dla podanych danych.', 'info');
+        if (notify) showToast('Brak propozycji wzorca dla podanych danych.', 'info');
         return;
       }
-      showToast(`Wygenerowano ${list.length} propozycji.`, 'ok');
+      if (notify) showToast(`Wygenerowano ${list.length} propozycji.`, 'ok');
       patternSuggestions.innerHTML = list.map((item) => `
         <div class="pattern-suggestion">
           <div>
@@ -313,16 +336,30 @@
       if (variant === 'warn') toast.classList.add('is-warn');
       if (variant === 'info') toast.classList.add('is-info');
       if (variant === 'ok') toast.classList.add('is-ok');
-      const suffix = ` (${Math.round(Number.isFinite(durationMs) ? durationMs : 0)} ms)`;
-      toast.textContent = `${message || ''}${suffix}`;
+      const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
+      const suffix = hasTiming ? ` (${Math.round(durationMs)} ms)` : '';
+      const toastText = document.createElement('span');
+      toastText.className = 'mapping-toast-text';
+      toastText.textContent = `${message || ''}${suffix}`;
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'mapping-toast-close';
+      closeBtn.setAttribute('aria-label', 'Zamknij komunikat');
+      closeBtn.textContent = '×';
+      toast.append(toastText, closeBtn);
       toastStack.append(toast);
       requestAnimationFrame(() => {
         toast.classList.add('is-visible');
       });
-      setTimeout(() => {
+      let isClosed = false;
+      const closeToast = () => {
+        if (isClosed) return;
+        isClosed = true;
         toast.classList.remove('is-visible');
         setTimeout(() => toast.remove(), 200);
-      }, 8000);
+      };
+      closeBtn.addEventListener('click', closeToast);
+      setTimeout(closeToast, 8000);
     }
 
     function genReportId() {
@@ -351,19 +388,91 @@
       if (creatorReportReason) creatorReportReason.value = '';
     }
 
+    const refreshPatternSuggestions = (notify = false) => {
+      const list = toPnLineList(patternSeedInput?.value || '');
+      if (!list.length) {
+        renderPatternSuggestions([], { notify });
+        return;
+      }
+      const suggestions = generatePatternSuggestions(list, {
+        stripSpecial: patternStripSpecial?.checked,
+        preferPlus: patternPreferPlus?.checked
+      });
+      renderPatternSuggestions(suggestions, { notify });
+    };
+
+    const scheduleRefreshPatternSuggestions = () => {
+      if (patternLiveTimer) clearTimeout(patternLiveTimer);
+      patternLiveTimer = setTimeout(() => {
+        patternLiveTimer = null;
+        refreshPatternSuggestions(false);
+      }, 180);
+    };
+
+    if (patternSeedInput) {
+      const pushNewLineAtCursor = () => {
+        const start = patternSeedInput.selectionStart;
+        const end = patternSeedInput.selectionEnd;
+        const value = patternSeedInput.value;
+        const before = value.slice(0, start).replace(/[ \t,;]+$/g, '');
+        const after = value.slice(end).replace(/^[ \t,;]+/g, '');
+        const shouldAddBreak = before.length > 0 && !before.endsWith('\n');
+        const next = `${before}${shouldAddBreak ? '\n' : ''}${after}`;
+        const caret = (before + (shouldAddBreak ? '\n' : '')).length;
+        patternSeedInput.value = next;
+        patternSeedInput.setSelectionRange(caret, caret);
+      };
+
+      patternSeedInput.addEventListener('beforeinput', (event) => {
+        if (event.inputType !== 'insertText') return;
+        const token = event.data || '';
+        if (!/^[\s,;]$/.test(token)) return;
+        event.preventDefault();
+        pushNewLineAtCursor();
+      });
+      patternSeedInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === 'NumpadEnter' || event.key === ' ' || event.key === 'Spacebar' || event.key === 'Tab' || event.key === ',' || event.key === ';') {
+          event.preventDefault();
+          pushNewLineAtCursor();
+        }
+      });
+      patternSeedInput.addEventListener('input', () => {
+        normalizeSeedTextarea();
+        scheduleRefreshPatternSuggestions();
+      });
+      patternSeedInput.addEventListener('paste', (event) => {
+        event.preventDefault();
+        const text = event.clipboardData?.getData('text') || '';
+        const tokens = toPnLineList(text);
+        const start = patternSeedInput.selectionStart;
+        const end = patternSeedInput.selectionEnd;
+        const value = patternSeedInput.value;
+        const before = value.slice(0, start);
+        const after = value.slice(end);
+        const insertCore = tokens.join('\n');
+        const needLeadingBreak = before.length > 0 && !before.endsWith('\n');
+        const needTrailingBreak = after.length > 0 && !after.startsWith('\n');
+        const insert = `${needLeadingBreak ? '\n' : ''}${insertCore}${needTrailingBreak ? '\n' : ''}`;
+        patternSeedInput.setRangeText(insert, start, end, 'end');
+        normalizeSeedTextarea();
+        scheduleRefreshPatternSuggestions();
+      });
+    }
+
     if (patternGenerateBtn) {
       patternGenerateBtn.addEventListener('click', () => {
-        const raw = patternSeedInput?.value || '';
-        const list = raw.split(/\r?\n|,|;/).map((item) => item.trim()).filter(Boolean);
-        if (!list.length) {
-          showToast('Wklej przynajmniej jeden PN.', 'warn');
-          return;
-        }
-        const suggestions = generatePatternSuggestions(list, {
-          stripSpecial: patternStripSpecial?.checked,
-          preferPlus: patternPreferPlus?.checked
-        });
-        renderPatternSuggestions(suggestions);
+        refreshPatternSuggestions(true);
+      });
+    }
+
+    if (patternStripSpecial) {
+      patternStripSpecial.addEventListener('change', () => {
+        scheduleRefreshPatternSuggestions();
+      });
+    }
+    if (patternPreferPlus) {
+      patternPreferPlus.addEventListener('change', () => {
+        scheduleRefreshPatternSuggestions();
       });
     }
 
@@ -405,6 +514,7 @@
         try {
           const data = window.PN_MAPPINGS_API.get();
           const hasPattern = /[xX*+]/.test(rawPattern);
+          let saved = false;
           if (hasPattern) {
             const normalized = window.PN_MAPPINGS_API.normalizePattern(rawPattern);
             const exists = (data.patterns || []).some((p) => window.PN_MAPPINGS_API.normalizePattern(p.pattern) === normalized);
@@ -415,6 +525,7 @@
               window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-pattern', pattern: normalized, vendor: vendor.trim() });
               showToast('Dodano wzorzec z kreatora.', 'ok');
               refreshVendorOptions();
+              saved = true;
             } else {
               showToast('Taki wzorzec już istnieje.', 'warn');
             }
@@ -426,6 +537,15 @@
             window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-exact', key, vendor: vendor.trim() });
             showToast('Dodano PN exact z kreatora.', 'ok');
             refreshVendorOptions();
+            saved = true;
+          }
+          if (saved) {
+            if (patternResult) patternResult.value = '';
+            if (patternVendor) patternVendor.value = '';
+            if (patternVendorSelect) patternVendorSelect.value = '';
+            if (patternSeedInput) patternSeedInput.value = '';
+            if (patternSuggestions) patternSuggestions.innerHTML = '';
+            patternResult?.focus();
           }
         } catch (error) {
           showToast(`Nie udało się zapisać mapowania: ${error?.message || 'unknown'}`, 'warn');
