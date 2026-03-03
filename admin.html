@@ -101,6 +101,37 @@
           <div class="admin-meta">Pokaże listę zmian przed zapisaniem.</div>
         </div>
 
+        <div class="admin-card admin-card-wide">
+          <details id="layoutPresetSection">
+            <summary class="report-summary">
+              <span>Kreator presetów układu</span>
+            </summary>
+            <p>Zapisz globalny preset (widoczny dla wszystkich), który ustawia kolumnę, kolejność i widoczność sekcji na stronie kalkulatora.</p>
+            <div class="admin-log-controls layout-preset-controls">
+              <div class="admin-log-field admin-log-field-wide">
+                <label for="layoutPresetName">Nazwa presetu</label>
+                <input type="text" id="layoutPresetName" maxlength="40" placeholder="Np. eBay kompakt">
+              </div>
+              <div class="admin-log-field">
+                <label for="layoutPresetSelect">Istniejące</label>
+                <select id="layoutPresetSelect">
+                  <option value="">---</option>
+                </select>
+              </div>
+              <div class="admin-log-field layout-preset-action">
+                <label>&nbsp;</label>
+                <button type="button" id="layoutPresetSaveBtn">Zapisz preset</button>
+              </div>
+              <div class="admin-log-field layout-preset-action">
+                <label>&nbsp;</label>
+                <button type="button" id="layoutPresetDeleteBtn">Usuń preset</button>
+              </div>
+            </div>
+            <div class="admin-meta">Uwaga: to tylko definicje globalne presetów. Użytkownik nadal zapisuje swój aktualny układ lokalnie.</div>
+            <div id="layoutPresetItems" class="layout-preset-items"></div>
+          </details>
+        </div>
+
 
         <div class="admin-card admin-card-wide">
           <h3>Status mapowań</h3>
@@ -355,6 +386,29 @@
     const patternApplyBtn = document.getElementById('patternApplyBtn');
     const patternStripSpecial = document.getElementById('patternStripSpecial');
     const patternPreferPlus = document.getElementById('patternPreferPlus');
+    const layoutPresetName = document.getElementById('layoutPresetName');
+    const layoutPresetSelect = document.getElementById('layoutPresetSelect');
+    const layoutPresetItems = document.getElementById('layoutPresetItems');
+    const layoutPresetSaveBtn = document.getElementById('layoutPresetSaveBtn');
+    const layoutPresetDeleteBtn = document.getElementById('layoutPresetDeleteBtn');
+    const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
+    const LAYOUT_SECTION_SCHEMA = [
+      { id: 'calc-presets', label: 'Presety waluta/VAT', column: 'calc' },
+      { id: 'calc-netto', label: 'Kwota netto', column: 'calc' },
+      { id: 'calc-brutto', label: 'Kwota brutto', column: 'calc' },
+      { id: 'calc-ebay', label: 'Cena eBay', column: 'calc' },
+      { id: 'calc-currency', label: 'Waluta docelowa', column: 'calc' },
+      { id: 'calc-rate', label: 'Kurs waluty', column: 'calc' },
+      { id: 'calc-vat', label: 'Stawka VAT', column: 'calc' },
+      { id: 'calc-min-markup', label: 'Minimalny narzut', column: 'calc' },
+      { id: 'calc-markup-from-sale', label: 'Narzut z ceny sprzedaży', column: 'calc' },
+      { id: 'calc-advanced', label: 'Opcje zaawansowane', column: 'calc' },
+      { id: 'search-card', label: 'Wyszukiwanie ofert', column: 'info' },
+      { id: 'history-card', label: 'Historia działań', column: 'info' },
+      { id: 'base-card', label: 'Mnożnik dla Base', column: 'info' }
+    ];
+    let globalLayoutPresets = [];
+    let layoutPresetRows = [];
     let patternLiveTimer = null;
     let migrateMode = 'full';
     let pendingReportApply = null;
@@ -969,19 +1023,83 @@
       backupFileInput.value = '';
     });
 
+    if (layoutPresetSelect) {
+      layoutPresetSelect.addEventListener('change', () => {
+        loadLayoutPresetIntoEditor(layoutPresetSelect.value);
+      });
+    }
+
+    if (layoutPresetSaveBtn) {
+      layoutPresetSaveBtn.addEventListener('click', async () => {
+        try {
+          await handleSaveLayoutPreset();
+        } catch (error) {
+          showToast(`Nie udało się zapisać presetu: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+    }
+
+    if (layoutPresetDeleteBtn) {
+      layoutPresetDeleteBtn.addEventListener('click', async () => {
+        try {
+          await handleDeleteLayoutPreset();
+        } catch (error) {
+          showToast(`Nie udało się usunąć presetu: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+    }
+
+    if (layoutPresetItems) {
+      layoutPresetItems.addEventListener('click', (event) => {
+        const row = event.target.closest('.layout-preset-row');
+        if (!row) return;
+        const index = Number(row.getAttribute('data-index'));
+        if (!Number.isFinite(index) || !layoutPresetRows[index]) return;
+        const moveBtn = event.target.closest('.layout-preset-move');
+        if (!moveBtn) return;
+        const dir = moveBtn.getAttribute('data-dir');
+        const nextIndex = dir === 'up' ? index - 1 : index + 1;
+        if (nextIndex < 0 || nextIndex >= layoutPresetRows.length) return;
+        const copy = [...layoutPresetRows];
+        const [moved] = copy.splice(index, 1);
+        copy.splice(nextIndex, 0, moved);
+        layoutPresetRows = copy;
+        renderLayoutPresetRows();
+      });
+
+      layoutPresetItems.addEventListener('change', (event) => {
+        const row = event.target.closest('.layout-preset-row');
+        if (!row) return;
+        const index = Number(row.getAttribute('data-index'));
+        if (!Number.isFinite(index) || !layoutPresetRows[index]) return;
+        if (event.target.classList.contains('layout-preset-column')) {
+          layoutPresetRows[index].column = event.target.value === 'info' ? 'info' : 'calc';
+          return;
+        }
+        if (event.target.classList.contains('layout-preset-visible-check')) {
+          layoutPresetRows[index].visible = !!event.target.checked;
+        }
+      });
+    }
+
+    if (!layoutPresetRows.length) {
+      loadLayoutPresetIntoEditor('');
+    }
+
     if (window.PN_MAPPINGS_API?.load) {
       const dbLoadStart = performance.now();
       showToast('Ładowanie bazy danych…', 'info', 0);
       window.PN_MAPPINGS_API.load()
-        .then((data) => {
+        .then(async (data) => {
           const dbLoadEnd = performance.now();
           updateStats(data);
           const stamp = new Date().toLocaleString('pl-PL');
           localStorage.setItem(ADMIN_LAST_SYNC_KEY, stamp);
           if (lastSyncValue) lastSyncValue.textContent = stamp;
           showToast('Baza danych załadowana.', 'ok', dbLoadEnd - dbLoadStart);
-          fetchLogs();
-          fetchReports();
+          await Promise.allSettled([fetchLogs(), fetchReports()]);
+          renderReports();
+          loadGlobalLayoutPresets();
           resolveCurrentAppVersion();
           fetchLogsBackupStatus();
           refreshVendorOptions();
@@ -990,6 +1108,7 @@
           const dbLoadEnd = performance.now();
           showToast('Nie udało się pobrać mapowań z serwera.', 'warn', dbLoadEnd - dbLoadStart);
           updateStats(window.PN_MAPPINGS_API.get());
+          loadLayoutPresetIntoEditor('');
         });
     }
 
@@ -1003,10 +1122,249 @@
       if (totalCountEl) totalCountEl.textContent = exactCount + patternCount;
     }
 
+    function normalizeLayoutPresetEntry(entry) {
+      if (!entry || typeof entry !== 'object') return null;
+      const id = String(entry.id || '').trim() || `gp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      const name = String(entry.name || '').trim();
+      if (!name) return null;
+      const rawOrder = entry.order || {};
+      const rawVisibility = entry.visibility || {};
+      const allIds = LAYOUT_SECTION_SCHEMA.map((item) => item.id);
+      const order = { calc: [], info: [] };
+      const seen = new Set();
+      ['calc', 'info'].forEach((group) => {
+        const groupIds = Array.isArray(rawOrder[group]) ? rawOrder[group] : [];
+        groupIds.forEach((itemId) => {
+          if (!allIds.includes(itemId) || seen.has(itemId)) return;
+          seen.add(itemId);
+          order[group].push(itemId);
+        });
+      });
+      LAYOUT_SECTION_SCHEMA.forEach((item) => {
+        if (seen.has(item.id)) return;
+        order[item.column].push(item.id);
+      });
+      const visibility = {};
+      allIds.forEach((itemId) => {
+        visibility[itemId] = rawVisibility[itemId] !== false;
+      });
+      return { id, name, order, visibility };
+    }
+
+    function normalizeLayoutPresetCollection(raw) {
+      const input = Array.isArray(raw) ? raw : [];
+      const normalized = [];
+      const ids = new Set();
+      input.forEach((item) => {
+        const next = normalizeLayoutPresetEntry(item);
+        if (!next || ids.has(next.id)) return;
+        ids.add(next.id);
+        normalized.push(next);
+      });
+      return normalized;
+    }
+
+    function getDefaultLayoutRows() {
+      return LAYOUT_SECTION_SCHEMA.map((item) => ({
+        id: item.id,
+        label: item.label,
+        column: item.column,
+        visible: true
+      }));
+    }
+
+    function rowsToLayoutPreset(rows, name, id) {
+      const order = { calc: [], info: [] };
+      const visibility = {};
+      rows.forEach((row) => {
+        const column = row.column === 'info' ? 'info' : 'calc';
+        order[column].push(row.id);
+        visibility[row.id] = row.visible !== false;
+      });
+      return {
+        id: id || `gp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+        name: String(name || '').trim(),
+        order,
+        visibility
+      };
+    }
+
+    function presetToRows(preset) {
+      const allMap = new Map(LAYOUT_SECTION_SCHEMA.map((item) => [item.id, item]));
+      const rows = [];
+      ['calc', 'info'].forEach((group) => {
+        (preset.order?.[group] || []).forEach((id) => {
+          const schema = allMap.get(id);
+          if (!schema) return;
+          rows.push({
+            id,
+            label: schema.label,
+            column: group,
+            visible: preset.visibility?.[id] !== false
+          });
+        });
+      });
+      LAYOUT_SECTION_SCHEMA.forEach((schema) => {
+        if (rows.some((row) => row.id === schema.id)) return;
+        rows.push({
+          id: schema.id,
+          label: schema.label,
+          column: schema.column,
+          visible: preset.visibility?.[schema.id] !== false
+        });
+      });
+      return rows;
+    }
+
+    function renderLayoutPresetSelect() {
+      if (!layoutPresetSelect) return;
+      const current = layoutPresetSelect.value;
+      layoutPresetSelect.innerHTML = `
+        <option value="">---</option>
+        ${globalLayoutPresets.map((preset) => `<option value="${preset.id}">${preset.name}</option>`).join('')}
+      `;
+      if (current && globalLayoutPresets.some((p) => p.id === current)) {
+        layoutPresetSelect.value = current;
+      }
+    }
+
+    function renderLayoutPresetRows() {
+      if (!layoutPresetItems) return;
+      layoutPresetItems.innerHTML = layoutPresetRows.map((row, index) => `
+        <div class="layout-preset-row" data-index="${index}">
+          <button type="button" class="layout-preset-move" data-dir="up" ${index === 0 ? 'disabled' : ''}>↑</button>
+          <button type="button" class="layout-preset-move" data-dir="down" ${index === layoutPresetRows.length - 1 ? 'disabled' : ''}>↓</button>
+          <div class="layout-preset-label">${row.label}</div>
+          <select class="layout-preset-column">
+            <option value="calc" ${row.column === 'calc' ? 'selected' : ''}>Lewa kolumna</option>
+            <option value="info" ${row.column === 'info' ? 'selected' : ''}>Prawa kolumna</option>
+          </select>
+          <label class="layout-preset-visible">
+            <input type="checkbox" class="layout-preset-visible-check" ${row.visible ? 'checked' : ''}>
+            <span>Widoczne</span>
+          </label>
+        </div>
+      `).join('');
+    }
+
+    function loadLayoutPresetIntoEditor(presetId) {
+      if (!presetId) {
+        layoutPresetRows = getDefaultLayoutRows();
+        if (layoutPresetName) layoutPresetName.value = '';
+        renderLayoutPresetRows();
+        return;
+      }
+      const preset = globalLayoutPresets.find((item) => item.id === presetId);
+      if (!preset) return;
+      layoutPresetRows = presetToRows(preset);
+      if (layoutPresetName) layoutPresetName.value = preset.name;
+      renderLayoutPresetRows();
+    }
+
+    async function loadGlobalLayoutPresets() {
+      try {
+        const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(LAYOUT_PRESETS_NOTE_ID)}`, {
+          method: 'GET'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const raw = payload?.note ? JSON.parse(payload.note) : [];
+        globalLayoutPresets = normalizeLayoutPresetCollection(raw);
+      } catch (error) {
+        globalLayoutPresets = [];
+      }
+      renderLayoutPresetSelect();
+      if (!layoutPresetRows.length) {
+        loadLayoutPresetIntoEditor(layoutPresetSelect?.value || '');
+      } else {
+        renderLayoutPresetRows();
+      }
+    }
+
+    async function saveGlobalLayoutPresets() {
+      const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(LAYOUT_PRESETS_NOTE_ID)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: JSON.stringify(globalLayoutPresets) })
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ''}`);
+      }
+    }
+
+    async function handleSaveLayoutPreset() {
+      const name = String(layoutPresetName?.value || '').trim();
+      if (!name) {
+        showToast('Podaj nazwę presetu.', 'warn');
+        return;
+      }
+      const presetId = String(layoutPresetSelect?.value || '').trim();
+      const nextPreset = rowsToLayoutPreset(layoutPresetRows, name, presetId || undefined);
+      if (!nextPreset.name) {
+        showToast('Podaj poprawną nazwę presetu.', 'warn');
+        return;
+      }
+      if (presetId) {
+        globalLayoutPresets = globalLayoutPresets.map((item) => (item.id === presetId ? nextPreset : item));
+      } else {
+        globalLayoutPresets.push(nextPreset);
+      }
+      const t0 = performance.now();
+      await saveGlobalLayoutPresets();
+      renderLayoutPresetSelect();
+      if (layoutPresetSelect) layoutPresetSelect.value = nextPreset.id;
+      showToast('Preset globalny zapisany.', 'ok', performance.now() - t0);
+    }
+
+    async function handleDeleteLayoutPreset() {
+      const presetId = String(layoutPresetSelect?.value || '').trim();
+      if (!presetId) {
+        showToast('Wybierz preset do usunięcia.', 'warn');
+        return;
+      }
+      const existing = globalLayoutPresets.find((item) => item.id === presetId);
+      if (!existing) return;
+      globalLayoutPresets = globalLayoutPresets.filter((item) => item.id !== presetId);
+      const t0 = performance.now();
+      await saveGlobalLayoutPresets();
+      renderLayoutPresetSelect();
+      if (layoutPresetSelect) layoutPresetSelect.value = '';
+      loadLayoutPresetIntoEditor('');
+      showToast(`Usunięto preset: ${existing.name}.`, 'ok', performance.now() - t0);
+    }
+
     const lastBackup = localStorage.getItem(ADMIN_LAST_BACKUP_KEY);
     if (lastBackupValue) lastBackupValue.textContent = lastBackup || 'brak';
     const lastSync = localStorage.getItem(ADMIN_LAST_SYNC_KEY);
     if (lastSyncValue) lastSyncValue.textContent = lastSync || '—';
+
+    function safeObject(value) {
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    }
+
+    function normalizeLogEntry(entry) {
+      const normalized = safeObject(entry);
+      const geoRaw = safeObject(normalized.geo);
+      const metaRaw = safeObject(normalized.meta);
+      return {
+        logId: typeof normalized.logId === 'string' ? normalized.logId : '',
+        type: typeof normalized.type === 'string' ? normalized.type : 'unknown',
+        ip: typeof normalized.ip === 'string' ? normalized.ip : 'unknown',
+        ua: typeof normalized.ua === 'string' ? normalized.ua : 'unknown',
+        ray: typeof normalized.ray === 'string' ? normalized.ray : '—',
+        clientFp: typeof normalized.clientFp === 'string' ? normalized.clientFp : 'unknown',
+        ts: typeof normalized.ts === 'string' ? normalized.ts : '',
+        geo: {
+          city: typeof geoRaw.city === 'string' ? geoRaw.city : 'unknown',
+          region: typeof geoRaw.region === 'string' ? geoRaw.region : 'unknown',
+          country: typeof geoRaw.country === 'string' ? geoRaw.country : 'unknown',
+          asn: geoRaw.asn ?? 'unknown',
+          colo: typeof geoRaw.colo === 'string' ? geoRaw.colo : 'unknown'
+        },
+        meta: metaRaw
+      };
+    }
 
     async function fetchLogs({ notifySuccess = false } = {}) {
       if (!adminLogList) return;
@@ -1029,7 +1387,7 @@
         }
         const data = await resp.json();
         const t1 = performance.now();
-        logsCache = Array.isArray(data.logs) ? data.logs : [];
+        logsCache = Array.isArray(data.logs) ? data.logs.map(normalizeLogEntry) : [];
         totalLogs = Number.isFinite(data.total) ? data.total : null;
         if (compositeBackup) {
           const backupTypes = new Set(['backup', 'backup-full', 'backup-logs', 'restore-logs']);
@@ -1092,8 +1450,9 @@
           if (pageItems.length < pageSize) break;
         }
 
-        reportsCache = allLogs.filter((entry) => isReportLike(entry));
+        reportsCache = allLogs.map(normalizeLogEntry).filter((entry) => isReportLike(entry));
         await fetchReportKindsForReports(reportsCache);
+        renderReports();
         scheduleRenderReports();
       } catch (error) {
         // keep existing report list on failure
@@ -1114,7 +1473,8 @@
       if (!pageItems.length) {
         adminLogList.textContent = 'Brak danych.';
       } else {
-        adminLogList.innerHTML = pageItems.map((entry) => {
+        adminLogList.innerHTML = pageItems.map((unsafeEntry, localIndex) => {
+          const entry = normalizeLogEntry(unsafeEntry);
           const type = entry.type || 'unknown';
           const ip = entry.ip || 'unknown';
           const ts = entry.ts ? new Date(entry.ts).toLocaleString('pl-PL') : '—';
@@ -1125,7 +1485,7 @@
           const asn = geo.asn ? `AS${geo.asn}` : 'unknown';
           const ray = entry.ray || '—';
           const hasMeta = entry.meta && Object.keys(entry.meta).length > 0;
-          const entryIndex = logsCache.indexOf(entry);
+          const entryIndex = Math.max(0, ((logPage - 1) * pageSize) + localIndex);
           const metaId = `meta-${entryIndex}`;
           const rawMeta = hasMeta ? escapeHtml(JSON.stringify(entry.meta)) : '';
           return `
@@ -1187,8 +1547,8 @@
       const type = entry.type || '';
       if (type === 'backup-logs' || type === 'restore-logs') return false;
       if (type === 'mapping-report') return true;
-      const meta = entry.meta || {};
-      const report = meta.report || {};
+      const meta = safeObject(entry.meta);
+      const report = safeObject(meta.report);
       return !!(
         meta.reportId ||
         report.reportId ||
@@ -1206,7 +1566,7 @@
     }
 
     function formatMetaPretty(entry) {
-      const meta = entry.meta || {};
+      const meta = safeObject(entry.meta);
       const lines = [];
       const usedKeys = new Set();
       if (entry.type) lines.push(`Typ: ${entry.type}`);
@@ -1215,7 +1575,8 @@
         usedKeys.add('action');
       }
       if (entry.type === 'mapping-report') {
-        const report = meta.report || {
+        const reportObject = safeObject(meta.report);
+        const report = Object.keys(reportObject).length ? reportObject : {
           query: meta.query,
           suggestedVendor: meta.suggestedVendor,
           source: meta.source,
@@ -1231,7 +1592,7 @@
           usedKeys.add('report.reason');
         }
         if (meta.mapping) {
-          const m = meta.mapping || {};
+          const m = safeObject(meta.mapping);
           if (m.key) lines.push(`Mapa -> PN/wzorzec: ${m.key}`);
           if (m.vendor) lines.push(`Mapa -> producent: ${m.vendor}`);
           if (m.type) lines.push(`Typ wpisu: ${m.type}`);
@@ -1353,8 +1714,8 @@
 
     function getReportMeta(entry) {
       if (!entry) return {};
-      const meta = entry.meta || {};
-      return meta.report || meta;
+      const meta = safeObject(entry.meta);
+      return Object.keys(safeObject(meta.report)).length ? safeObject(meta.report) : meta;
     }
 
     function getReportKind(entry) {
@@ -1367,10 +1728,11 @@
     }
 
     function buildReportKey(entry) {
-      const meta = entry.meta || {};
+      const meta = safeObject(entry.meta);
       if (meta.reportId) return meta.reportId;
-      if (meta.report && meta.report.reportId) return meta.report.reportId;
-      const report = meta.report || meta;
+      const reportObj = safeObject(meta.report);
+      if (reportObj.reportId) return reportObj.reportId;
+      const report = Object.keys(reportObj).length ? reportObj : meta;
       const metaKey = buildReportKeyFromMeta(report);
       if (metaKey) return metaKey;
       return `${entry.ts || ''}|${entry.ray || ''}`;
@@ -1419,7 +1781,8 @@
 
     function renderReports() {
       if (!reportList) return;
-      const allReports = reportsCache.filter((entry) => entry.type === 'mapping-report');
+      try {
+      const allReports = reportsCache.map(normalizeLogEntry).filter((entry) => entry.type === 'mapping-report');
       const baseReports = allReports.filter((entry) => !entry?.meta?.action);
       const reportById = new Map();
       baseReports.forEach((entry) => {
@@ -1500,6 +1863,10 @@
       if (!reportList.innerHTML.trim()) {
         reportList.textContent = 'Brak zgłoszeń.';
       }
+      } catch (error) {
+        reportList.textContent = 'Brak zgłoszeń.';
+        showToast('Wykryto uszkodzony wpis zgłoszenia. Pomiń lub zrób migrację logów.', 'warn');
+      }
     }
 
     function renderReportItem(entry, index) {
@@ -1514,13 +1881,14 @@
       const kind = getReportKind(entry);
       const kindLabel = kind === 'ui' ? 'Błąd działania strony' : 'Błąd mapowania';
       const reportId = buildReportId(entry);
+      const reportIdEscaped = escapeHtml(reportId);
       const storedNote = getAdminNote(reportId);
       const reportStatus = getReportStatus(reportId);
       if (kind === 'ui') {
         return `
-          <div class="report-item report-${kind} ${reportStatus === 'on-hold' ? 'is-on-hold' : ''}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportId}">
+          <div class="report-item report-${kind} ${reportStatus === 'on-hold' ? 'is-on-hold' : ''}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}">
             <div class="report-header">
-              <strong>ID: ${reportId}</strong>
+              <strong>ID: ${reportIdEscaped}</strong>
               <div class="report-header-meta">
                 <span class="report-ts">${ts}</span>
                 <div class="report-meta-row">
@@ -1543,7 +1911,7 @@
         `;
       }
       return `
-          <div class="report-item report-${kind} ${reportStatus === 'on-hold' ? 'is-on-hold' : ''}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportId}">
+          <div class="report-item report-${kind} ${reportStatus === 'on-hold' ? 'is-on-hold' : ''}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}">
             <div class="report-header">
               <strong>${query || '—'}</strong>
               <div class="report-header-meta">
@@ -1551,7 +1919,7 @@
                 <div class="report-meta-row">
                   <span class="report-kind">${kindLabel}</span>
                   <button type="button" class="report-kind-toggle" aria-label="Zmień typ zgłoszenia">↔</button>
-                  <span class="report-id">ID: ${reportId}</span>
+                  <span class="report-id">ID: ${reportIdEscaped}</span>
                 </div>
               </div>
             </div>
@@ -1583,10 +1951,11 @@
     }
 
     function buildReportId(entry) {
-      const meta = entry.meta || {};
+      const meta = safeObject(entry.meta);
       if (meta.reportId) return meta.reportId;
-      if (meta.report && meta.report.reportId) return meta.report.reportId;
-      const report = meta.report || {
+      const reportObj = safeObject(meta.report);
+      if (reportObj.reportId) return reportObj.reportId;
+      const report = Object.keys(reportObj).length ? reportObj : {
         query: meta.query,
         suggestedVendor: meta.suggestedVendor,
         source: meta.source,
@@ -1833,6 +2202,9 @@
     }
     if (reportFilter) {
       reportFilter.addEventListener('change', () => {
+        if (!Array.isArray(reportsCache) || !reportsCache.length) {
+          fetchReports();
+        }
         renderReports();
       });
     }

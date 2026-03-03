@@ -68,28 +68,28 @@
 
             <div class="layout-item" data-layout-item="calc-netto">
               <label for="plnNetto" class="field-label">Kwota netto w PLN
-                <span class="field-help" tabindex="0" data-tooltip="Netto ERP. Kalkulator przelicza na brutto stałym VAT 23%: brutto = netto × 1.23." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Netto ERP. Kalkulator przelicza na brutto stałym VAT 23%: brutto = netto × 1.23." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="plnNetto" step="0.01" min="0" placeholder="Wprowadź kwotę netto">
             </div>
 
             <div class="layout-item" data-layout-item="calc-brutto">
               <label for="plnBrutto" class="field-label">Kwota brutto w PLN (z VAT 23%)
-                <span class="field-help" tabindex="0" data-tooltip="Brutto ERP (punkt bazowy dla wyceny eBay). Netto = brutto / 1.23." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Brutto ERP (punkt bazowy dla wyceny eBay). Netto = brutto / 1.23." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="plnBrutto" step="0.01" min="0" placeholder="Wprowadź lub przeliczana z netto">
             </div>
 
             <div class="layout-item" data-layout-item="calc-ebay">
               <label for="ebayPrice" class="field-label">Docelowa cena na eBay w <span id="ebayCurrencyLabel">EUR (z VAT 23%)</span>
-                <span class="field-help" tabindex="0" data-tooltip="Cena końcowa dla klienta w wybranej walucie. Gdy wpiszesz tę wartość ręcznie, kalkulator liczy wstecz ERP brutto/netto." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Cena końcowa dla klienta w wybranej walucie. Gdy wpiszesz tę wartość ręcznie, kalkulator liczy wstecz ERP brutto/netto." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="ebayPrice" step="0.01" min="0" placeholder="Wprowadź docelową cenę na eBay">
             </div>
 
             <div class="layout-item" data-layout-item="calc-currency">
               <label for="currency" class="field-label">Waluta docelowa
-                <span class="field-help" tabindex="0" data-tooltip="Waluta sprzedaży eBay (EUR/USD/GBP). Zmiana waluty przelicza cenę wg kursu PLN→waluta." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Waluta sprzedaży eBay (EUR/USD/GBP). Zmiana waluty przelicza cenę wg kursu PLN→waluta." aria-label="Pomoc">?</span>
               </label>
               <div class="currency-row">
                 <select id="currency">
@@ -103,7 +103,7 @@
 
             <div class="layout-item" data-layout-item="calc-rate">
               <label for="exchangeRate" class="field-label">Kurs PLN  /<span id="currencyLabel">EUR</span>
-                <span class="field-help" tabindex="0" data-tooltip="Ile jednostek waluty docelowej dostajesz za 1 PLN (np. 1 PLN = 0.2372 EUR)." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Ile jednostek waluty docelowej dostajesz za 1 PLN (np. 1 PLN = 0.2372 EUR)." aria-label="Pomoc">?</span>
               </label>
               <p id="exchangeInfo">Pobieranie kursu...</p>
               <div id="exchangeRateTooltip" class="input-tooltip" data-tooltip="">
@@ -113,28 +113,46 @@
 
             <div class="layout-item" data-layout-item="calc-vat">
               <label for="vatRate" class="field-label">Stawka VAT dla klienta (%)
-                <span class="field-help" tabindex="0" data-tooltip="W aktualnej logice wpływa na etykiety i mnożnik Base. Nie zmienia bezpośrednio przeliczenia ERP↔eBay (to idzie od ERP brutto + kurs + prowizja)." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="W aktualnej logice wpływa na etykiety i mnożnik Base. Nie zmienia bezpośrednio przeliczenia ERP↔eBay (to idzie od ERP brutto + kurs + prowizja)." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="vatRate" value="23" min="0" max="100" required>
             </div>
 
             <div class="layout-item" data-layout-item="calc-min-markup">
               <label for="purchaseAmount" class="field-label">Kwota zakupu (PLN brutto)
-                <span class="field-help" tabindex="0" data-tooltip="Twój koszt zakupu brutto. Podstawa do wyliczenia minimalnej ceny sprzedaży." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Twój koszt zakupu brutto. Podstawa do wyliczenia minimalnej ceny sprzedaży." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="purchaseAmount" step="0.01" min="0" placeholder="Np. 1200.00">
 
               <label for="minMarkup" class="field-label">Minimalny narzut (%)
-                <span class="field-help" tabindex="0" data-tooltip="Narzut liczony wzorem: (sprzedaż - zakup) / zakup × 100%. Minimalna sprzedaż = zakup × (1 + narzut/100)." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Narzut liczony wzorem: (sprzedaż - zakup) / zakup × 100%. Minimalna sprzedaż = zakup × (1 + narzut/100)." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="minMarkup" step="0.1" min="0" value="30" placeholder="Np. 18">
 
               <div class="min-price-box" id="minPriceBox">
                 <div><strong>Minimalna cena sprzedaży (PLN brutto):</strong> <span id="minSalePln">—</span>
-                  <span class="field-help inline-help" tabindex="0" data-tooltip="Najniższa cena brutto w PLN spełniająca zadany narzut." aria-label="Pomoc">?</span>
+                  <span class="field-help inline-help" data-tooltip="Najniższa cena brutto w PLN spełniająca zadany narzut." aria-label="Pomoc">?</span>
                 </div>
                 <div><strong>Minimalna cena na eBay (<span id="minSaleCurrencyLabel">EUR</span>):</strong> <span id="minSaleEbay">—</span>
-                  <span class="field-help inline-help" tabindex="0" data-tooltip="Przeliczenie minimalnej ceny PLN na walutę eBay z prowizją: min_eBay = min_PLN × kurs × (1 + prowizja)." aria-label="Pomoc">?</span>
+                  <span class="field-help inline-help" data-tooltip="Przeliczenie minimalnej ceny PLN na walutę eBay z prowizją: min_eBay = min_PLN × kurs × (1 + prowizja)." aria-label="Pomoc">?</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="layout-item" data-layout-item="calc-markup-from-sale">
+              <label for="markupPurchaseAmount" class="field-label">Kwota zakupu do narzutu (PLN brutto)
+                <span class="field-help" data-tooltip="Cena zakupu brutto używana do wyliczenia faktycznego narzutu przy zadanej cenie sprzedaży." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="markupPurchaseAmount" step="0.01" min="0" placeholder="Np. 1200.00">
+
+              <label for="targetSaleAmount" class="field-label">Docelowa cena sprzedaży (PLN brutto)
+                <span class="field-help" data-tooltip="Cena sprzedaży brutto, dla której liczony jest narzut: (sprzedaż - zakup) / zakup × 100%." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="targetSaleAmount" step="0.01" min="0" placeholder="Np. 1590.00">
+
+              <div class="min-price-box" id="markupFromSaleBox">
+                <div><strong>Wyliczony narzut:</strong> <span id="calculatedMarkup">—</span>
+                  <span class="field-help inline-help" data-tooltip="Dodatni wynik oznacza zysk względem kosztu zakupu, ujemny oznacza stratę." aria-label="Pomoc">?</span>
                 </div>
               </div>
             </div>
@@ -150,12 +168,12 @@
 
               <div id="advancedOptions" class="advanced-options" style="display: none;">
                 <label for="commission" class="field-label">Prowizja (%)
-                  <span class="field-help" tabindex="0" data-tooltip="Marża platformy doliczana do ceny eBay. eBay = ERP_brutto × kurs × (1 + prowizja/100). Gdy opcje zaawansowane są wyłączone, używane jest domyślne 15%." aria-label="Pomoc">?</span>
+                  <span class="field-help" data-tooltip="Marża platformy doliczana do ceny eBay. eBay = ERP_brutto × kurs × (1 + prowizja/100). Gdy opcje zaawansowane są wyłączone, używane jest domyślne 15%." aria-label="Pomoc">?</span>
                 </label>
                 <input type="number" id="commission" value="15" step="0.1" min="0" max="100" required>
 
                 <label for="productId" class="field-label">ID produktu w STOCK
-                  <span class="field-help" tabindex="0" data-tooltip="Pole pomocnicze do szybkiego otwarcia karty produktu w STOCK." aria-label="Pomoc">?</span>
+                  <span class="field-help" data-tooltip="Pole pomocnicze do szybkiego otwarcia karty produktu w STOCK." aria-label="Pomoc">?</span>
                 </label>
                 <div class="currency-row">
                   <input type="number" id="productId" min="1" placeholder="Wprowadź ID produktu (1-6 cyfr)">
@@ -163,7 +181,7 @@
                 </div>
                 <div class="rate-source-row">
                   <label for="rateSource" class="field-label">Źródło kursu
-                    <span class="field-help" tabindex="0" data-tooltip="Wybór API kursowego. Gdy źródło nie odpowiada, aplikacja używa fallbacku." aria-label="Pomoc">?</span>
+                    <span class="field-help" data-tooltip="Wybór API kursowego. Gdy źródło nie odpowiada, aplikacja używa fallbacku." aria-label="Pomoc">?</span>
                   </label>
 
                   <select id="rateSource">
@@ -269,19 +287,21 @@
           </div>
         </details>
         </div>
-        <footer>Wersja <span id="appVersion">1.90</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
+        <footer>Wersja <span id="appVersion">1.91</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
       </aside>
     </div>
   </div>
 
-  <div id="layoutEditBar" class="layout-edit-bar" hidden>
-    <strong>Tryb edycji układu</strong>
-    <div class="layout-edit-actions">
-      <button type="button" id="layoutSaveBtn">Zapisz</button>
-      <button type="button" id="layoutResetBtn">Domyślny</button>
-      <button type="button" id="layoutExitBtn">Wyjdź</button>
+    <div id="layoutEditBar" class="layout-edit-bar" hidden>
+      <strong>Tryb edycji układu</strong>
+      <div class="layout-edit-actions">
+        <div id="layoutGlobalPresets" class="layout-global-presets"></div>
+        <span class="layout-edit-separator" aria-hidden="true"></span>
+        <button type="button" id="layoutSaveBtn">Zapisz</button>
+        <button type="button" id="layoutResetBtn">Domyślny</button>
+        <button type="button" id="layoutExitBtn">Wyjdź</button>
+      </div>
     </div>
-  </div>
 
   <div id="mainToastStack" class="mapping-toast-stack" role="status" aria-live="polite"></div>
   <div id="reportModal" class="mapping-modal" style="display: none;">
@@ -302,6 +322,22 @@
       <div class="mapping-modal-actions">
         <button type="button" id="reportModalCancel">Anuluj</button>
         <button type="button" id="reportModalSubmit">Wyślij zgłoszenie</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="layoutResetModal" class="mapping-modal" style="display: none;">
+    <div class="mapping-modal-card" role="dialog" aria-modal="true" aria-labelledby="layoutResetModalTitle">
+      <div class="mapping-modal-header">
+        <strong id="layoutResetModalTitle">Przywrócić domyślny układ?</strong>
+        <button type="button" id="layoutResetModalClose" aria-label="Zamknij">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <p id="layoutResetModalMessage">Ta operacja cofnie zmiany układu i zakończy tryb edycji.</p>
+      </div>
+      <div class="mapping-modal-actions confirm-actions">
+        <button type="button" id="layoutResetModalCancel">Anuluj</button>
+        <button type="button" id="layoutResetModalConfirm" class="btn-danger">Przywróć domyślny</button>
       </div>
     </div>
   </div>

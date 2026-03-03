@@ -44,20 +44,41 @@ if (appVersion) {
 
 const INDEX_LAYOUT_STORAGE_KEY = 'indexLayoutOrderV1';
 const INDEX_LAYOUT_COOKIE_KEY = 'indexLayoutOrderV1';
+const INDEX_LAYOUT_VISIBILITY_STORAGE_KEY = 'indexLayoutVisibilityV1';
+const INDEX_LAYOUT_VISIBILITY_COOKIE_KEY = 'indexLayoutVisibilityV1';
+const INDEX_LAYOUT_GLOBAL_PRESETS_NOTE_ID = 'layout-presets-v1';
+const INDEX_LAYOUT_ACTIVE_PRESET_KEY = 'indexLayoutActivePresetV1';
 const layoutGroups = {
   calc: document.getElementById('calcLayoutContainer'),
   info: document.getElementById('infoLayoutContainer')
 };
+const topMenuLayoutGroup = document.querySelector('.top-menu-group.has-dropdown');
+const topMenuLayoutLink = topMenuLayoutGroup?.querySelector('.top-menu-link');
 const layoutCustomizeBtn = document.getElementById('layoutCustomizeBtn');
 const layoutEditBar = document.getElementById('layoutEditBar');
 const layoutSaveBtn = document.getElementById('layoutSaveBtn');
 const layoutResetBtn = document.getElementById('layoutResetBtn');
 const layoutExitBtn = document.getElementById('layoutExitBtn');
+const layoutGlobalPresetsEl = document.getElementById('layoutGlobalPresets');
+const layoutResetModal = document.getElementById('layoutResetModal');
+const layoutResetModalClose = document.getElementById('layoutResetModalClose');
+const layoutResetModalCancel = document.getElementById('layoutResetModalCancel');
+const layoutResetModalConfirm = document.getElementById('layoutResetModalConfirm');
 let isLayoutEditMode = false;
 let defaultLayoutOrder = null;
 let preEditLayoutOrder = null;
+let defaultLayoutVisibility = null;
+let preEditLayoutVisibility = null;
 let currentDraggedItem = null;
 let currentDraggedEl = null;
+let layoutResetModalResolver = null;
+let globalLayoutPresets = [];
+let selectedLayoutPresetKey = localStorage.getItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY) || 'custom';
+let preEditLayoutPresetKey = selectedLayoutPresetKey;
+if (selectedLayoutPresetKey.startsWith('builtin:')) {
+  selectedLayoutPresetKey = 'custom';
+  localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
+}
 
 function beginLayoutDrag(groupKey, itemId, item, event) {
   if (!isLayoutEditMode) return;
@@ -109,54 +130,109 @@ function getCurrentLayoutOrder() {
   return order;
 }
 
-function normalizeLayoutOrder(rawOrder) {
+function getAllLayoutItems() {
+  return Array.from(document.querySelectorAll('.layout-item[data-layout-item]'));
+}
+
+function getCurrentLayoutVisibility() {
+  const visibility = {};
+  getAllLayoutItems().forEach((item) => {
+    const id = item.getAttribute('data-layout-item');
+    if (!id) return;
+    visibility[id] = !item.classList.contains('is-user-hidden');
+  });
+  return visibility;
+}
+
+function normalizeLayoutVisibility(rawVisibility) {
   const normalized = {};
+  getAllLayoutItems().forEach((item) => {
+    const id = item.getAttribute('data-layout-item');
+    if (!id) return;
+    const rawValue = rawVisibility?.[id];
+    normalized[id] = rawValue !== false;
+  });
+  return normalized;
+}
+
+function normalizeLayoutOrder(rawOrder) {
+  const allIds = getAllLayoutItems()
+    .map((item) => item.getAttribute('data-layout-item'))
+    .filter(Boolean);
+  const currentOrder = getCurrentLayoutOrder();
+  const currentGroupById = {};
+  Object.entries(currentOrder).forEach(([groupKey, ids]) => {
+    (ids || []).forEach((id) => {
+      currentGroupById[id] = groupKey;
+    });
+  });
+
+  const normalized = {};
+  const used = new Set();
   Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
     if (!groupEl) return;
-    const available = Array.from(groupEl.children)
-      .map((child) => child.getAttribute('data-layout-item'))
-      .filter(Boolean);
-    const seen = new Set();
     const requested = Array.isArray(rawOrder?.[groupKey]) ? rawOrder[groupKey] : [];
     const finalOrder = [];
     requested.forEach((id) => {
-      if (!id || seen.has(id) || !available.includes(id)) return;
-      seen.add(id);
-      finalOrder.push(id);
-    });
-    available.forEach((id) => {
-      if (seen.has(id)) return;
-      seen.add(id);
+      if (!id || used.has(id) || !allIds.includes(id)) return;
+      used.add(id);
       finalOrder.push(id);
     });
     normalized[groupKey] = finalOrder;
   });
+
+  allIds.forEach((id) => {
+    if (used.has(id)) return;
+    const groupKey = currentGroupById[id] && normalized[currentGroupById[id]]
+      ? currentGroupById[id]
+      : Object.keys(layoutGroups)[0];
+    normalized[groupKey].push(id);
+    used.add(id);
+  });
+
   return normalized;
 }
 
 function applyLayoutOrder(orderMap) {
   const normalized = normalizeLayoutOrder(orderMap);
+  const movableById = new Map();
   Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
     if (!groupEl) return;
-    const allChildren = Array.from(groupEl.children);
-    const movableChildren = allChildren.filter((child) => child.getAttribute('data-layout-item'));
-    const staticChildren = allChildren.filter((child) => !child.getAttribute('data-layout-item'));
-    const byId = new Map();
+    const movableChildren = Array.from(groupEl.children).filter((child) => child.getAttribute('data-layout-item'));
     movableChildren.forEach((child) => {
       const id = child.getAttribute('data-layout-item');
-      if (id) byId.set(id, child);
-    });
-    (normalized[groupKey] || []).forEach((id) => {
-      const child = byId.get(id);
-      if (child) groupEl.appendChild(child);
-    });
-    staticChildren.forEach((child) => {
-      groupEl.appendChild(child);
+      if (id) movableById.set(id, child);
     });
   });
+
+  Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
+    if (!groupEl) return;
+    const firstStatic = Array.from(groupEl.children).find((child) => !child.getAttribute('data-layout-item')) || null;
+    (normalized[groupKey] || []).forEach((id) => {
+      const child = movableById.get(id);
+      if (!child) return;
+      groupEl.insertBefore(child, firstStatic);
+    });
+  });
+
   if (isLayoutEditMode) {
     renderLayoutItemControls();
   }
+}
+
+function applyLayoutVisibility(visibilityMap, options = {}) {
+  const normalized = normalizeLayoutVisibility(visibilityMap);
+  const forceShowAll = options.forceShowAll === true;
+  getAllLayoutItems().forEach((item) => {
+    const id = item.getAttribute('data-layout-item');
+    if (!id) return;
+    const isVisible = normalized[id] !== false;
+    const shouldHide = !isVisible && !forceShowAll;
+    item.classList.toggle('is-user-hidden', !isVisible);
+    item.classList.toggle('is-layout-hidden-preview', !isVisible && forceShowAll);
+    item.style.display = shouldHide ? 'none' : '';
+    item.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
+  });
 }
 
 function loadSavedLayoutOrder() {
@@ -169,6 +245,140 @@ function loadSavedLayoutOrder() {
   }
 }
 
+function loadSavedLayoutVisibility() {
+  const raw = localStorage.getItem(INDEX_LAYOUT_VISIBILITY_STORAGE_KEY) || layoutGetCookieValue(INDEX_LAYOUT_VISIBILITY_COOKIE_KEY);
+  if (!raw) return null;
+  try {
+    return normalizeLayoutVisibility(JSON.parse(raw));
+  } catch (error) {
+    return null;
+  }
+}
+
+function loadSavedLayoutFromLocal() {
+  const order = loadSavedLayoutOrder();
+  const visibility = loadSavedLayoutVisibility();
+  if (!order && !visibility) return null;
+  return {
+    order: order || getCurrentLayoutOrder(),
+    visibility: visibility || getCurrentLayoutVisibility()
+  };
+}
+
+function flattenLayoutOrder(order) {
+  return [...(order?.calc || []), ...(order?.info || [])];
+}
+
+function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisibility) {
+  const allIds = Array.from(new Set([
+    ...flattenLayoutOrder(beforeOrder),
+    ...flattenLayoutOrder(afterOrder),
+    ...Object.keys(beforeVisibility || {}),
+    ...Object.keys(afterVisibility || {})
+  ]));
+
+  const beforeGroupById = {};
+  const afterGroupById = {};
+  Object.entries(beforeOrder || {}).forEach(([group, ids]) => (ids || []).forEach((id) => { beforeGroupById[id] = group; }));
+  Object.entries(afterOrder || {}).forEach(([group, ids]) => (ids || []).forEach((id) => { afterGroupById[id] = group; }));
+
+  const beforeFlat = flattenLayoutOrder(beforeOrder);
+  const afterFlat = flattenLayoutOrder(afterOrder);
+
+  const moved = [];
+  const columnChanged = [];
+  const shown = [];
+  const hidden = [];
+
+  allIds.forEach((id) => {
+    const beforeIdx = beforeFlat.indexOf(id);
+    const afterIdx = afterFlat.indexOf(id);
+    const beforeGroup = beforeGroupById[id] || null;
+    const afterGroup = afterGroupById[id] || null;
+    if (beforeIdx !== afterIdx) moved.push({ id, fromIndex: beforeIdx, toIndex: afterIdx });
+    if (beforeGroup !== afterGroup) columnChanged.push({ id, from: beforeGroup, to: afterGroup });
+
+    const beforeVisible = beforeVisibility?.[id] !== false;
+    const afterVisible = afterVisibility?.[id] !== false;
+    if (!beforeVisible && afterVisible) shown.push(id);
+    if (beforeVisible && !afterVisible) hidden.push(id);
+  });
+
+  return { moved, columnChanged, shown, hidden };
+}
+
+function saveLayoutToLocal(orderMap, visibilityMap) {
+  saveLayoutOrder(orderMap);
+  saveLayoutVisibility(visibilityMap);
+}
+
+function clearSavedLayoutLocal() {
+  clearSavedLayoutOrder();
+}
+
+function normalizeGlobalLayoutPreset(rawPreset) {
+  if (!rawPreset || typeof rawPreset !== 'object') return null;
+  const id = String(rawPreset.id || '').trim();
+  const name = String(rawPreset.name || '').trim();
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    order: normalizeLayoutOrder(rawPreset.order || {}),
+    visibility: normalizeLayoutVisibility(rawPreset.visibility || {})
+  };
+}
+
+async function loadGlobalLayoutPresets() {
+  try {
+    if (!window.PN_MAPPINGS_API?.request) return null;
+    const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(INDEX_LAYOUT_GLOBAL_PRESETS_NOTE_ID)}`);
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const parsed = payload?.note ? JSON.parse(payload.note) : [];
+    const list = Array.isArray(parsed) ? parsed : [];
+    return list.map(normalizeGlobalLayoutPreset).filter(Boolean);
+  } catch (error) {
+    return null;
+  }
+}
+
+function renderGlobalLayoutPresetButtons() {
+  if (!layoutGlobalPresetsEl) return;
+  if (!globalLayoutPresets.length) {
+    layoutGlobalPresetsEl.innerHTML = '';
+    return;
+  }
+  layoutGlobalPresetsEl.innerHTML = globalLayoutPresets
+    .map((preset) => `<button type="button" class="layout-global-preset-btn" data-preset-id="${preset.id}">${preset.name}</button>`)
+    .join('');
+}
+
+function applyPresetSelectionVisual() {
+  if (!layoutGlobalPresetsEl) return;
+  const activeGlobalId = selectedLayoutPresetKey.startsWith('global:') ? selectedLayoutPresetKey.slice(7) : '';
+  Array.from(layoutGlobalPresetsEl.querySelectorAll('.layout-global-preset-btn')).forEach((button) => {
+    const buttonId = button.getAttribute('data-preset-id') || '';
+    button.classList.toggle('is-active', !!activeGlobalId && activeGlobalId === buttonId);
+  });
+}
+
+function applyGlobalPresetById(presetId) {
+  const preset = globalLayoutPresets.find((item) => item.id === presetId);
+  if (!preset) return false;
+  selectedLayoutPresetKey = `global:${preset.id}`;
+  applyLayoutOrder(preset.order);
+  applyLayoutVisibility(preset.visibility, { forceShowAll: isLayoutEditMode });
+  if (isLayoutEditMode) {
+    renderLayoutItemControls();
+    updateLayoutDiffHighlight();
+  } else {
+    removeLayoutItemControls();
+  }
+  applyPresetSelectionVisual();
+  return true;
+}
+
 function saveLayoutOrder(orderMap) {
   const normalized = normalizeLayoutOrder(orderMap);
   const payload = JSON.stringify(normalized);
@@ -176,28 +386,39 @@ function saveLayoutOrder(orderMap) {
   layoutSetCookieValue(INDEX_LAYOUT_COOKIE_KEY, payload);
 }
 
+function saveLayoutVisibility(visibilityMap) {
+  const normalized = normalizeLayoutVisibility(visibilityMap);
+  const payload = JSON.stringify(normalized);
+  localStorage.setItem(INDEX_LAYOUT_VISIBILITY_STORAGE_KEY, payload);
+  layoutSetCookieValue(INDEX_LAYOUT_VISIBILITY_COOKIE_KEY, payload);
+}
+
 function clearSavedLayoutOrder() {
   localStorage.removeItem(INDEX_LAYOUT_STORAGE_KEY);
+  localStorage.removeItem(INDEX_LAYOUT_VISIBILITY_STORAGE_KEY);
   document.cookie = `${INDEX_LAYOUT_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  document.cookie = `${INDEX_LAYOUT_VISIBILITY_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
 }
 
 function updateLayoutDiffHighlight() {
   const baseline = normalizeLayoutOrder(preEditLayoutOrder || {});
   const current = getCurrentLayoutOrder();
+  const baselinePos = new Map();
+  Object.entries(baseline).forEach(([groupKey, ids]) => {
+    (ids || []).forEach((id, index) => {
+      baselinePos.set(id, { groupKey, index });
+    });
+  });
   Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
     if (!groupEl) return;
-    const baseOrder = Array.isArray(baseline[groupKey]) ? baseline[groupKey] : [];
     const currOrder = Array.isArray(current[groupKey]) ? current[groupKey] : [];
-    const baseIndex = new Map();
-    baseOrder.forEach((id, index) => {
-      baseIndex.set(id, index);
-    });
     Array.from(groupEl.children).forEach((item) => {
       const id = item.getAttribute('data-layout-item');
       if (!id) return;
       const nowIndex = currOrder.indexOf(id);
-      const prevIndex = baseIndex.has(id) ? baseIndex.get(id) : nowIndex;
-      item.classList.toggle('is-layout-modified', nowIndex !== prevIndex);
+      const prev = baselinePos.get(id);
+      const changed = !prev || prev.groupKey !== groupKey || prev.index !== nowIndex;
+      item.classList.toggle('is-layout-modified', changed);
     });
   });
 }
@@ -206,6 +427,8 @@ function removeLayoutItemControls() {
   document.querySelectorAll('.layout-item-controls').forEach((el) => el.remove());
   Object.values(layoutGroups).forEach((groupEl) => {
     if (!groupEl) return;
+    groupEl.ondragover = null;
+    groupEl.ondrop = null;
     Array.from(groupEl.children).forEach((item) => {
       if (!item.classList.contains('layout-item')) return;
       item.removeAttribute('draggable');
@@ -230,6 +453,24 @@ function moveLayoutItem(groupKey, itemId, direction) {
   if (targetIndex < 0 || targetIndex >= list.length) return;
   [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
   order[groupKey] = list;
+  selectedLayoutPresetKey = 'custom';
+  applyPresetSelectionVisual();
+  applyLayoutOrder(order);
+  updateLayoutDiffHighlight();
+}
+
+function moveLayoutItemToGroup(itemId, targetGroupKey) {
+  if (!itemId || !targetGroupKey || !layoutGroups[targetGroupKey]) return;
+  const order = getCurrentLayoutOrder();
+  let currentGroupKey = null;
+  Object.keys(order).forEach((groupKey) => {
+    if ((order[groupKey] || []).includes(itemId)) currentGroupKey = groupKey;
+  });
+  if (!currentGroupKey || currentGroupKey === targetGroupKey) return;
+  order[currentGroupKey] = (order[currentGroupKey] || []).filter((id) => id !== itemId);
+  order[targetGroupKey] = [...(order[targetGroupKey] || []), itemId];
+  selectedLayoutPresetKey = 'custom';
+  applyPresetSelectionVisual();
   applyLayoutOrder(order);
   updateLayoutDiffHighlight();
 }
@@ -238,17 +479,35 @@ function renderLayoutItemControls() {
   removeLayoutItemControls();
   Object.entries(layoutGroups).forEach(([groupKey, groupEl]) => {
     if (!groupEl) return;
+    groupEl.ondragover = (event) => {
+      if (!isLayoutEditMode || !currentDraggedEl) return;
+      event.preventDefault();
+      const overItem = event.target?.closest?.('.layout-item[data-layout-item]');
+      if (overItem && overItem.parentElement === groupEl) return;
+      const firstStatic = Array.from(groupEl.children).find((child) => !child.getAttribute('data-layout-item')) || null;
+      if (currentDraggedEl.parentElement !== groupEl || currentDraggedEl.nextSibling !== firstStatic) {
+        groupEl.insertBefore(currentDraggedEl, firstStatic);
+        updateLayoutDiffHighlight();
+      }
+    };
+    groupEl.ondrop = (event) => {
+      if (!isLayoutEditMode || !currentDraggedEl) return;
+      event.preventDefault();
+      selectedLayoutPresetKey = 'custom';
+      applyPresetSelectionVisual();
+      renderLayoutItemControls();
+      updateLayoutDiffHighlight();
+    };
     const items = Array.from(groupEl.children).filter((child) => child.getAttribute('data-layout-item'));
     items.forEach((item, index) => {
       const itemId = item.getAttribute('data-layout-item');
       if (!itemId) return;
       item.classList.add('is-layout-draggable');
       item.ondragover = (event) => {
-        if (!isLayoutEditMode || !currentDraggedItem || currentDraggedItem.groupKey !== groupKey) return;
+        if (!isLayoutEditMode || !currentDraggedEl) return;
         event.preventDefault();
-        if (currentDraggedItem.itemId === itemId) return;
+        if (currentDraggedEl === item) return;
         item.classList.add('is-drop-target');
-        if (!currentDraggedEl || currentDraggedEl === item || currentDraggedEl.parentElement !== groupEl) return;
         const rect = item.getBoundingClientRect();
         const insertAfter = event.clientY > rect.top + rect.height / 2;
         if (insertAfter) {
@@ -267,7 +526,9 @@ function renderLayoutItemControls() {
       item.ondrop = (event) => {
         event.preventDefault();
         item.classList.remove('is-drop-target');
-        if (!isLayoutEditMode || !currentDraggedItem || currentDraggedItem.groupKey !== groupKey) return;
+        if (!isLayoutEditMode || !currentDraggedEl) return;
+        selectedLayoutPresetKey = 'custom';
+        applyPresetSelectionVisual();
         renderLayoutItemControls();
         updateLayoutDiffHighlight();
       };
@@ -308,7 +569,37 @@ function renderLayoutItemControls() {
         event.stopPropagation();
         moveLayoutItem(groupKey, itemId, 'down');
       });
-      controls.append(handle, upBtn, downBtn);
+      const transferBtn = document.createElement('button');
+      transferBtn.type = 'button';
+      transferBtn.className = 'layout-item-move layout-item-transfer';
+      const targetGroupKey = groupKey === 'calc' ? 'info' : 'calc';
+      transferBtn.textContent = groupKey === 'calc' ? '→' : '←';
+      transferBtn.setAttribute('aria-label', groupKey === 'calc' ? 'Przenieś do prawej kolumny' : 'Przenieś do lewej kolumny');
+      transferBtn.setAttribute('title', groupKey === 'calc' ? 'Przenieś do prawej kolumny' : 'Przenieś do lewej kolumny');
+      transferBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        moveLayoutItemToGroup(itemId, targetGroupKey);
+      });
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'layout-item-move layout-item-toggle-visibility';
+      const isVisible = !item.classList.contains('is-user-hidden');
+      toggleBtn.textContent = isVisible ? 'Ukryj' : 'Pokaż';
+      toggleBtn.setAttribute('aria-label', isVisible ? 'Ukryj sekcję' : 'Pokaż sekcję');
+      toggleBtn.setAttribute('title', isVisible ? 'Ukryj sekcję' : 'Pokaż sekcję');
+      toggleBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const visibility = getCurrentLayoutVisibility();
+        visibility[itemId] = !visibility[itemId];
+        selectedLayoutPresetKey = 'custom';
+        applyPresetSelectionVisual();
+        applyLayoutVisibility(visibility, { forceShowAll: true });
+        renderLayoutItemControls();
+        updateLayoutDiffHighlight();
+      });
+      controls.append(handle, upBtn, downBtn, transferBtn, toggleBtn);
       const detailsSummary = item.tagName === 'DETAILS'
         ? item.querySelector('.collapsible-summary')
         : null;
@@ -332,6 +623,7 @@ function blockDetailsToggleInLayoutMode(event) {
 }
 
 function setLayoutEditMode(enabled) {
+  const wasEnabled = isLayoutEditMode;
   isLayoutEditMode = !!enabled;
   document.body.classList.toggle('layout-edit-mode', isLayoutEditMode);
   if (layoutEditBar) {
@@ -342,13 +634,43 @@ function setLayoutEditMode(enabled) {
   }
   if (isLayoutEditMode) {
     preEditLayoutOrder = getCurrentLayoutOrder();
+    preEditLayoutVisibility = getCurrentLayoutVisibility();
+    preEditLayoutPresetKey = selectedLayoutPresetKey;
+    applyLayoutVisibility(preEditLayoutVisibility, { forceShowAll: true });
     renderLayoutItemControls();
     updateLayoutDiffHighlight();
+    applyPresetSelectionVisual();
     showMainToast('Tryb edycji układu aktywny.', 'info');
+    if (!wasEnabled) {
+      logActivity('layout-edit', {
+        action: 'enter',
+        preset: selectedLayoutPresetKey || 'custom',
+        order: preEditLayoutOrder,
+        visibility: preEditLayoutVisibility
+      });
+    }
     return;
   }
   currentDraggedItem = null;
   removeLayoutItemControls();
+  applyLayoutVisibility(getCurrentLayoutVisibility());
+}
+
+function closeLayoutResetModal(result) {
+  if (!layoutResetModal) return;
+  layoutResetModal.style.display = 'none';
+  if (layoutResetModalResolver) {
+    layoutResetModalResolver(!!result);
+    layoutResetModalResolver = null;
+  }
+}
+
+function askLayoutResetConfirmation() {
+  if (!layoutResetModal) return Promise.resolve(false);
+  layoutResetModal.style.display = 'flex';
+  return new Promise((resolve) => {
+    layoutResetModalResolver = resolve;
+  });
 }
 
 function getFieldElement(source) {
@@ -358,7 +680,11 @@ function getFieldElement(source) {
     ebayPrice: 'ebayPrice',
     vatRate: 'vatRate',
     exchangeRate: 'exchangeRate',
-    commission: 'commission'
+    commission: 'commission',
+    purchaseAmount: 'purchaseAmount',
+    minMarkup: 'minMarkup',
+    markupPurchaseAmount: 'markupPurchaseAmount',
+    targetSaleAmount: 'targetSaleAmount'
   };
   const id = map[source] || source;
   return document.getElementById(id);
@@ -417,6 +743,44 @@ function updateMinSaleByMarkup() {
 
   const minSaleEbay = minSalePlnBrutto * exchangeRate * (1 + commission);
   minSaleEbayEl.textContent = `${minSaleEbay.toFixed(2)} ${currency}`;
+}
+
+function updateMarkupFromSale() {
+  const purchaseEl = document.getElementById('markupPurchaseAmount');
+  const saleEl = document.getElementById('targetSaleAmount');
+  const resultEl = document.getElementById('calculatedMarkup');
+  if (!purchaseEl || !saleEl || !resultEl) return;
+
+  const purchase = parseNumber(purchaseEl.value);
+  const sale = parseNumber(saleEl.value);
+  if (!Number.isFinite(purchase) || purchase <= 0 || !Number.isFinite(sale) || sale < 0) {
+    resultEl.textContent = '—';
+    return;
+  }
+
+  const markupPercent = ((sale - purchase) / purchase) * 100;
+  resultEl.textContent = `${markupPercent.toFixed(2)}%`;
+}
+
+function setupAutoReplaceInput(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  const armIfHasValue = () => {
+    el.dataset.autoReplace = String((el.value || '').trim().length > 0);
+  };
+
+  const clearIfArmed = () => {
+    if (el.dataset.autoReplace === 'true') {
+      el.value = '';
+      el.dataset.autoReplace = 'false';
+    }
+  };
+
+  el.addEventListener('focus', clearIfArmed);
+  el.addEventListener('paste', clearIfArmed);
+  el.addEventListener('blur', armIfHasValue);
+  el.addEventListener('change', armIfHasValue);
 }
 
 function updateBaseMultiplier() {
@@ -615,17 +979,44 @@ function renderHistory() {
 }
 
 defaultLayoutOrder = getCurrentLayoutOrder();
-const savedLayoutOrder = loadSavedLayoutOrder();
-if (savedLayoutOrder) {
-  applyLayoutOrder(savedLayoutOrder);
+defaultLayoutVisibility = getCurrentLayoutVisibility();
+const savedLocalLayout = loadSavedLayoutFromLocal();
+if (savedLocalLayout) {
+  applyLayoutOrder(savedLocalLayout.order);
+  applyLayoutVisibility(savedLocalLayout.visibility);
 }
+loadGlobalLayoutPresets()
+  .then((presets) => {
+    globalLayoutPresets = Array.isArray(presets) ? presets : [];
+    renderGlobalLayoutPresetButtons();
+    const activeGlobalId = selectedLayoutPresetKey.startsWith('global:') ? selectedLayoutPresetKey.slice(7) : '';
+    if (activeGlobalId) {
+      const applied = applyGlobalPresetById(activeGlobalId);
+      if (applied) {
+        saveLayoutToLocal(getCurrentLayoutOrder(), getCurrentLayoutVisibility());
+      }
+    }
+    applyPresetSelectionVisual();
+  })
+  .catch(() => {
+    globalLayoutPresets = [];
+    renderGlobalLayoutPresetButtons();
+  });
 
 if (layoutCustomizeBtn) {
   layoutCustomizeBtn.addEventListener('click', () => {
+    if (topMenuLayoutGroup) {
+      topMenuLayoutGroup.classList.remove('is-open');
+    }
     if (isLayoutEditMode) {
       if (preEditLayoutOrder) {
         applyLayoutOrder(preEditLayoutOrder);
       }
+      if (preEditLayoutVisibility) {
+        applyLayoutVisibility(preEditLayoutVisibility);
+      }
+      selectedLayoutPresetKey = preEditLayoutPresetKey || 'custom';
+      applyPresetSelectionVisual();
       setLayoutEditMode(false);
       showMainToast('Anulowano zmiany układu.', 'info');
       return;
@@ -634,27 +1025,103 @@ if (layoutCustomizeBtn) {
   });
 }
 
-if (layoutSaveBtn) {
-  layoutSaveBtn.addEventListener('click', (event) => {
+if (topMenuLayoutGroup && topMenuLayoutLink) {
+  topMenuLayoutLink.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
+    topMenuLayoutGroup.classList.toggle('is-open');
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!topMenuLayoutGroup.classList.contains('is-open')) return;
+    if (topMenuLayoutGroup.contains(event.target)) return;
+    topMenuLayoutGroup.classList.remove('is-open');
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    topMenuLayoutGroup.classList.remove('is-open');
+  });
+}
+
+if (layoutSaveBtn) {
+  layoutSaveBtn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const beforeOrder = preEditLayoutOrder || getCurrentLayoutOrder();
+    const beforeVisibility = preEditLayoutVisibility || getCurrentLayoutVisibility();
     const order = getCurrentLayoutOrder();
-    saveLayoutOrder(order);
+    const visibility = getCurrentLayoutVisibility();
+    const changes = diffLayoutChanges(beforeOrder, beforeVisibility, order, visibility);
+    saveLayoutToLocal(order, visibility);
+    if (!selectedLayoutPresetKey) {
+      selectedLayoutPresetKey = 'custom';
+    }
+    localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
+    logActivity('layout-edit', {
+      action: 'save',
+      preset: selectedLayoutPresetKey || 'custom',
+      before: { order: beforeOrder, visibility: beforeVisibility },
+      after: { order, visibility },
+      changes
+    });
     preEditLayoutOrder = order;
+    preEditLayoutVisibility = visibility;
     setLayoutEditMode(false);
-    showMainToast('Układ zapisany.', 'ok');
+    showMainToast('Układ zapisany lokalnie dla tego użytkownika.', 'ok');
   });
 }
 
 if (layoutResetBtn) {
-  layoutResetBtn.addEventListener('click', (event) => {
+  layoutResetBtn.addEventListener('click', async (event) => {
     event.preventDefault();
     event.stopPropagation();
+    const confirmed = await askLayoutResetConfirmation();
+    if (!confirmed) return;
     if (!defaultLayoutOrder) return;
     applyLayoutOrder(defaultLayoutOrder);
-    clearSavedLayoutOrder();
+    applyLayoutVisibility(defaultLayoutVisibility || {});
+    clearSavedLayoutLocal();
+    selectedLayoutPresetKey = 'custom';
+    localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
     preEditLayoutOrder = getCurrentLayoutOrder();
+    preEditLayoutVisibility = getCurrentLayoutVisibility();
+    setLayoutEditMode(false);
     showMainToast('Przywrócono domyślny układ.', 'ok');
+  });
+}
+
+if (layoutResetModalClose) {
+  layoutResetModalClose.addEventListener('click', () => closeLayoutResetModal(false));
+}
+
+if (layoutResetModalCancel) {
+  layoutResetModalCancel.addEventListener('click', () => closeLayoutResetModal(false));
+}
+
+if (layoutResetModalConfirm) {
+  layoutResetModalConfirm.addEventListener('click', () => closeLayoutResetModal(true));
+}
+
+if (layoutResetModal) {
+  layoutResetModal.addEventListener('click', (event) => {
+    if (event.target === layoutResetModal) closeLayoutResetModal(false);
+  });
+}
+
+if (layoutGlobalPresetsEl) {
+  layoutGlobalPresetsEl.addEventListener('click', (event) => {
+    const button = event.target.closest('.layout-global-preset-btn');
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const presetId = button.getAttribute('data-preset-id') || '';
+    if (!presetId) return;
+    const applied = applyGlobalPresetById(presetId);
+    if (applied) {
+      const presetName = globalLayoutPresets.find((item) => item.id === presetId)?.name || 'preset';
+      showMainToast(`Zastosowano preset: ${presetName}.`, 'info');
+    }
   });
 }
 
@@ -665,6 +1132,11 @@ if (layoutExitBtn) {
     if (preEditLayoutOrder) {
       applyLayoutOrder(preEditLayoutOrder);
     }
+    if (preEditLayoutVisibility) {
+      applyLayoutVisibility(preEditLayoutVisibility);
+    }
+    selectedLayoutPresetKey = preEditLayoutPresetKey || 'custom';
+    applyPresetSelectionVisual();
     setLayoutEditMode(false);
     showMainToast('Wyjście z edycji bez zapisu.', 'info');
   });
@@ -699,6 +1171,10 @@ function addHistoryEntry(source) {
   const netto = parseNumber(document.getElementById('plnNetto').value);
   const brutto = parseNumber(document.getElementById('plnBrutto').value);
   const ebayPrice = parseNumber(document.getElementById('ebayPrice').value);
+  const purchaseAmount = parseNumber(document.getElementById('purchaseAmount')?.value);
+  const minMarkupPercent = parseNumber(document.getElementById('minMarkup')?.value);
+  const markupPurchaseAmount = parseNumber(document.getElementById('markupPurchaseAmount')?.value);
+  const targetSaleAmount = parseNumber(document.getElementById('targetSaleAmount')?.value);
   const currency = document.getElementById('currency').value;
   const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
   const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
@@ -712,22 +1188,54 @@ function addHistoryEntry(source) {
     currency: 'Waluta',
     exchangeRate: 'Kurs',
     commission: 'Prowizja',
+    purchaseAmount: 'Koszt zakupu (min cena)',
+    minMarkup: 'Minimalny narzut',
+    markupPurchaseAmount: 'Koszt zakupu (narzut)',
+    targetSaleAmount: 'Cena sprzedaży (narzut)',
     preset: 'Preset'
   }[source] || 'Przeliczenie';
 
   const timestamp = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const details = [
+  const defaultDetails = [
     `Netto <span class="history-value">${formatCurrency(netto)}</span> PLN`,
     `Brutto <span class="history-value">${formatCurrency(brutto)}</span> PLN`,
     `eBay <span class="history-value">${formatCurrency(ebayPrice)}</span> ${currency}`
   ].join(' <span class="history-dot">•</span> ');
-  const meta = [
+  const defaultMeta = [
     `VAT ${Number.isFinite(vatRateRaw) ? vatRateRaw.toFixed(1) : '-'}%`,
     `Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}%`,
     `Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency}`
   ].join(' <span class="history-dot">•</span> ');
 
-  if (!Number.isFinite(netto) && !Number.isFinite(brutto) && !Number.isFinite(ebayPrice)) {
+  let details = defaultDetails;
+  let meta = defaultMeta;
+
+  const isMinMarkupSource = source === 'purchaseAmount' || source === 'minMarkup';
+  const isSaleMarkupSource = source === 'markupPurchaseAmount' || source === 'targetSaleAmount';
+
+  if (isMinMarkupSource) {
+    const minSalePlnText = document.getElementById('minSalePln')?.textContent?.trim() || '—';
+    const minSaleEbayText = document.getElementById('minSaleEbay')?.textContent?.trim() || '—';
+    details = [
+      `Zakup <span class="history-value">${formatCurrency(purchaseAmount)}</span> PLN`,
+      `Min. narzut <span class="history-value">${Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : '-'}</span>%`,
+      `Min. sprzedaż <span class="history-value">${minSalePlnText}</span>`
+    ].join(' <span class="history-dot">•</span> ');
+    meta = `Min. eBay ${minSaleEbayText} <span class="history-dot">•</span> Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}%`;
+  } else if (isSaleMarkupSource) {
+    const calculatedMarkupText = document.getElementById('calculatedMarkup')?.textContent?.trim() || '—';
+    details = [
+      `Zakup <span class="history-value">${formatCurrency(markupPurchaseAmount)}</span> PLN`,
+      `Sprzedaż <span class="history-value">${formatCurrency(targetSaleAmount)}</span> PLN`,
+      `Narzut <span class="history-value">${calculatedMarkupText}</span>`
+    ].join(' <span class="history-dot">•</span> ');
+    meta = `Wzór: (sprzedaż - zakup) / zakup × 100%`;
+  }
+
+  const hasMainValues = Number.isFinite(netto) || Number.isFinite(brutto) || Number.isFinite(ebayPrice);
+  const hasMinMarkupValues = Number.isFinite(purchaseAmount) || Number.isFinite(minMarkupPercent);
+  const hasSaleMarkupValues = Number.isFinite(markupPurchaseAmount) || Number.isFinite(targetSaleAmount);
+  if (!hasMainValues && !hasMinMarkupValues && !hasSaleMarkupValues) {
     return;
   }
 
@@ -758,6 +1266,10 @@ function addHistoryEntry(source) {
     netto: Number.isFinite(netto) ? netto.toFixed(2) : null,
     brutto: Number.isFinite(brutto) ? brutto.toFixed(2) : null,
     ebay: Number.isFinite(ebayPrice) ? ebayPrice.toFixed(2) : null,
+    purchaseAmount: Number.isFinite(purchaseAmount) ? purchaseAmount.toFixed(2) : null,
+    minMarkup: Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : null,
+    markupPurchaseAmount: Number.isFinite(markupPurchaseAmount) ? markupPurchaseAmount.toFixed(2) : null,
+    targetSaleAmount: Number.isFinite(targetSaleAmount) ? targetSaleAmount.toFixed(2) : null,
     currency,
     vat: Number.isFinite(vatRateRaw) ? vatRateRaw.toFixed(1) : null,
     commission: Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : null,
@@ -845,6 +1357,9 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   document.getElementById('purchaseAmount').value = '';
   document.getElementById('minMarkup').value = '';
   updateMinSaleByMarkup();
+  document.getElementById('markupPurchaseAmount').value = '';
+  document.getElementById('targetSaleAmount').value = '';
+  updateMarkupFromSale();
   document.getElementById('productId').value = '';
   document.getElementById('currency').value = 'EUR';
   document.getElementById('currencyLabel').innerText = 'EUR';
@@ -998,6 +1513,7 @@ function calculatePrice() {
   const multiplierBrutto = finalPriceMultiplier / (1 + VAT23);
   updateBaseMultiplier();
   updateMinSaleByMarkup();
+  updateMarkupFromSale();
 
   let resultHTML = ``;
 
@@ -1236,6 +1752,7 @@ document.getElementById('stockUrlBtn').addEventListener('click', () => {
   const productId = document.getElementById('productId').value;
   if (/^\d{1,6}$/.test(productId)) {
     const url = `https://stock/product/product/details/${productId}`;
+    logActivity('stock-open', { productId, url });
     window.open(url, '_blank');
   } else {
     document.getElementById('result').innerHTML = '<span class="error">ID produktu musi być liczbą od 1 do 6 cyfr.</span>';
@@ -1339,8 +1856,33 @@ document.getElementById('currency').addEventListener('change', () => {
   el.addEventListener('input', () => {
     enforceTwoDecimals(el);
     updateMinSaleByMarkup();
+    scheduleHistoryLog(id);
+  });
+  el.addEventListener('focus', () => {
+    setFieldBaseline(id);
+  });
+  el.addEventListener('blur', () => {
+    flushHistoryLog(id);
   });
 });
+
+['markupPurchaseAmount', 'targetSaleAmount'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    enforceTwoDecimals(el);
+    updateMarkupFromSale();
+    scheduleHistoryLog(id);
+  });
+  el.addEventListener('focus', () => {
+    setFieldBaseline(id);
+  });
+  el.addEventListener('blur', () => {
+    flushHistoryLog(id);
+  });
+});
+
+['purchaseAmount', 'minMarkup', 'markupPurchaseAmount', 'targetSaleAmount'].forEach(setupAutoReplaceInput);
 
 document.getElementById('refreshRateBtn').addEventListener('click', () => {
   fetchExchangeRate(document.getElementById('currency').value, { notify: true });
@@ -1360,6 +1902,7 @@ fetchExchangeRate(document.getElementById('currency').value, { notify: false });
 renderHistory();
 checkRateProvidersStatus(document.getElementById('currency').value);
 updateMinSaleByMarkup();
+updateMarkupFromSale();
 
 document.getElementById('historyList').addEventListener('click', (event) => {
   const target = event.target;
