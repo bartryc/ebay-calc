@@ -120,9 +120,16 @@
 
             <div class="layout-item" data-layout-item="calc-min-markup">
               <label for="purchaseAmount" class="field-label">Kwota zakupu (PLN brutto)
-                <span class="field-help" data-tooltip="Twój koszt zakupu brutto. Podstawa do wyliczenia minimalnej ceny sprzedaży." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Twój koszt zakupu. W trybie netto kalkulator przelicza bazę na brutto (VAT 23%), a potem liczy minimalną cenę sprzedaży." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="purchaseAmount" step="0.01" min="0" placeholder="Np. 1200.00">
+              <div class="toggle-row purchase-mode-row">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="purchaseAmountNetToggle">
+                  <span class="slider"></span>
+                </label>
+                <span class="toggle-label" id="purchaseAmountModeLabel">Tryb zakupu: brutto</span>
+              </div>
 
               <label for="minMarkup" class="field-label">Minimalny narzut (%)
                 <span class="field-help" data-tooltip="Narzut liczony wzorem: (sprzedaż - zakup) / zakup × 100%. Minimalna sprzedaż = zakup × (1 + narzut/100)." aria-label="Pomoc">?</span>
@@ -284,10 +291,22 @@
               <button type="button" id="baseMultiplierValue" class="highlight-copy" aria-label="Kopiuj mnożnik" title="Kliknij, aby skopiować">—</button>
             </div>
             <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
+            <div class="base-commission-tools">
+              <label for="currentBaseMultiplier" class="field-label">Aktualny mnożnik Base
+                <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera, aby wyliczyć efektywną prowizję dla aktualnego kursu i VAT klienta." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="currentBaseMultiplier" step="0.0001" min="0" placeholder="Np. 0.2654">
+
+              <div class="min-price-box" id="baseCommissionBox">
+                <div><strong>Wyliczona prowizja (%):</strong> <span id="calculatedCommissionFromBase">—</span>
+                  <span class="field-help inline-help" data-tooltip="Wzór odwrotny: prowizja = (mnożnik × 1.23 / ((1 + VAT klienta) × kurs)) - 1." aria-label="Pomoc">?</span>
+                </div>
+              </div>
+            </div>
           </div>
         </details>
         </div>
-        <footer>Wersja <span id="appVersion">1.91</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
+        <footer>Wersja <span id="appVersion">1.92</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
       </aside>
     </div>
   </div>

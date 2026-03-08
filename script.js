@@ -682,6 +682,7 @@ function getFieldElement(source) {
     exchangeRate: 'exchangeRate',
     commission: 'commission',
     purchaseAmount: 'purchaseAmount',
+    currentBaseMultiplier: 'currentBaseMultiplier',
     minMarkup: 'minMarkup',
     markupPurchaseAmount: 'markupPurchaseAmount',
     targetSaleAmount: 'targetSaleAmount'
@@ -705,6 +706,27 @@ function hideSelfTestDetails() {}
 function formatCurrency(value) {
   if (!Number.isFinite(value)) return '-';
   return value.toFixed(2);
+}
+
+function isPurchaseNetMode() {
+  return !!document.getElementById('purchaseAmountNetToggle')?.checked;
+}
+
+function getPurchaseAmountMode() {
+  return isPurchaseNetMode() ? 'netto' : 'brutto';
+}
+
+function updatePurchaseAmountModeUI() {
+  const modeLabelEl = document.getElementById('purchaseAmountModeLabel');
+  const purchaseLabelEl = document.querySelector('label[for="purchaseAmount"]');
+  const isNet = isPurchaseNetMode();
+  if (modeLabelEl) {
+    modeLabelEl.textContent = `Tryb zakupu: ${isNet ? 'netto' : 'brutto'}`;
+  }
+  if (purchaseLabelEl) {
+    const helpHtml = purchaseLabelEl.querySelector('.field-help')?.outerHTML || '';
+    purchaseLabelEl.innerHTML = `Kwota zakupu (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+  }
 }
 
 function updateMinSaleByMarkup() {
@@ -733,7 +755,8 @@ function updateMinSaleByMarkup() {
     return;
   }
 
-  const minSalePlnBrutto = purchase * (1 + (markupPercent / 100));
+  const purchaseBrutto = isPurchaseNetMode() ? purchase * (1 + VAT23) : purchase;
+  const minSalePlnBrutto = purchaseBrutto * (1 + (markupPercent / 100));
   minSalePlnEl.textContent = `${minSalePlnBrutto.toFixed(2)} PLN`;
 
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
@@ -760,6 +783,33 @@ function updateMarkupFromSale() {
 
   const markupPercent = ((sale - purchase) / purchase) * 100;
   resultEl.textContent = `${markupPercent.toFixed(2)}%`;
+}
+
+function updateCommissionFromBaseMultiplier() {
+  const baseMultiplierEl = document.getElementById('currentBaseMultiplier');
+  const resultEl = document.getElementById('calculatedCommissionFromBase');
+  const exchangeRateEl = document.getElementById('exchangeRate');
+  const vatRateEl = document.getElementById('vatRate');
+  if (!baseMultiplierEl || !resultEl || !exchangeRateEl || !vatRateEl) return;
+
+  const baseMultiplier = parseNumber(baseMultiplierEl.value);
+  const exchangeRate = parseNumber(exchangeRateEl.value);
+  const vatRateRaw = parseNumber(vatRateEl.value);
+  const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
+
+  if (!Number.isFinite(baseMultiplier) || baseMultiplier <= 0 || !Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(vatRate) || vatRate < 0) {
+    resultEl.textContent = '—';
+    return;
+  }
+
+  const denominator = (1 + vatRate) * exchangeRate;
+  if (!Number.isFinite(denominator) || denominator <= 0) {
+    resultEl.textContent = '—';
+    return;
+  }
+
+  const commission = ((baseMultiplier * (1 + VAT23)) / denominator) - 1;
+  resultEl.textContent = `${(commission * 100).toFixed(2)}%`;
 }
 
 function setupAutoReplaceInput(id) {
@@ -797,6 +847,7 @@ function updateBaseMultiplier() {
     multiplierEl.textContent = '—';
     multiplierEl.dataset.value = '';
     if (multiplierSummaryEl) multiplierSummaryEl.textContent = '—';
+    updateCommissionFromBaseMultiplier();
     return;
   }
 
@@ -808,6 +859,7 @@ function updateBaseMultiplier() {
   multiplierEl.textContent = formatted;
   multiplierEl.dataset.value = formatted;
   if (multiplierSummaryEl) multiplierSummaryEl.textContent = formatted;
+  updateCommissionFromBaseMultiplier();
 }
 
 function openSearch(urlBase, query) {
@@ -1172,6 +1224,12 @@ function addHistoryEntry(source) {
   const brutto = parseNumber(document.getElementById('plnBrutto').value);
   const ebayPrice = parseNumber(document.getElementById('ebayPrice').value);
   const purchaseAmount = parseNumber(document.getElementById('purchaseAmount')?.value);
+  const currentBaseMultiplier = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
+  const calculatedCommissionFromBaseText = document.getElementById('calculatedCommissionFromBase')?.textContent?.trim() || '—';
+  const purchaseAmountMode = getPurchaseAmountMode();
+  const purchaseAmountBrutto = Number.isFinite(purchaseAmount)
+    ? (purchaseAmountMode === 'netto' ? purchaseAmount * (1 + VAT23) : purchaseAmount)
+    : NaN;
   const minMarkupPercent = parseNumber(document.getElementById('minMarkup')?.value);
   const markupPurchaseAmount = parseNumber(document.getElementById('markupPurchaseAmount')?.value);
   const targetSaleAmount = parseNumber(document.getElementById('targetSaleAmount')?.value);
@@ -1189,6 +1247,8 @@ function addHistoryEntry(source) {
     exchangeRate: 'Kurs',
     commission: 'Prowizja',
     purchaseAmount: 'Koszt zakupu (min cena)',
+    currentBaseMultiplier: 'Mnożnik Base → Prowizja',
+    purchaseAmountMode: 'Tryb zakupu (min cena)',
     minMarkup: 'Minimalny narzut',
     markupPurchaseAmount: 'Koszt zakupu (narzut)',
     targetSaleAmount: 'Cena sprzedaży (narzut)',
@@ -1210,14 +1270,16 @@ function addHistoryEntry(source) {
   let details = defaultDetails;
   let meta = defaultMeta;
 
-  const isMinMarkupSource = source === 'purchaseAmount' || source === 'minMarkup';
+  const isMinMarkupSource = source === 'purchaseAmount' || source === 'minMarkup' || source === 'purchaseAmountMode';
+  const isBaseCommissionSource = source === 'currentBaseMultiplier';
   const isSaleMarkupSource = source === 'markupPurchaseAmount' || source === 'targetSaleAmount';
 
   if (isMinMarkupSource) {
     const minSalePlnText = document.getElementById('minSalePln')?.textContent?.trim() || '—';
     const minSaleEbayText = document.getElementById('minSaleEbay')?.textContent?.trim() || '—';
     details = [
-      `Zakup <span class="history-value">${formatCurrency(purchaseAmount)}</span> PLN`,
+      `Zakup (${purchaseAmountMode}) <span class="history-value">${formatCurrency(purchaseAmount)}</span> PLN`,
+      `Baza brutto <span class="history-value">${formatCurrency(purchaseAmountBrutto)}</span> PLN`,
       `Min. narzut <span class="history-value">${Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : '-'}</span>%`,
       `Min. sprzedaż <span class="history-value">${minSalePlnText}</span>`
     ].join(' <span class="history-dot">•</span> ');
@@ -1230,12 +1292,19 @@ function addHistoryEntry(source) {
       `Narzut <span class="history-value">${calculatedMarkupText}</span>`
     ].join(' <span class="history-dot">•</span> ');
     meta = `Wzór: (sprzedaż - zakup) / zakup × 100%`;
+  } else if (isBaseCommissionSource) {
+    details = [
+      `Mnożnik Base <span class="history-value">${Number.isFinite(currentBaseMultiplier) ? currentBaseMultiplier.toFixed(4) : '-'}</span>`,
+      `Wyliczona prowizja <span class="history-value">${calculatedCommissionFromBaseText}</span>`
+    ].join(' <span class="history-dot">•</span> ');
+    meta = `Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> VAT klienta ${Number.isFinite(vatRateRaw) ? vatRateRaw.toFixed(1) : '-'}%`;
   }
 
   const hasMainValues = Number.isFinite(netto) || Number.isFinite(brutto) || Number.isFinite(ebayPrice);
   const hasMinMarkupValues = Number.isFinite(purchaseAmount) || Number.isFinite(minMarkupPercent);
   const hasSaleMarkupValues = Number.isFinite(markupPurchaseAmount) || Number.isFinite(targetSaleAmount);
-  if (!hasMainValues && !hasMinMarkupValues && !hasSaleMarkupValues) {
+  const hasBaseCommissionValues = Number.isFinite(currentBaseMultiplier);
+  if (!hasMainValues && !hasMinMarkupValues && !hasSaleMarkupValues && !hasBaseCommissionValues) {
     return;
   }
 
@@ -1267,6 +1336,10 @@ function addHistoryEntry(source) {
     brutto: Number.isFinite(brutto) ? brutto.toFixed(2) : null,
     ebay: Number.isFinite(ebayPrice) ? ebayPrice.toFixed(2) : null,
     purchaseAmount: Number.isFinite(purchaseAmount) ? purchaseAmount.toFixed(2) : null,
+    currentBaseMultiplier: Number.isFinite(currentBaseMultiplier) ? currentBaseMultiplier.toFixed(4) : null,
+    calculatedCommissionFromBase: calculatedCommissionFromBaseText,
+    purchaseAmountMode,
+    purchaseAmountBrutto: Number.isFinite(purchaseAmountBrutto) ? purchaseAmountBrutto.toFixed(2) : null,
     minMarkup: Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : null,
     markupPurchaseAmount: Number.isFinite(markupPurchaseAmount) ? markupPurchaseAmount.toFixed(2) : null,
     targetSaleAmount: Number.isFinite(targetSaleAmount) ? targetSaleAmount.toFixed(2) : null,
@@ -1355,6 +1428,13 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   document.getElementById('vatRate').value = '23';
   document.getElementById('commission').value = '15';
   document.getElementById('purchaseAmount').value = '';
+  document.getElementById('currentBaseMultiplier').value = '';
+  document.getElementById('calculatedCommissionFromBase').textContent = '—';
+  const purchaseAmountNetToggle = document.getElementById('purchaseAmountNetToggle');
+  if (purchaseAmountNetToggle) {
+    purchaseAmountNetToggle.checked = false;
+  }
+  updatePurchaseAmountModeUI();
   document.getElementById('minMarkup').value = '';
   updateMinSaleByMarkup();
   document.getElementById('markupPurchaseAmount').value = '';
@@ -1858,6 +1938,15 @@ document.getElementById('currency').addEventListener('change', () => {
     updateMinSaleByMarkup();
     scheduleHistoryLog(id);
   });
+  el.addEventListener('change', () => {
+    updateMinSaleByMarkup();
+    flushHistoryLog(id);
+  });
+  el.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    updateMinSaleByMarkup();
+    flushHistoryLog(id);
+  });
   el.addEventListener('focus', () => {
     setFieldBaseline(id);
   });
@@ -1865,6 +1954,38 @@ document.getElementById('currency').addEventListener('change', () => {
     flushHistoryLog(id);
   });
 });
+
+const currentBaseMultiplierEl = document.getElementById('currentBaseMultiplier');
+if (currentBaseMultiplierEl) {
+  currentBaseMultiplierEl.addEventListener('input', () => {
+    updateCommissionFromBaseMultiplier();
+    scheduleHistoryLog('currentBaseMultiplier');
+  });
+  currentBaseMultiplierEl.addEventListener('change', () => {
+    updateCommissionFromBaseMultiplier();
+    flushHistoryLog('currentBaseMultiplier');
+  });
+  currentBaseMultiplierEl.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    updateCommissionFromBaseMultiplier();
+    flushHistoryLog('currentBaseMultiplier');
+  });
+  currentBaseMultiplierEl.addEventListener('focus', () => {
+    setFieldBaseline('currentBaseMultiplier');
+  });
+  currentBaseMultiplierEl.addEventListener('blur', () => {
+    flushHistoryLog('currentBaseMultiplier');
+  });
+}
+
+const purchaseAmountNetToggle = document.getElementById('purchaseAmountNetToggle');
+if (purchaseAmountNetToggle) {
+  purchaseAmountNetToggle.addEventListener('change', () => {
+    updatePurchaseAmountModeUI();
+    updateMinSaleByMarkup();
+    addHistoryEntry('purchaseAmountMode');
+  });
+}
 
 ['markupPurchaseAmount', 'targetSaleAmount'].forEach((id) => {
   const el = document.getElementById(id);
@@ -1874,6 +1995,15 @@ document.getElementById('currency').addEventListener('change', () => {
     updateMarkupFromSale();
     scheduleHistoryLog(id);
   });
+  el.addEventListener('change', () => {
+    updateMarkupFromSale();
+    flushHistoryLog(id);
+  });
+  el.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    updateMarkupFromSale();
+    flushHistoryLog(id);
+  });
   el.addEventListener('focus', () => {
     setFieldBaseline(id);
   });
@@ -1882,7 +2012,7 @@ document.getElementById('currency').addEventListener('change', () => {
   });
 });
 
-['purchaseAmount', 'minMarkup', 'markupPurchaseAmount', 'targetSaleAmount'].forEach(setupAutoReplaceInput);
+['purchaseAmount', 'minMarkup', 'currentBaseMultiplier', 'markupPurchaseAmount', 'targetSaleAmount'].forEach(setupAutoReplaceInput);
 
 document.getElementById('refreshRateBtn').addEventListener('click', () => {
   fetchExchangeRate(document.getElementById('currency').value, { notify: true });
@@ -1898,11 +2028,13 @@ if (rateSourceSelect) {
 }
 
 updateEbayCurrencyLabel();
+updatePurchaseAmountModeUI();
 fetchExchangeRate(document.getElementById('currency').value, { notify: false });
 renderHistory();
 checkRateProvidersStatus(document.getElementById('currency').value);
 updateMinSaleByMarkup();
 updateMarkupFromSale();
+updateCommissionFromBaseMultiplier();
 
 document.getElementById('historyList').addEventListener('click', (event) => {
   const target = event.target;
