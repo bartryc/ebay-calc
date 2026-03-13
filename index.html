@@ -151,6 +151,13 @@
                 <span class="field-help" data-tooltip="Cena zakupu brutto używana do wyliczenia faktycznego narzutu przy zadanej cenie sprzedaży." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="markupPurchaseAmount" step="0.01" min="0" placeholder="Np. 1200.00">
+              <div class="toggle-row purchase-mode-row">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="markupAmountNetToggle">
+                  <span class="slider"></span>
+                </label>
+                <span class="toggle-label" id="markupAmountModeLabel">Tryb narzutu: brutto</span>
+              </div>
 
               <label for="targetSaleAmount" class="field-label">Docelowa cena sprzedaży (PLN brutto)
                 <span class="field-help" data-tooltip="Cena sprzedaży brutto, dla której liczony jest narzut: (sprzedaż - zakup) / zakup × 100%." aria-label="Pomoc">?</span>
@@ -306,7 +313,7 @@
           </div>
         </details>
         </div>
-        <footer>Wersja <span id="appVersion">1.92</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
+        <footer>Wersja <span id="appVersion">1.93</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
       </aside>
     </div>
   </div>

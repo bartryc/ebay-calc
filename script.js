@@ -729,6 +729,58 @@ function updatePurchaseAmountModeUI() {
   }
 }
 
+function isMarkupNetMode() {
+  return !!document.getElementById('markupAmountNetToggle')?.checked;
+}
+
+function getMarkupAmountMode() {
+  return isMarkupNetMode() ? 'netto' : 'brutto';
+}
+
+function updateMarkupAmountModeUI() {
+  const modeLabelEl = document.getElementById('markupAmountModeLabel');
+  const purchaseLabelEl = document.querySelector('label[for="markupPurchaseAmount"]');
+  const saleLabelEl = document.querySelector('label[for="targetSaleAmount"]');
+  const isNet = isMarkupNetMode();
+  if (modeLabelEl) {
+    modeLabelEl.textContent = `Tryb narzutu: ${isNet ? 'netto' : 'brutto'}`;
+  }
+  if (purchaseLabelEl) {
+    const helpHtml = purchaseLabelEl.querySelector('.field-help')?.outerHTML || '';
+    purchaseLabelEl.innerHTML = `Kwota zakupu do narzutu (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+  }
+  if (saleLabelEl) {
+    const helpHtml = saleLabelEl.querySelector('.field-help')?.outerHTML || '';
+    saleLabelEl.innerHTML = `Docelowa cena sprzedaży (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+  }
+}
+
+function isMarkupNetMode() {
+  return !!document.getElementById('markupAmountNetToggle')?.checked;
+}
+
+function getMarkupAmountMode() {
+  return isMarkupNetMode() ? 'netto' : 'brutto';
+}
+
+function updateMarkupAmountModeUI() {
+  const modeLabelEl = document.getElementById('markupAmountModeLabel');
+  const purchaseLabelEl = document.querySelector('label[for="markupPurchaseAmount"]');
+  const saleLabelEl = document.querySelector('label[for="targetSaleAmount"]');
+  const isNet = isMarkupNetMode();
+  if (modeLabelEl) {
+    modeLabelEl.textContent = `Tryb narzutu: ${isNet ? 'netto' : 'brutto'}`;
+  }
+  if (purchaseLabelEl) {
+    const helpHtml = purchaseLabelEl.querySelector('.field-help')?.outerHTML || '';
+    purchaseLabelEl.innerHTML = `Kwota zakupu do narzutu (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+  }
+  if (saleLabelEl) {
+    const helpHtml = saleLabelEl.querySelector('.field-help')?.outerHTML || '';
+    saleLabelEl.innerHTML = `Docelowa cena sprzedaży (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+  }
+}
+
 function updateMinSaleByMarkup() {
   const purchaseEl = document.getElementById('purchaseAmount');
   const markupEl = document.getElementById('minMarkup');
@@ -781,7 +833,9 @@ function updateMarkupFromSale() {
     return;
   }
 
-  const markupPercent = ((sale - purchase) / purchase) * 100;
+  const purchaseBrutto = isMarkupNetMode() ? purchase * (1 + VAT23) : purchase;
+  const saleBrutto = isMarkupNetMode() ? sale * (1 + VAT23) : sale;
+  const markupPercent = ((saleBrutto - purchaseBrutto) / purchaseBrutto) * 100;
   resultEl.textContent = `${markupPercent.toFixed(2)}%`;
 }
 
@@ -1233,12 +1287,19 @@ function addHistoryEntry(source) {
   const minMarkupPercent = parseNumber(document.getElementById('minMarkup')?.value);
   const markupPurchaseAmount = parseNumber(document.getElementById('markupPurchaseAmount')?.value);
   const targetSaleAmount = parseNumber(document.getElementById('targetSaleAmount')?.value);
+  const markupAmountMode = getMarkupAmountMode();
+  const markupPurchaseBrutto = Number.isFinite(markupPurchaseAmount)
+    ? (markupAmountMode === 'netto' ? markupPurchaseAmount * (1 + VAT23) : markupPurchaseAmount)
+    : NaN;
+  const markupSaleBrutto = Number.isFinite(targetSaleAmount)
+    ? (markupAmountMode === 'netto' ? targetSaleAmount * (1 + VAT23) : targetSaleAmount)
+    : NaN;
   const currency = document.getElementById('currency').value;
   const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
   const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
 
-  const sourceLabel = {
+  let sourceLabel = {
     netto: 'ERP netto',
     brutto: 'ERP brutto',
     ebayPrice: 'eBay',
@@ -1252,6 +1313,7 @@ function addHistoryEntry(source) {
     minMarkup: 'Minimalny narzut',
     markupPurchaseAmount: 'Koszt zakupu (narzut)',
     targetSaleAmount: 'Cena sprzedaży (narzut)',
+    markupAmountMode: 'Tryb narzutu',
     preset: 'Preset'
   }[source] || 'Przeliczenie';
 
@@ -1272,7 +1334,10 @@ function addHistoryEntry(source) {
 
   const isMinMarkupSource = source === 'purchaseAmount' || source === 'minMarkup' || source === 'purchaseAmountMode';
   const isBaseCommissionSource = source === 'currentBaseMultiplier';
-  const isSaleMarkupSource = source === 'markupPurchaseAmount' || source === 'targetSaleAmount';
+  const isSaleMarkupSource = source === 'markupPurchaseAmount' || source === 'targetSaleAmount' || source === 'markupAmountMode';
+  if (isSaleMarkupSource) {
+    sourceLabel = `${sourceLabel} (${markupAmountMode})`;
+  }
 
   if (isMinMarkupSource) {
     const minSalePlnText = document.getElementById('minSalePln')?.textContent?.trim() || '—';
@@ -1287,8 +1352,9 @@ function addHistoryEntry(source) {
   } else if (isSaleMarkupSource) {
     const calculatedMarkupText = document.getElementById('calculatedMarkup')?.textContent?.trim() || '—';
     details = [
-      `Zakup <span class="history-value">${formatCurrency(markupPurchaseAmount)}</span> PLN`,
-      `Sprzedaż <span class="history-value">${formatCurrency(targetSaleAmount)}</span> PLN`,
+      `Zakup (${markupAmountMode}) <span class="history-value">${formatCurrency(markupPurchaseAmount)}</span> PLN`,
+      `Sprzedaż (${markupAmountMode}) <span class="history-value">${formatCurrency(targetSaleAmount)}</span> PLN`,
+      `Baza brutto <span class="history-value">${formatCurrency(markupPurchaseBrutto)}</span> / <span class="history-value">${formatCurrency(markupSaleBrutto)}</span> PLN`,
       `Narzut <span class="history-value">${calculatedMarkupText}</span>`
     ].join(' <span class="history-dot">•</span> ');
     meta = `Wzór: (sprzedaż - zakup) / zakup × 100%`;
@@ -1343,6 +1409,9 @@ function addHistoryEntry(source) {
     minMarkup: Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : null,
     markupPurchaseAmount: Number.isFinite(markupPurchaseAmount) ? markupPurchaseAmount.toFixed(2) : null,
     targetSaleAmount: Number.isFinite(targetSaleAmount) ? targetSaleAmount.toFixed(2) : null,
+    markupAmountMode,
+    markupPurchaseBrutto: Number.isFinite(markupPurchaseBrutto) ? markupPurchaseBrutto.toFixed(2) : null,
+    markupSaleBrutto: Number.isFinite(markupSaleBrutto) ? markupSaleBrutto.toFixed(2) : null,
     currency,
     vat: Number.isFinite(vatRateRaw) ? vatRateRaw.toFixed(1) : null,
     commission: Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : null,
@@ -1439,6 +1508,11 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   updateMinSaleByMarkup();
   document.getElementById('markupPurchaseAmount').value = '';
   document.getElementById('targetSaleAmount').value = '';
+  const markupAmountNetToggle = document.getElementById('markupAmountNetToggle');
+  if (markupAmountNetToggle) {
+    markupAmountNetToggle.checked = false;
+  }
+  updateMarkupAmountModeUI();
   updateMarkupFromSale();
   document.getElementById('productId').value = '';
   document.getElementById('currency').value = 'EUR';
@@ -1827,16 +1901,29 @@ function checkRateProvidersStatus(currency) {
   });
 }
 
-// STOCK URL button handler
-document.getElementById('stockUrlBtn').addEventListener('click', () => {
-  const productId = document.getElementById('productId').value;
+function openStockFromInput() {
+  const productInput = document.getElementById('productId');
+  if (!productInput) return;
+  const productId = productInput.value;
   if (/^\d{1,6}$/.test(productId)) {
     const url = `https://stock/product/product/details/${productId}`;
     logActivity('stock-open', { productId, url });
     window.open(url, '_blank');
+    productInput.value = '';
   } else {
     document.getElementById('result').innerHTML = '<span class="error">ID produktu musi być liczbą od 1 do 6 cyfr.</span>';
   }
+}
+
+// STOCK URL button handler
+document.getElementById('stockUrlBtn').addEventListener('click', () => {
+  openStockFromInput();
+});
+
+document.getElementById('productId').addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  openStockFromInput();
 });
 
 document.getElementById('plnNetto').addEventListener('input', () => {
@@ -1987,6 +2074,15 @@ if (purchaseAmountNetToggle) {
   });
 }
 
+const markupAmountNetToggle = document.getElementById('markupAmountNetToggle');
+if (markupAmountNetToggle) {
+  markupAmountNetToggle.addEventListener('change', () => {
+    updateMarkupAmountModeUI();
+    updateMarkupFromSale();
+    addHistoryEntry('markupAmountMode');
+  });
+}
+
 ['markupPurchaseAmount', 'targetSaleAmount'].forEach((id) => {
   const el = document.getElementById(id);
   if (!el) return;
@@ -2029,6 +2125,7 @@ if (rateSourceSelect) {
 
 updateEbayCurrencyLabel();
 updatePurchaseAmountModeUI();
+updateMarkupAmountModeUI();
 fetchExchangeRate(document.getElementById('currency').value, { notify: false });
 renderHistory();
 checkRateProvidersStatus(document.getElementById('currency').value);
