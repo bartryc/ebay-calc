@@ -1075,6 +1075,10 @@ function normalizePnValue(value) {
   return String(value || '').replace(/\s+/g, '').toUpperCase();
 }
 
+function normalizeSearchText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
 function getBestPatternMatch(patterns, normalized) {
   if (!Array.isArray(patterns) || !window.PN_MAPPINGS_API?.matchPattern) return null;
   const scored = [];
@@ -2468,7 +2472,7 @@ if (partNumberInput) {
     }, 350);
   };
   const runSearchAll = () => {
-    const query = partNumberInput.value.trim();
+    const query = normalizeSearchText(partNumberInput.value);
     const sources = [];
     if (sourceGoogle?.checked) sources.push('google');
     if (sourceEbay?.checked) sources.push('ebay');
@@ -2489,10 +2493,10 @@ if (partNumberInput) {
     lastSearchQuery = query;
     clearSearchStatus();
     if (sources.includes('google')) {
-      const vendor = partNumberInput.dataset.suggestionVendor || '';
+      const vendor = normalizeSearchText(partNumberInput.dataset.suggestionVendor || '');
       let pn = query;
       if (vendor && pn.toLowerCase().startsWith(`${vendor.toLowerCase()} `)) {
-        pn = pn.slice(vendor.length).trim();
+        pn = normalizeSearchText(pn.slice(vendor.length));
       }
       if (!pn) pn = query;
       const hasSpaces = /\s/.test(pn);
@@ -2508,14 +2512,14 @@ if (partNumberInput) {
       openSearch('https://allegro.pl/kategoria/komputery?string=', query);
     }
     if (sources.includes('renewtech')) {
-      let vendorRaw = partNumberInput.dataset.suggestionVendor || '';
+      let vendorRaw = normalizeSearchText(partNumberInput.dataset.suggestionVendor || '');
       const suggestionValue = partNumberInput.dataset.suggestion || '';
       if (!vendorRaw && suggestionValue) {
-        vendorRaw = suggestionValue.split(/\s+/)[0] || '';
+        vendorRaw = normalizeSearchText(suggestionValue.split(/\s+/)[0] || '');
       }
       let pn = query;
       if (vendorRaw && pn.toLowerCase().startsWith(`${vendorRaw.toLowerCase()} `)) {
-        pn = pn.slice(vendorRaw.length).trim();
+        pn = normalizeSearchText(pn.slice(vendorRaw.length));
       }
       const vendorSlug = vendorRaw.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       const pnSlug = (pn || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9-]/g, '');
