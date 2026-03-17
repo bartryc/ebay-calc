@@ -46,8 +46,19 @@ const INDEX_LAYOUT_STORAGE_KEY = 'indexLayoutOrderV1';
 const INDEX_LAYOUT_COOKIE_KEY = 'indexLayoutOrderV1';
 const INDEX_LAYOUT_VISIBILITY_STORAGE_KEY = 'indexLayoutVisibilityV1';
 const INDEX_LAYOUT_VISIBILITY_COOKIE_KEY = 'indexLayoutVisibilityV1';
+const INDEX_LAYOUT_COLORS_STORAGE_KEY = 'indexLayoutColorsV1';
+const INDEX_LAYOUT_COLORS_COOKIE_KEY = 'indexLayoutColorsV1';
 const INDEX_LAYOUT_GLOBAL_PRESETS_NOTE_ID = 'layout-presets-v1';
 const INDEX_LAYOUT_ACTIVE_PRESET_KEY = 'indexLayoutActivePresetV1';
+const LAYOUT_TINTS = ['', 'mint', 'blue', 'amber', 'violet', 'rose'];
+const LAYOUT_TINT_LABELS = {
+  '': 'Brak',
+  mint: 'Mięta',
+  blue: 'Niebieski',
+  amber: 'Bursztyn',
+  violet: 'Fiolet',
+  rose: 'Róż'
+};
 const layoutGroups = {
   calc: document.getElementById('calcLayoutContainer'),
   info: document.getElementById('infoLayoutContainer')
@@ -69,6 +80,8 @@ let defaultLayoutOrder = null;
 let preEditLayoutOrder = null;
 let defaultLayoutVisibility = null;
 let preEditLayoutVisibility = null;
+let defaultLayoutColors = null;
+let preEditLayoutColors = null;
 let currentDraggedItem = null;
 let currentDraggedEl = null;
 let layoutResetModalResolver = null;
@@ -144,6 +157,17 @@ function getCurrentLayoutVisibility() {
   return visibility;
 }
 
+function getCurrentLayoutColors() {
+  const colors = {};
+  getAllLayoutItems().forEach((item) => {
+    const id = item.getAttribute('data-layout-item');
+    if (!id) return;
+    const tint = String(item.dataset.layoutTint || '');
+    colors[id] = LAYOUT_TINTS.includes(tint) ? tint : '';
+  });
+  return colors;
+}
+
 function normalizeLayoutVisibility(rawVisibility) {
   const normalized = {};
   getAllLayoutItems().forEach((item) => {
@@ -151,6 +175,17 @@ function normalizeLayoutVisibility(rawVisibility) {
     if (!id) return;
     const rawValue = rawVisibility?.[id];
     normalized[id] = rawValue !== false;
+  });
+  return normalized;
+}
+
+function normalizeLayoutColors(rawColors) {
+  const normalized = {};
+  getAllLayoutItems().forEach((item) => {
+    const id = item.getAttribute('data-layout-item');
+    if (!id) return;
+    const rawValue = String(rawColors?.[id] || '');
+    normalized[id] = LAYOUT_TINTS.includes(rawValue) ? rawValue : '';
   });
   return normalized;
 }
@@ -235,6 +270,17 @@ function applyLayoutVisibility(visibilityMap, options = {}) {
   });
 }
 
+function applyLayoutColors(colorMap) {
+  const normalized = normalizeLayoutColors(colorMap);
+  getAllLayoutItems().forEach((item) => {
+    const id = item.getAttribute('data-layout-item');
+    if (!id) return;
+    const tint = normalized[id] || '';
+    item.dataset.layoutTint = tint;
+    item.classList.toggle('has-layout-tint', !!tint);
+  });
+}
+
 function loadSavedLayoutOrder() {
   const raw = localStorage.getItem(INDEX_LAYOUT_STORAGE_KEY) || layoutGetCookieValue(INDEX_LAYOUT_COOKIE_KEY);
   if (!raw) return null;
@@ -255,13 +301,25 @@ function loadSavedLayoutVisibility() {
   }
 }
 
+function loadSavedLayoutColors() {
+  const raw = localStorage.getItem(INDEX_LAYOUT_COLORS_STORAGE_KEY) || layoutGetCookieValue(INDEX_LAYOUT_COLORS_COOKIE_KEY);
+  if (!raw) return null;
+  try {
+    return normalizeLayoutColors(JSON.parse(raw));
+  } catch (_error) {
+    return null;
+  }
+}
+
 function loadSavedLayoutFromLocal() {
   const order = loadSavedLayoutOrder();
   const visibility = loadSavedLayoutVisibility();
-  if (!order && !visibility) return null;
+  const colors = loadSavedLayoutColors();
+  if (!order && !visibility && !colors) return null;
   return {
     order: order || getCurrentLayoutOrder(),
-    visibility: visibility || getCurrentLayoutVisibility()
+    visibility: visibility || getCurrentLayoutVisibility(),
+    colors: colors || getCurrentLayoutColors()
   };
 }
 
@@ -307,9 +365,10 @@ function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisib
   return { moved, columnChanged, shown, hidden };
 }
 
-function saveLayoutToLocal(orderMap, visibilityMap) {
+function saveLayoutToLocal(orderMap, visibilityMap, colorMap) {
   saveLayoutOrder(orderMap);
   saveLayoutVisibility(visibilityMap);
+  saveLayoutColors(colorMap || getCurrentLayoutColors());
 }
 
 function clearSavedLayoutLocal() {
@@ -393,11 +452,20 @@ function saveLayoutVisibility(visibilityMap) {
   layoutSetCookieValue(INDEX_LAYOUT_VISIBILITY_COOKIE_KEY, payload);
 }
 
+function saveLayoutColors(colorMap) {
+  const normalized = normalizeLayoutColors(colorMap);
+  const payload = JSON.stringify(normalized);
+  localStorage.setItem(INDEX_LAYOUT_COLORS_STORAGE_KEY, payload);
+  layoutSetCookieValue(INDEX_LAYOUT_COLORS_COOKIE_KEY, payload);
+}
+
 function clearSavedLayoutOrder() {
   localStorage.removeItem(INDEX_LAYOUT_STORAGE_KEY);
   localStorage.removeItem(INDEX_LAYOUT_VISIBILITY_STORAGE_KEY);
+  localStorage.removeItem(INDEX_LAYOUT_COLORS_STORAGE_KEY);
   document.cookie = `${INDEX_LAYOUT_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   document.cookie = `${INDEX_LAYOUT_VISIBILITY_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  document.cookie = `${INDEX_LAYOUT_COLORS_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
 }
 
 function updateLayoutDiffHighlight() {
@@ -473,6 +541,12 @@ function moveLayoutItemToGroup(itemId, targetGroupKey) {
   applyPresetSelectionVisual();
   applyLayoutOrder(order);
   updateLayoutDiffHighlight();
+}
+
+function getNextLayoutTint(currentTint) {
+  const index = LAYOUT_TINTS.indexOf(currentTint);
+  const safeIndex = index >= 0 ? index : 0;
+  return LAYOUT_TINTS[(safeIndex + 1) % LAYOUT_TINTS.length];
 }
 
 function renderLayoutItemControls() {
@@ -599,7 +673,27 @@ function renderLayoutItemControls() {
         renderLayoutItemControls();
         updateLayoutDiffHighlight();
       });
-      controls.append(handle, upBtn, downBtn, transferBtn, toggleBtn);
+      const colorBtn = document.createElement('button');
+      colorBtn.type = 'button';
+      colorBtn.className = 'layout-item-move layout-item-color';
+      colorBtn.textContent = 'Tło';
+      const currentTint = String(item.dataset.layoutTint || '');
+      colorBtn.dataset.tint = currentTint;
+      colorBtn.setAttribute('aria-label', 'Zmień kolor sekcji');
+      colorBtn.setAttribute('title', `Kolor: ${LAYOUT_TINT_LABELS[currentTint] || LAYOUT_TINT_LABELS['']}`);
+      colorBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const colors = getCurrentLayoutColors();
+        const nextTint = getNextLayoutTint(colors[itemId] || '');
+        colors[itemId] = nextTint;
+        selectedLayoutPresetKey = 'custom';
+        applyPresetSelectionVisual();
+        applyLayoutColors(colors);
+        renderLayoutItemControls();
+        updateLayoutDiffHighlight();
+      });
+      controls.append(handle, upBtn, downBtn, transferBtn, toggleBtn, colorBtn);
       const detailsSummary = item.tagName === 'DETAILS'
         ? item.querySelector('.collapsible-summary')
         : null;
@@ -635,6 +729,7 @@ function setLayoutEditMode(enabled) {
   if (isLayoutEditMode) {
     preEditLayoutOrder = getCurrentLayoutOrder();
     preEditLayoutVisibility = getCurrentLayoutVisibility();
+    preEditLayoutColors = getCurrentLayoutColors();
     preEditLayoutPresetKey = selectedLayoutPresetKey;
     applyLayoutVisibility(preEditLayoutVisibility, { forceShowAll: true });
     renderLayoutItemControls();
@@ -738,21 +833,22 @@ function getMarkupAmountMode() {
 }
 
 function updateMarkupAmountModeUI() {
-  const modeLabelEl = document.getElementById('markupAmountModeLabel');
   const purchaseLabelEl = document.querySelector('label[for="markupPurchaseAmount"]');
   const saleLabelEl = document.querySelector('label[for="targetSaleAmount"]');
   const isNet = isMarkupNetMode();
-  if (modeLabelEl) {
-    modeLabelEl.textContent = `Tryb narzutu: ${isNet ? 'netto' : 'brutto'}`;
-  }
   if (purchaseLabelEl) {
     const helpHtml = purchaseLabelEl.querySelector('.field-help')?.outerHTML || '';
-    purchaseLabelEl.innerHTML = `Kwota zakupu do narzutu (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+    const toggleHtml = '<button type="button" class="mode-inline-toggle" data-toggle="markupAmountNetToggle"></button>';
+    purchaseLabelEl.innerHTML = `Kwota zakupu do narzutu (PLN ${toggleHtml}) ${helpHtml}`;
   }
   if (saleLabelEl) {
     const helpHtml = saleLabelEl.querySelector('.field-help')?.outerHTML || '';
-    saleLabelEl.innerHTML = `Docelowa cena sprzedaży (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+    const toggleHtml = '<button type="button" class="mode-inline-toggle" data-toggle="markupAmountNetToggle"></button>';
+    saleLabelEl.innerHTML = `Docelowa cena sprzedaży (PLN ${toggleHtml}) ${helpHtml}`;
   }
+  document.querySelectorAll('.mode-inline-toggle[data-toggle="markupAmountNetToggle"]').forEach((btn) => {
+    btn.textContent = isNet ? 'netto' : 'brutto';
+  });
 }
 
 function isMarkupNetMode() {
@@ -870,21 +966,17 @@ function setupAutoReplaceInput(id) {
   const el = document.getElementById(id);
   if (!el) return;
 
-  const armIfHasValue = () => {
-    el.dataset.autoReplace = String((el.value || '').trim().length > 0);
-  };
-
-  const clearIfArmed = () => {
-    if (el.dataset.autoReplace === 'true') {
-      el.value = '';
-      el.dataset.autoReplace = 'false';
-    }
-  };
-
-  el.addEventListener('focus', clearIfArmed);
-  el.addEventListener('paste', clearIfArmed);
-  el.addEventListener('blur', armIfHasValue);
-  el.addEventListener('change', armIfHasValue);
+  el.addEventListener('focus', () => {
+    requestAnimationFrame(() => {
+      if (document.activeElement !== el) return;
+      if ((el.value || '').trim().length === 0) return;
+      try {
+        el.select();
+      } catch (_error) {
+        // ignore
+      }
+    });
+  });
 }
 
 function updateBaseMultiplier() {
@@ -1086,10 +1178,12 @@ function renderHistory() {
 
 defaultLayoutOrder = getCurrentLayoutOrder();
 defaultLayoutVisibility = getCurrentLayoutVisibility();
+defaultLayoutColors = getCurrentLayoutColors();
 const savedLocalLayout = loadSavedLayoutFromLocal();
 if (savedLocalLayout) {
   applyLayoutOrder(savedLocalLayout.order);
   applyLayoutVisibility(savedLocalLayout.visibility);
+  applyLayoutColors(savedLocalLayout.colors);
 }
 loadGlobalLayoutPresets()
   .then((presets) => {
@@ -1099,7 +1193,7 @@ loadGlobalLayoutPresets()
     if (activeGlobalId) {
       const applied = applyGlobalPresetById(activeGlobalId);
       if (applied) {
-        saveLayoutToLocal(getCurrentLayoutOrder(), getCurrentLayoutVisibility());
+        saveLayoutToLocal(getCurrentLayoutOrder(), getCurrentLayoutVisibility(), getCurrentLayoutColors());
       }
     }
     applyPresetSelectionVisual();
@@ -1120,6 +1214,9 @@ if (layoutCustomizeBtn) {
       }
       if (preEditLayoutVisibility) {
         applyLayoutVisibility(preEditLayoutVisibility);
+      }
+      if (preEditLayoutColors) {
+        applyLayoutColors(preEditLayoutColors);
       }
       selectedLayoutPresetKey = preEditLayoutPresetKey || 'custom';
       applyPresetSelectionVisual();
@@ -1158,8 +1255,9 @@ if (layoutSaveBtn) {
     const beforeVisibility = preEditLayoutVisibility || getCurrentLayoutVisibility();
     const order = getCurrentLayoutOrder();
     const visibility = getCurrentLayoutVisibility();
+    const colors = getCurrentLayoutColors();
     const changes = diffLayoutChanges(beforeOrder, beforeVisibility, order, visibility);
-    saveLayoutToLocal(order, visibility);
+    saveLayoutToLocal(order, visibility, colors);
     if (!selectedLayoutPresetKey) {
       selectedLayoutPresetKey = 'custom';
     }
@@ -1173,6 +1271,7 @@ if (layoutSaveBtn) {
     });
     preEditLayoutOrder = order;
     preEditLayoutVisibility = visibility;
+    preEditLayoutColors = colors;
     setLayoutEditMode(false);
     showMainToast('Układ zapisany lokalnie dla tego użytkownika.', 'ok');
   });
@@ -1187,11 +1286,13 @@ if (layoutResetBtn) {
     if (!defaultLayoutOrder) return;
     applyLayoutOrder(defaultLayoutOrder);
     applyLayoutVisibility(defaultLayoutVisibility || {});
+    applyLayoutColors(defaultLayoutColors || {});
     clearSavedLayoutLocal();
     selectedLayoutPresetKey = 'custom';
     localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
     preEditLayoutOrder = getCurrentLayoutOrder();
     preEditLayoutVisibility = getCurrentLayoutVisibility();
+    preEditLayoutColors = getCurrentLayoutColors();
     setLayoutEditMode(false);
     showMainToast('Przywrócono domyślny układ.', 'ok');
   });
@@ -1240,6 +1341,9 @@ if (layoutExitBtn) {
     }
     if (preEditLayoutVisibility) {
       applyLayoutVisibility(preEditLayoutVisibility);
+    }
+    if (preEditLayoutColors) {
+      applyLayoutColors(preEditLayoutColors);
     }
     selectedLayoutPresetKey = preEditLayoutPresetKey || 'custom';
     applyPresetSelectionVisual();
@@ -2082,6 +2186,19 @@ if (markupAmountNetToggle) {
     addHistoryEntry('markupAmountMode');
   });
 }
+
+document.addEventListener('click', (event) => {
+  const btn = event.target.closest('.mode-inline-toggle');
+  if (!btn) return;
+  const toggleId = btn.getAttribute('data-toggle');
+  if (toggleId !== 'markupAmountNetToggle') return;
+  const toggleEl = document.getElementById(toggleId);
+  if (!toggleEl) return;
+  toggleEl.checked = !toggleEl.checked;
+  updateMarkupAmountModeUI();
+  updateMarkupFromSale();
+  addHistoryEntry('markupAmountMode');
+});
 
 ['markupPurchaseAmount', 'targetSaleAmount'].forEach((id) => {
   const el = document.getElementById(id);
