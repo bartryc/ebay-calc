@@ -13,9 +13,13 @@ const RATE_PROVIDERS = {
     readRate: (data, currency) => data?.rates?.[currency]
   },
   exchangerate: {
-    label: 'exchangerate.host',
-    buildUrl: (currency) => `https://api.exchangerate.host/latest?base=PLN&symbols=${currency}`,
-    readRate: (data, currency) => data?.rates?.[currency]
+    label: 'NBP API',
+    buildUrl: (currency) => `https://api.nbp.pl/api/exchangerates/rates/A/${currency}/?format=json`,
+    readRate: (data) => {
+      const mid = data?.rates?.[0]?.mid;
+      if (!Number.isFinite(mid) || mid <= 0) return null;
+      return 1 / mid; // NBP zwraca waluta->PLN, a my potrzebujemy PLN->waluta
+    }
   },
   erapi: {
     label: 'open.er-api.com',
@@ -1924,12 +1928,13 @@ function fetchExchangeRate(currency, options = {}) {
           .catch(error => {
             console.error('Błąd pobierania kursu:', error);
             const fallbackRate = DEFAULT_RATES[currency] || 4.3;
+            const nowFallback = new Date();
             exchangeRateInp.value = fallbackRate.toFixed(4);
             currentExchangeRate = fallbackRate;
             exchangeInfo.innerText = `Błąd pobierania kursu. Użyto domyślnego kursu PLN/${currency}: ${fallbackRate.toFixed(4)}`;
             if (exchangeRateTooltip) {
               const inverse = 1 / fallbackRate;
-              exchangeRateTooltip.setAttribute('data-tooltip', `Kurs ${currency}/PLN: ${inverse.toFixed(4)} • domyślny (${now.toLocaleString('pl-PL')})`);
+              exchangeRateTooltip.setAttribute('data-tooltip', `Kurs ${currency}/PLN: ${inverse.toFixed(4)} • domyślny (${nowFallback.toLocaleString('pl-PL')})`);
             }
             if (notify) {
               showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
@@ -1942,12 +1947,13 @@ function fetchExchangeRate(currency, options = {}) {
         return;
       }
       const fallbackRate = DEFAULT_RATES[currency] || 4.3;
+      const nowFallback = new Date();
       exchangeRateInp.value = fallbackRate.toFixed(4);
       currentExchangeRate = fallbackRate;
       exchangeInfo.innerText = `Błąd pobierania kursu. Użyto domyślnego kursu PLN/${currency}: ${fallbackRate.toFixed(4)}`;
       if (exchangeRateTooltip) {
         const inverse = 1 / fallbackRate;
-        exchangeRateTooltip.setAttribute('data-tooltip', `Kurs ${currency}/PLN: ${inverse.toFixed(4)} • domyślny (${now.toLocaleString('pl-PL')})`);
+        exchangeRateTooltip.setAttribute('data-tooltip', `Kurs ${currency}/PLN: ${inverse.toFixed(4)} • domyślny (${nowFallback.toLocaleString('pl-PL')})`);
       }
       if (notify) {
         showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
