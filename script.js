@@ -34,6 +34,7 @@ let selfTestHideTimer = null;
 const historyEntries = [];
 const historyTimers = {};
 let lastHistorySignature = '';
+const lastHistorySignatureBySource = {};
 let lastClearedHistory = [];
 let restoreHistoryTimer = null;
 const fieldBaselines = {};
@@ -1062,6 +1063,10 @@ function logActivity(type, meta = {}) {
   if (appVersion && !meta.appVersion) {
     meta.appVersion = appVersion;
   }
+  if (type === 'calc') {
+    window.PN_MAPPINGS_API.log(type, meta);
+    return;
+  }
   const key = `${type}:${JSON.stringify(meta).slice(0, 200)}`;
   const now = Date.now();
   if (activityLogCache[key] && now - activityLogCache[key] < 10000) {
@@ -1487,10 +1492,12 @@ function addHistoryEntry(source) {
   }
 
   const signature = `${sourceLabel}|${details}|${meta}`;
-  if (signature === lastHistorySignature) {
+  const signatureKey = String(source || 'default');
+  if (signature === lastHistorySignatureBySource[signatureKey]) {
     return;
   }
   lastHistorySignature = signature;
+  lastHistorySignatureBySource[signatureKey] = signature;
   const loggedEl = getFieldElement(source);
   if (loggedEl) {
     lastLoggedValues[source] = loggedEl.value;
@@ -2302,6 +2309,9 @@ document.getElementById('clearHistoryBtn').addEventListener('click', () => {
   lastClearedHistory = historyEntries.slice();
   historyEntries.length = 0;
   lastHistorySignature = '';
+  Object.keys(lastHistorySignatureBySource).forEach((key) => {
+    delete lastHistorySignatureBySource[key];
+  });
   renderHistory();
   const restoreBtn = document.getElementById('restoreHistoryBtn');
   restoreBtn.style.display = 'inline-flex';
