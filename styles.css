@@ -1224,6 +1224,49 @@ body.layout-edit-mode .calc-actions-fixed {
   cursor: pointer;
 }
 
+.source-option-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.source-submenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  display: none;
+  min-width: 150px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+}
+
+.source-option-wrap-has-submenu:hover .source-submenu,
+.source-option-wrap-has-submenu:focus-within .source-submenu,
+.source-option-wrap-ebay:hover .source-submenu,
+.source-option-wrap-ebay:focus-within .source-submenu {
+  display: block;
+}
+
+.source-submenu-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 4px 0;
+  white-space: nowrap;
+}
+
+.source-submenu-option input {
+  accent-color: var(--accent);
+}
+
 .source-icon {
   width: 30px;
   height: 30px;
@@ -1233,6 +1276,34 @@ body.layout-edit-mode .calc-actions-fixed {
   object-fit: contain;
   background: rgba(255, 255, 255, 0.08);
   transition: box-shadow 0.2s ease, background-color 0.2s ease, filter 0.2s ease;
+}
+
+.source-icon.is-hidden {
+  display: none;
+}
+
+.source-icon-placeholder {
+  display: none;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 112px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  transition: box-shadow 0.2s ease, background-color 0.2s ease, filter 0.2s ease;
+}
+
+.source-option-has-placeholder .source-icon-placeholder {
+  display: inline-flex;
 }
 
 .source-option input {
@@ -1252,10 +1323,33 @@ body.layout-edit-mode .calc-actions-fixed {
   filter: saturate(0.9);
 }
 
+.source-option input:checked ~ .source-icon-placeholder {
+  background: rgba(24, 163, 74, 0.22);
+  box-shadow: 0 0 0 2px rgba(24, 163, 74, 0.35), 0 0 10px rgba(24, 163, 74, 0.35);
+}
+
+.source-option input:not(:checked) ~ .source-icon-placeholder {
+  background: rgba(209, 59, 47, 0.16);
+  box-shadow: 0 0 0 2px rgba(209, 59, 47, 0.25);
+  filter: saturate(0.9);
+}
+
 body.dark-mode .source-icon {
   background: rgba(255, 255, 255, 0.22);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4), 0 0 12px rgba(255, 255, 255, 0.6);
   filter: brightness(1.25) contrast(1.05);
+}
+
+body.dark-mode .source-icon-placeholder {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4), 0 0 12px rgba(255, 255, 255, 0.6);
+  color: #fff;
+  filter: brightness(1.15) contrast(1.05);
+}
+
+body.dark-mode .source-submenu {
+  background: rgba(20, 26, 38, 0.98);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .source-option input {
@@ -1389,6 +1483,40 @@ footer a:hover {
   flex-wrap: wrap;
 }
 
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-tab-description {
+  margin-top: -4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.admin-tab-btn {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.admin-tab-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.admin-tab-btn.is-active {
+  border-color: rgba(15, 91, 255, 0.45);
+  background: rgba(15, 91, 255, 0.1);
+  color: var(--accent);
+}
+
 .admin-links {
   display: flex;
   gap: 10px;
@@ -1444,6 +1572,311 @@ footer a:hover {
 .admin-actions button:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.source-config-controls .admin-log-field input {
+  width: 100%;
+}
+
+.source-config-controls {
+  grid-template-columns: minmax(180px, 0.7fr) minmax(260px, 1fr);
+  grid-template-areas:
+    "select name"
+    "icon icon"
+    "search search"
+    "directMode directMode"
+    "direct direct";
+  align-items: end;
+}
+
+.source-field-select { grid-area: select; }
+.source-field-name { grid-area: name; }
+.source-field-icon { grid-area: icon; }
+.source-field-search { grid-area: search; }
+.source-field-direct-mode { grid-area: directMode; }
+.source-field-direct { grid-area: direct; }
+
+.source-config-controls .admin-log-field label {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+}
+
+.source-config-controls .admin-log-field input,
+.source-config-controls .admin-log-field select {
+  min-height: 42px;
+  border-radius: 14px;
+}
+
+.source-variants-title {
+  margin: 12px 0 8px;
+  font-size: 1rem;
+}
+
+.source-token-examples {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 0.9rem;
+}
+
+.source-token-examples > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.source-token-preview {
+  margin: 10px 0 8px;
+}
+
+.source-token-preview label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.source-token-preview input {
+  width: 100%;
+}
+
+.source-token-examples ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.source-token-examples li {
+  margin: 4px 0;
+}
+
+.source-preview-line {
+  margin-top: 6px;
+}
+
+.source-preview-line code {
+  display: inline-block;
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.source-variants-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.source-variant-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.source-actions {
+  margin-top: 8px;
+}
+
+.source-actions button {
+  min-height: 38px;
+  border-radius: 12px;
+}
+
+.source-actions button.is-dirty {
+  border-color: rgba(29, 178, 95, 0.7);
+  background: rgba(29, 178, 95, 0.14);
+  color: #15924f;
+  box-shadow: 0 0 0 2px rgba(29, 178, 95, 0.2);
+}
+
+.source-actions button.is-dirty:hover {
+  border-color: rgba(29, 178, 95, 0.9);
+  color: #0f7a41;
+}
+
+#sourceConfigSaveHint.is-dirty {
+  color: #15924f;
+  font-weight: 600;
+}
+
+.source-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.source-header-row h3 {
+  margin: 0;
+}
+
+[data-admin-tab="sources"] code.has-tooltip {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+.source-insert-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.source-insert-inline-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.source-insert-inline-wrap input[type="text"] {
+  margin-bottom: 0 !important;
+  padding-right: 132px;
+}
+
+.source-insert-inline {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+}
+
+.source-insert-inline .source-insert-list {
+  top: 100%;
+  right: 0;
+  margin-top: 0;
+  min-width: 190px;
+  max-height: 240px;
+  overflow: auto;
+  z-index: 120;
+}
+
+.admin-log-field .source-insert-inline-btn {
+  min-height: 26px;
+  height: 26px;
+  width: 26px;
+  padding: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.96);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.source-insert-inline-wrap:focus-within .source-insert-inline-btn,
+.source-insert-inline-wrap:hover .source-insert-inline-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.source-insert-btn {
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.source-insert-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.source-insert-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 210px;
+  display: none;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  padding: 6px;
+  z-index: 70;
+}
+
+.source-insert-inline:hover .source-insert-list,
+.source-insert-inline:focus-within .source-insert-list {
+  display: flex;
+}
+
+.source-insert-item {
+  min-height: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  border-radius: 8px;
+  text-align: left;
+  padding: 7px 9px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.source-insert-item:hover,
+.source-insert-item:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+.source-variant-row input[type="text"] {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-2);
+  color: var(--ink);
+}
+
+.source-variant-row .source-insert-inline-wrap {
+  margin-bottom: 0;
+}
+
+.source-variant-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.source-variant-remove {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.source-variant-remove:hover {
+  border-color: #d13b2f;
+  color: #d13b2f;
 }
 
 .admin-meta {
@@ -3437,6 +3870,13 @@ footer {
     height: 28px;
   }
 
+  body[data-page-title="Kalkulator"] .source-icon-placeholder {
+    min-width: 28px;
+    height: 28px;
+    max-width: 96px;
+    font-size: 0.58rem;
+  }
+
   body[data-page-title="Kalkulator"] .collapsible-summary {
     padding: 8px 10px;
   }
@@ -3474,6 +3914,26 @@ footer {
   .layout-item.has-layout-tint {
     padding: 8px;
     border-radius: 10px;
+  }
+
+  .source-variant-row {
+    grid-template-columns: 1fr;
+  }
+
+  .source-config-controls {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "select"
+      "name"
+      "icon"
+      "search"
+      "directMode"
+      "direct";
+  }
+
+  .source-header-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

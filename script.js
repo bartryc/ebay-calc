@@ -46,6 +46,8 @@ const appVersion = appVersionEl ? appVersionEl.textContent.trim() : '';
 if (appVersion) {
   localStorage.setItem('appVersion', appVersion);
 }
+const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
+const SEARCH_SOURCES_CONFIG_CACHE_KEY = 'searchSourcesConfigV1';
 
 const INDEX_LAYOUT_STORAGE_KEY = 'indexLayoutOrderV1';
 const INDEX_LAYOUT_COOKIE_KEY = 'indexLayoutOrderV1';
@@ -1019,6 +1021,49 @@ function openSearch(urlBase, query) {
   const url = `${urlBase}${encodeURIComponent(trimmed)}`;
   window.open(url, '_blank', 'noopener');
   return true;
+}
+
+function getDefaultSearchSourcesConfig() {
+  return {
+    version: 1,
+    sources: [
+      {
+        id: 'google',
+        name: 'Google',
+        searchUrl: 'https://www.google.com/search?q={QUERY}',
+        directUrl: '',
+        directMode: 'off',
+        variants: [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }]
+      },
+      {
+        id: 'allegro',
+        name: 'Allegro',
+        searchUrl: 'https://allegro.pl/kategoria/komputery?string={PN}',
+        directUrl: '',
+        directMode: 'off',
+        variants: [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }]
+      },
+      {
+        id: 'ebay',
+        name: 'eBay',
+        searchUrl: 'https://www.ebay.com/sch/58058/i.html?_oac=1&_from=R40&_nkw={PN}',
+        directUrl: '',
+        directMode: 'off',
+        variants: [
+          { id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true },
+          { id: 'nearest', label: 'Nearest first', append: '&_sop=7', isDefault: false, resetAfterSearch: true }
+        ]
+      },
+      {
+        id: 'renewtech',
+        name: 'Renewtech',
+        searchUrl: 'https://www.renewtech.pl/#{RENEWTECH_STATE}',
+        directUrl: 'https://www.renewtech.pl/{VENDOR_SLUG}-{PN_SLUG}.html',
+        directMode: 'auto',
+        variants: [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }]
+      }
+    ]
+  };
 }
 
 function showMainToast(message, variant = 'info', durationMs) {
@@ -2347,6 +2392,8 @@ if (partNumberInput) {
   let lastSyncedPnKey = '';
   const SEARCH_SOURCES_STORAGE_KEY = 'searchSources';
   const SEARCH_SOURCES_COOKIE_KEY = 'searchSources';
+  const SEARCH_SOURCE_VARIANTS_STORAGE_KEY = 'searchSourceVariantsV1';
+  const SEARCH_SOURCE_VARIANTS_COOKIE_KEY = 'searchSourceVariantsV1';
   const searchStatus = document.getElementById('searchStatus');
   const pnSuggestion = document.getElementById('pnSuggestion');
   const reportMappingBtn = document.getElementById('reportMappingBtn');
@@ -2358,10 +2405,9 @@ if (partNumberInput) {
   const reportReason = document.getElementById('reportReason');
   const reportNonMapping = document.getElementById('reportNonMapping');
   const searchClearBtn = document.getElementById('searchClearBtn');
-  const sourceGoogle = document.getElementById('sourceGoogle');
-  const sourceAllegro = document.getElementById('sourceAllegro');
-  const sourceEbay = document.getElementById('sourceEbay');
-  const sourceRenewtech = document.getElementById('sourceRenewtech');
+  const searchSourcesContainer = document.getElementById('searchSources');
+  const sourceInputMap = new Map();
+  let searchSourcesConfig = getDefaultSearchSourcesConfig();
   const getCookieValue = (name) => {
     const prefix = `${name}=`;
     const parts = (document.cookie || '').split(';').map((item) => item.trim());
@@ -2374,18 +2420,21 @@ if (partNumberInput) {
     const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
     document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
   };
-  const getSourcesState = () => ({
-    google: !!sourceGoogle?.checked,
-    allegro: !!sourceAllegro?.checked,
-    ebay: !!sourceEbay?.checked,
-    renewtech: !!sourceRenewtech?.checked
-  });
+  const getSourcesState = () => {
+    const state = {};
+    sourceInputMap.forEach((inputEl, sourceId) => {
+      state[sourceId] = !!inputEl?.checked;
+    });
+    return state;
+  };
   const applySourcesState = (state) => {
     if (!state || typeof state !== 'object') return;
-    if (sourceGoogle && typeof state.google === 'boolean') sourceGoogle.checked = state.google;
-    if (sourceAllegro && typeof state.allegro === 'boolean') sourceAllegro.checked = state.allegro;
-    if (sourceEbay && typeof state.ebay === 'boolean') sourceEbay.checked = state.ebay;
-    if (sourceRenewtech && typeof state.renewtech === 'boolean') sourceRenewtech.checked = state.renewtech;
+    sourceInputMap.forEach((inputEl, sourceId) => {
+      if (!inputEl) return;
+      if (typeof state[sourceId] === 'boolean') {
+        inputEl.checked = state[sourceId];
+      }
+    });
   };
   const persistSourcesState = () => {
     const state = getSourcesState();
@@ -2393,19 +2442,286 @@ if (partNumberInput) {
     localStorage.setItem(SEARCH_SOURCES_STORAGE_KEY, payload);
     setCookieValue(SEARCH_SOURCES_COOKIE_KEY, payload);
   };
-  const restoreSourcesState = () => {
-    const raw = localStorage.getItem(SEARCH_SOURCES_STORAGE_KEY) || getCookieValue(SEARCH_SOURCES_COOKIE_KEY);
-    if (!raw) return;
+  const readSavedVariantsState = () => {
+    const raw = localStorage.getItem(SEARCH_SOURCE_VARIANTS_STORAGE_KEY) || getCookieValue(SEARCH_SOURCE_VARIANTS_COOKIE_KEY);
+    if (!raw) return {};
     try {
-      applySourcesState(JSON.parse(raw));
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_error) {
+      return {};
+    }
+  };
+  const persistVariantsState = (state) => {
+    const payload = JSON.stringify(state && typeof state === 'object' ? state : {});
+    localStorage.setItem(SEARCH_SOURCE_VARIANTS_STORAGE_KEY, payload);
+    setCookieValue(SEARCH_SOURCE_VARIANTS_COOKIE_KEY, payload);
+  };
+  const setSavedVariantForSource = (sourceId, variantId) => {
+    const state = readSavedVariantsState();
+    if (!sourceId) return;
+    if (variantId) {
+      state[sourceId] = String(variantId);
+    } else {
+      delete state[sourceId];
+    }
+    persistVariantsState(state);
+  };
+  const readSavedSourcesState = () => {
+    const raw = localStorage.getItem(SEARCH_SOURCES_STORAGE_KEY) || getCookieValue(SEARCH_SOURCES_COOKIE_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
     } catch (error) {
-      // ignore broken payload
+      return null;
     }
   };
   const clearSearchStatus = () => {
     if (!searchStatus) return;
     searchStatus.textContent = '';
     searchStatus.classList.remove('is-warn');
+  };
+  const getSourceConfig = (id) => {
+    const list = Array.isArray(searchSourcesConfig?.sources) ? searchSourcesConfig.sources : [];
+    return list.find((item) => item?.id === id) || null;
+  };
+  const defaultSourceIcons = {
+    google: 'resources/icon-google.svg',
+    allegro: 'resources/icon-allegro.svg',
+    ebay: 'resources/icon-ebay.svg',
+    renewtech: 'resources/icon-renewtech.webp'
+  };
+  const applySourceVisuals = () => {
+    sourceInputMap.forEach((inputEl, sourceId) => {
+      if (!inputEl || !searchSourcesContainer) return;
+      const label = inputEl.closest('.source-option');
+      if (!label) return;
+      const iconEl = label.querySelector('.source-icon');
+      if (!iconEl) return;
+      let placeholderEl = label.querySelector('.source-icon-placeholder');
+      if (!placeholderEl) {
+        placeholderEl = document.createElement('span');
+        placeholderEl.className = 'source-icon-placeholder';
+        placeholderEl.setAttribute('aria-hidden', 'true');
+        label.appendChild(placeholderEl);
+      }
+      const cfg = getSourceConfig(sourceId);
+      const sourceName = String(cfg?.name || sourceId || '').trim() || sourceId.toUpperCase();
+      const iconRaw = String(cfg?.icon || '').trim();
+      const isPlaceholder = iconRaw.toUpperCase() === 'PLACEHOLDER';
+      if (isPlaceholder) {
+        label.classList.add('source-option-has-placeholder');
+        iconEl.classList.add('is-hidden');
+        placeholderEl.textContent = sourceName;
+        placeholderEl.title = sourceName;
+        return;
+      }
+      label.classList.remove('source-option-has-placeholder');
+      iconEl.classList.remove('is-hidden');
+      placeholderEl.textContent = '';
+      placeholderEl.title = '';
+      const fallbackIcon = defaultSourceIcons[sourceId] || iconEl.getAttribute('src') || '';
+      const nextIcon = iconRaw || fallbackIcon;
+      if (nextIcon) {
+        iconEl.setAttribute('src', nextIcon);
+      }
+      if (sourceId === 'renewtech' && (!iconRaw || iconRaw === defaultSourceIcons.renewtech)) {
+        iconEl.setAttribute('data-dark-src', 'resources/icon-renewtech-white.png');
+      } else if (sourceId !== 'renewtech') {
+        iconEl.removeAttribute('data-dark-src');
+      }
+    });
+  };
+  const getSourceSubmenu = (sourceId) => searchSourcesContainer?.querySelector(`.source-option-wrap-${sourceId} .source-submenu`);
+  const renderSourceVariants = (sourceId, submenuEl, cfg) => {
+    if (!submenuEl) return;
+    const variants = Array.isArray(cfg?.variants) && cfg.variants.length
+      ? cfg.variants
+      : [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }];
+    submenuEl.innerHTML = variants.map((variant, index) => {
+      const id = `sourceSort-${sourceId}-${index + 1}`;
+      const checked = variant.isDefault || (!variants.some((v) => v.isDefault) && index === 0);
+      return `
+        <label class="source-submenu-option">
+          <input type="radio" id="${id}" name="sourceSort-${sourceId}" value="${String(variant.id || '').replace(/"/g, '&quot;')}" data-reset="${variant.resetAfterSearch !== false ? '1' : '0'}" ${checked ? 'checked' : ''}>
+          <span>${String(variant.label || variant.id || 'Wariant').replace(/</g, '&lt;')}</span>
+        </label>
+      `;
+    }).join('');
+    const savedVariants = readSavedVariantsState();
+    const inputEl = sourceInputMap.get(sourceId);
+    if (inputEl?.checked) {
+      const savedVariant = String(savedVariants[sourceId] || '');
+      if (savedVariant) {
+        const savedRadio = Array.from(submenuEl.querySelectorAll(`input[name="sourceSort-${sourceId}"]`))
+          .find((el) => String(el.value) === savedVariant);
+        if (savedRadio) savedRadio.checked = true;
+      }
+    }
+    submenuEl.querySelectorAll(`input[name="sourceSort-${sourceId}"]`).forEach((radio) => {
+      radio.addEventListener('change', () => {
+        clearSearchStatus();
+        if (radio.checked) {
+          setSavedVariantForSource(sourceId, radio.value);
+        }
+      });
+    });
+  };
+  const renderSearchSourcesUI = () => {
+    if (!searchSourcesContainer) return;
+    sourceInputMap.clear();
+    searchSourcesContainer.innerHTML = '';
+    const sourceList = Array.isArray(searchSourcesConfig?.sources)
+      ? searchSourcesConfig.sources.filter((item) => item?.enabled !== false)
+      : [];
+    sourceList.forEach((cfg) => {
+      const sourceId = String(cfg?.id || '').trim().toLowerCase();
+      if (!sourceId) return;
+      const wrap = document.createElement('div');
+      wrap.className = `source-option-wrap source-option-wrap-${sourceId}`;
+
+      const label = document.createElement('label');
+      label.className = 'source-option';
+      label.dataset.sourceId = sourceId;
+      label.title = String(cfg?.name || sourceId).trim() || sourceId;
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = `source-${sourceId}`;
+      checkbox.checked = true;
+      checkbox.addEventListener('change', () => {
+        clearSearchStatus();
+        if (checkbox.checked) {
+          resetSourceVariantMode(sourceId);
+          setSavedVariantForSource(sourceId, '');
+        } else {
+          setSavedVariantForSource(sourceId, '');
+        }
+        persistSourcesState();
+      });
+
+      const icon = document.createElement('img');
+      icon.className = 'source-icon';
+      icon.src = String(cfg?.icon || defaultSourceIcons[sourceId] || '');
+      icon.alt = '';
+      icon.setAttribute('aria-hidden', 'true');
+      if (sourceId === 'renewtech') {
+        icon.setAttribute('data-dark-src', 'resources/icon-renewtech-white.png');
+      }
+
+      label.append(checkbox, icon);
+      wrap.appendChild(label);
+      sourceInputMap.set(sourceId, checkbox);
+
+      const hasVariants = Array.isArray(cfg?.variants) && cfg.variants.length > 1;
+      if (hasVariants) {
+        wrap.classList.add('source-option-wrap-has-submenu');
+        const submenu = document.createElement('div');
+        submenu.className = 'source-submenu';
+        submenu.setAttribute('role', 'group');
+        submenu.setAttribute('aria-label', `Opcje ${String(cfg?.name || sourceId)}`);
+        wrap.appendChild(submenu);
+        renderSourceVariants(sourceId, submenu, cfg);
+      }
+
+      searchSourcesContainer.appendChild(wrap);
+    });
+    applySourcesState(readSavedSourcesState() || {});
+    persistSourcesState();
+    applySourceVisuals();
+  };
+  const normalizeSearchSourcesConfig = (rawConfig) => {
+    const defaults = getDefaultSearchSourcesConfig();
+    const incoming = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+    const list = Array.isArray(incoming.sources) ? incoming.sources : defaults.sources;
+    const normalized = list
+      .map((item) => {
+        const id = String(item?.id || '').trim().toLowerCase();
+        if (!id) return null;
+        const def = defaults.sources.find((src) => src.id === id) || {};
+        const directUrl = String(item?.directUrl ?? def.directUrl ?? '').trim();
+        const modeRaw = String(item?.directMode || '').trim().toLowerCase();
+        const inferredMode = directUrl && id === 'renewtech' ? 'auto' : (def.directMode || 'off');
+        const directMode = ['off', 'auto', 'always'].includes(modeRaw) ? modeRaw : inferredMode;
+        return {
+          ...def,
+          ...item,
+          id,
+          directUrl,
+          directMode
+        };
+      })
+      .filter(Boolean);
+    return {
+      version: Number(incoming.version) || 1,
+      sources: normalized.length ? normalized : defaults.sources
+    };
+  };
+  const loadSearchSourcesConfig = async () => {
+    const fromLocal = localStorage.getItem(SEARCH_SOURCES_CONFIG_CACHE_KEY);
+    if (fromLocal) {
+      try {
+        const parsed = JSON.parse(fromLocal);
+        if (parsed && Array.isArray(parsed.sources) && parsed.sources.length) {
+          searchSourcesConfig = normalizeSearchSourcesConfig(parsed);
+        }
+      } catch (_error) {
+        // ignore local parse error
+      }
+    }
+    if (!window.PN_MAPPINGS_API?.request) return;
+    try {
+      const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(SEARCH_SOURCES_CONFIG_NOTE_ID)}`, { method: 'GET' });
+      if (!resp.ok) return;
+      const payload = await resp.json();
+      const parsed = payload?.note ? JSON.parse(payload.note) : null;
+      if (parsed && Array.isArray(parsed.sources) && parsed.sources.length) {
+        searchSourcesConfig = normalizeSearchSourcesConfig(parsed);
+        localStorage.setItem(SEARCH_SOURCES_CONFIG_CACHE_KEY, JSON.stringify(searchSourcesConfig));
+      }
+    } catch (_error) {
+      // fallback to local/default
+    }
+  };
+  const getSourceVariantMode = (sourceId) => {
+    const checked = getSourceSubmenu(sourceId)?.querySelector(`input[name="sourceSort-${sourceId}"]:checked`);
+    return checked?.value || 'default';
+  };
+  const resetSourceVariantMode = (sourceId) => {
+    const submenu = getSourceSubmenu(sourceId);
+    const defaultRadio = submenu?.querySelector(`input[name="sourceSort-${sourceId}"][data-reset="1"]`)
+      || submenu?.querySelector(`input[name="sourceSort-${sourceId}"]`);
+    if (defaultRadio) defaultRadio.checked = true;
+  };
+  const getSourceVariantConfig = (sourceId) => {
+    const cfg = getSourceConfig(sourceId);
+    const variants = Array.isArray(cfg?.variants) ? cfg.variants : [];
+    const variantId = getSourceVariantMode(sourceId);
+    const variant = variants.find((v) => String(v?.id) === String(variantId))
+      || variants.find((v) => v?.isDefault)
+      || variants[0]
+      || null;
+    return variant;
+  };
+  const buildUrlFromTemplate = (template, values = {}) => {
+    if (!template) return '';
+    return String(template).replace(/\{([A-Z_]+)\}/g, (_match, token) => String(values[token] ?? ''));
+  };
+  const resolveSourceUrl = (cfg, templateValues, options = {}) => {
+    const searchTemplate = cfg?.searchUrl || options.fallbackSearchUrl || '';
+    const directTemplate = cfg?.directUrl || '';
+    const modeRaw = String(cfg?.directMode || '').trim().toLowerCase();
+    const mode = ['off', 'auto', 'always'].includes(modeRaw) ? modeRaw : 'off';
+    const canUseDirect = options.canUseDirect === true;
+    const searchUrl = buildUrlFromTemplate(searchTemplate, templateValues);
+    const directUrl = buildUrlFromTemplate(directTemplate, templateValues);
+    if (mode === 'always' && directUrl) {
+      return { url: directUrl, usedDirect: true };
+    }
+    if (mode === 'auto' && canUseDirect && directUrl) {
+      return { url: directUrl, usedDirect: true };
+    }
+    return { url: searchUrl, usedDirect: false };
   };
 
   const updatePnSuggestion = () => {
@@ -2483,11 +2799,9 @@ if (partNumberInput) {
   };
   const runSearchAll = () => {
     const query = normalizeSearchText(partNumberInput.value);
-    const sources = [];
-    if (sourceGoogle?.checked) sources.push('google');
-    if (sourceEbay?.checked) sources.push('ebay');
-    if (sourceAllegro?.checked) sources.push('allegro');
-    if (sourceRenewtech?.checked) sources.push('renewtech');
+    const sources = Array.from(sourceInputMap.entries())
+      .filter(([, inputEl]) => !!inputEl?.checked)
+      .map(([sourceId]) => sourceId);
     if (!sources.length) {
       showMainToast('Wybierz minimum jedno źródło wyszukiwania.', 'warn');
       return false;
@@ -2502,53 +2816,75 @@ if (partNumberInput) {
     }
     lastSearchQuery = query;
     clearSearchStatus();
-    if (sources.includes('google')) {
-      const vendor = normalizeSearchText(partNumberInput.dataset.suggestionVendor || '');
-      let pn = query;
-      if (vendor && pn.toLowerCase().startsWith(`${vendor.toLowerCase()} `)) {
-        pn = normalizeSearchText(pn.slice(vendor.length));
-      }
-      if (!pn) pn = query;
-      const hasSpaces = /\s/.test(pn);
-      const googleQuery = vendor
-        ? (hasSpaces ? `${vendor} ${pn}` : `${vendor} "${pn}"`)
-        : (hasSpaces ? pn : `"${pn}"`);
-      openSearch('https://www.google.com/search?q=', googleQuery);
+    const vendor = normalizeSearchText(partNumberInput.dataset.suggestionVendor || '');
+    let pn = query;
+    if (vendor && pn.toLowerCase().startsWith(`${vendor.toLowerCase()} `)) {
+      pn = normalizeSearchText(pn.slice(vendor.length));
     }
-    if (sources.includes('ebay')) {
-      openSearch('https://www.ebay.com/sch/58058/i.html?_oac=1&_from=R40&_nkw=', query);
-    }
-    if (sources.includes('allegro')) {
-      openSearch('https://allegro.pl/kategoria/komputery?string=', query);
-    }
-    if (sources.includes('renewtech')) {
-      let vendorRaw = normalizeSearchText(partNumberInput.dataset.suggestionVendor || '');
-      const suggestionValue = partNumberInput.dataset.suggestion || '';
-      if (!vendorRaw && suggestionValue) {
-        vendorRaw = normalizeSearchText(suggestionValue.split(/\s+/)[0] || '');
+    if (!pn) pn = query;
+    const googleQuery = vendor
+      ? `${vendor} ${pn}`
+      : pn;
+    const vendorSlug = vendor.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const pnSlug = (pn || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9-]/g, '');
+    const renewtechState = encodeURIComponent(JSON.stringify({
+      'hr-search': {
+        search_term: pn || query,
+        filters: [],
+        sorting: [],
+        offsets: { product: 42 }
       }
-      let pn = query;
-      if (vendorRaw && pn.toLowerCase().startsWith(`${vendorRaw.toLowerCase()} `)) {
-        pn = normalizeSearchText(pn.slice(vendorRaw.length));
-      }
-      const vendorSlug = vendorRaw.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      const pnSlug = (pn || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9-]/g, '');
-      if (vendorSlug && pnSlug) {
-        const direct = `https://www.renewtech.pl/${vendorSlug}-${pnSlug}.html`;
-        window.open(direct, '_blank', 'noopener');
-      } else {
-        const state = {
-          'hr-search': {
-            search_term: pn || query,
-            filters: [],
-            sorting: [],
-            offsets: { product: 42 }
-          }
-        };
-        openSearch('https://www.renewtech.pl/#', JSON.stringify(state));
-      }
-    }
-    logActivity('search', { query, sources });
+    }));
+    const queryPlus = googleQuery
+      .replace(/"/g, '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => encodeURIComponent(part))
+      .join('+');
+
+    const templateValues = {
+      PN: encodeURIComponent(pn || query),
+      PN_RAW: encodeURIComponent(partNumberInput.value || ''),
+      QUERY: encodeURIComponent(googleQuery),
+      QUERY_PLUS: queryPlus,
+      VENDOR: encodeURIComponent(vendor || ''),
+      VENDOR_SLUG: vendorSlug,
+      PN_SLUG: pnSlug,
+      RENEWTECH_STATE: renewtechState
+    };
+    const sourceVariantsUsed = {};
+    const calledUrls = {};
+    sources.forEach((sourceId) => {
+      const cfg = getSourceConfig(sourceId) || {};
+      let fallbackSearchUrl = cfg.searchUrl || 'https://www.google.com/search?q={QUERY}';
+      if (sourceId === 'google') fallbackSearchUrl = 'https://www.google.com/search?q={QUERY}';
+      if (sourceId === 'ebay') fallbackSearchUrl = 'https://www.ebay.com/sch/58058/i.html?_oac=1&_from=R40&_nkw={PN}';
+      if (sourceId === 'allegro') fallbackSearchUrl = 'https://allegro.pl/kategoria/komputery?string={PN}';
+      if (sourceId === 'renewtech') fallbackSearchUrl = 'https://www.renewtech.pl/#{RENEWTECH_STATE}';
+
+      const variant = getSourceVariantConfig(sourceId);
+      sourceVariantsUsed[sourceId] = String(variant?.id || 'default');
+      const resolved = resolveSourceUrl(cfg, templateValues, {
+        fallbackSearchUrl,
+        canUseDirect: !!(vendorSlug && pnSlug)
+      });
+      let url = resolved.url || '';
+      const append = String(variant?.append || '');
+      if (append) url = `${url}${append}`;
+      calledUrls[sourceId] = {
+        url,
+        mode: resolved.usedDirect ? 'direct' : 'search',
+        variant: String(variant?.id || 'default')
+      };
+      if (url) window.open(url, '_blank', 'noopener');
+    });
+    logActivity('search', {
+      query,
+      sources,
+      variants: sourceVariantsUsed,
+      calledUrls
+    });
     return true;
   };
   document.getElementById('searchAllBtn').addEventListener('click', () => {
@@ -2563,13 +2899,17 @@ if (partNumberInput) {
       partNumberInput.focus();
     });
   }
-  [sourceGoogle, sourceAllegro, sourceEbay, sourceRenewtech].forEach((checkbox) => {
-    if (!checkbox) return;
-    checkbox.addEventListener('change', () => {
-      clearSearchStatus();
-      persistSourcesState();
+  let lastSourcesRefreshAt = 0;
+  const refreshSearchSourcesConfig = () => {
+    const now = Date.now();
+    if (now - lastSourcesRefreshAt < 10_000) return;
+    lastSourcesRefreshAt = now;
+    loadSearchSourcesConfig().finally(() => {
+      renderSearchSourcesUI();
     });
-  });
+  };
+  refreshSearchSourcesConfig();
+  window.addEventListener('focus', refreshSearchSourcesConfig);
   partNumberInput.addEventListener('keydown', (event) => {
     if (event.key === 'Tab') {
       const suggestionValue = partNumberInput.dataset.suggestion;
@@ -2597,7 +2937,6 @@ if (partNumberInput) {
     scheduleMappingsSync();
   });
   updatePnSuggestion();
-  restoreSourcesState();
   if (window.PN_MAPPINGS_API?.load) {
     window.PN_MAPPINGS_API.load().then(() => {
       updatePnSuggestion();

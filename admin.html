@@ -60,8 +60,17 @@
         </div>
       </div>
 
+      <div class="admin-tabs" role="tablist" aria-label="Sekcje panelu admina">
+        <button type="button" class="admin-tab-btn is-active" data-admin-tab-btn="logs" role="tab" aria-selected="true">Logi</button>
+        <button type="button" class="admin-tab-btn" data-admin-tab-btn="reports" role="tab" aria-selected="false">Zgłoszenia</button>
+        <button type="button" class="admin-tab-btn" data-admin-tab-btn="mappings" role="tab" aria-selected="false">Mapowania</button>
+        <button type="button" class="admin-tab-btn" data-admin-tab-btn="sources" role="tab" aria-selected="false">Źródła</button>
+        <button type="button" class="admin-tab-btn" data-admin-tab-btn="presets" role="tab" aria-selected="false">Presety</button>
+      </div>
+      <div id="adminTabDescription" class="admin-tab-description"></div>
+
       <div class="admin-grid">
-        <div class="admin-card">
+        <div class="admin-card" data-admin-tab="logs">
           <h3>Backup mapowań</h3>
           <p>Zapisz bieżące mapowania do pliku JSON. Przyda się przed większymi zmianami.</p>
           <div class="admin-actions">
@@ -71,7 +80,7 @@
           <div class="admin-meta">Ostatni backup: <span id="lastBackupValue">brak</span></div>
         </div>
 
-        <div class="admin-card">
+        <div class="admin-card" data-admin-tab="logs">
           <h3>Backup logów</h3>
           <p>Bezpieczna kopia historii działań w KV. Pozwala szybko odtworzyć logi.</p>
           <div class="backup-status">Status: <strong id="logsBackupStatus">Sprawdzam…</strong></div>
@@ -82,7 +91,7 @@
           <div class="admin-meta">Ostatni backup logów: <span id="logsBackupTs">brak</span></div>
         </div>
 
-        <div class="admin-card">
+        <div class="admin-card" data-admin-tab="logs">
           <h3>Przywracanie</h3>
           <p>Wczytaj plik JSON i nadpisz mapowania w bazie.</p>
           <div class="admin-actions">
@@ -91,7 +100,7 @@
           <div class="admin-meta warn">Uwaga: przywrócenie backupu nadpisuje bieżące mapowania.</div>
         </div>
 
-        <div class="admin-card">
+        <div class="admin-card" data-admin-tab="logs">
           <h3>Aktualizacja logów</h3>
           <p>Podnieś starsze zgłoszenia do nowego formatu (kind/reportId).</p>
           <div class="admin-actions">
@@ -101,8 +110,8 @@
           <div class="admin-meta">Pokaże listę zmian przed zapisaniem.</div>
         </div>
 
-        <div class="admin-card admin-card-wide">
-          <details id="layoutPresetSection">
+        <div class="admin-card admin-card-wide" data-admin-tab="presets">
+          <details id="layoutPresetSection" open>
             <summary class="report-summary">
               <span>Kreator presetów układu</span>
             </summary>
@@ -133,7 +142,7 @@
         </div>
 
 
-        <div class="admin-card admin-card-wide">
+        <div class="admin-card admin-card-wide" data-admin-tab="mappings">
           <h3>Status mapowań</h3>
           <div class="admin-kpis">
             <div class="admin-kpi">
@@ -152,8 +161,8 @@
           <div class="admin-meta">Ostatnia synchronizacja: <span id="lastSyncValue">—</span></div>
         </div>
 
-        <div class="admin-card admin-card-wide">
-          <details id="reportSection">
+        <div class="admin-card admin-card-wide" data-admin-tab="reports">
+          <details id="reportSection" open>
             <summary class="report-summary">
               <span>Zgłoszenia</span>
               <span class="report-count" id="reportCount">0</span>
@@ -171,8 +180,8 @@
           </details>
         </div>
 
-        <div class="admin-card admin-card-wide">
-          <details id="logSection">
+        <div class="admin-card admin-card-wide" data-admin-tab="logs">
+          <details id="logSection" open>
             <summary class="report-summary">
               <span>Historia operacji</span>
               <span class="report-count" id="logCount">0</span>
@@ -221,15 +230,118 @@
           </details>
         </div>
 
-        <div class="admin-card admin-card-wide">
-          <h3>Wskazówki</h3>
-          <ul class="admin-list">
-            <li>`x` = jedna cyfra, `*` = jeden dowolny znak, `+` = dowolny ciąg znaków.</li>
-            <li>Po dużej edycji wykonaj backup, żeby nie stracić reguł.</li>
-            <li>Backup przechowuj lokalnie z nazwą daty dla szybkiego przywrócenia.</li>
-            <li>Jeśli coś wygląda podejrzanie, sprawdź logi IP i User-Agent.</li>
-            <li>Dodawaj wzorce od najbardziej szczegółowych do ogólnych.</li>
-          </ul>
+        <div class="admin-card admin-card-wide" data-admin-tab="sources">
+          <div class="source-header-row">
+            <h3>Źródła wyszukiwania</h3>
+          </div>
+          <p>
+            Zarządzaj URL-ami i wariantami. Dostępne znaczniki:
+            <code class="has-tooltip" data-tooltip="Part Number po normalizacji (bez zbędnych spacji).">{PN}</code>,
+            <code class="has-tooltip" data-tooltip="Gotowe zapytanie do wyszukiwarki (np. producent + PN, bez automatycznych cudzysłowów).">{QUERY}</code>,
+            <code class="has-tooltip" data-tooltip="Producent wykryty z mapowań PN.">{VENDOR}</code>,
+            <code class="has-tooltip" data-tooltip="Surowy wpis użytkownika dokładnie tak, jak został podany.">{PN_RAW}</code>,
+            <code class="has-tooltip" data-tooltip="Producent jako slug URL (małe litery, myślniki).">{VENDOR_SLUG}</code>,
+            <code class="has-tooltip" data-tooltip="PN jako slug URL (uproszczony pod bezpośrednie linki).">{PN_SLUG}</code>,
+            <code class="has-tooltip" data-tooltip="Zapytanie jak {QUERY}, ale bez cudzysłowów i ze spacjami zamienionymi na +.">{QUERY_PLUS}</code>.
+          </p>
+          <details class="source-token-examples">
+            <summary>Przykłady użycia znaczników</summary>
+            <div class="source-token-preview">
+              <label for="sourceTokenPreviewInput">Fraza testowa (np. `Dell R7515` albo sam `R7515`)</label>
+              <input type="text" id="sourceTokenPreviewInput" placeholder="Wpisz frazę do podglądu podstawień">
+            </div>
+            <div id="tokenPreviewDetected" class="admin-meta">Wykrywanie producenta: —</div>
+            <ul>
+              <li><code>{PN}</code> → <code id="tokenPreviewPn">MCX653106A-ECAT</code> (URL-encoded)</li>
+              <li><code>{PN_RAW}</code> → <code id="tokenPreviewPnRaw">HPE ProLiant MCX653106A-ECAT</code> (URL-encoded)</li>
+              <li><code>{VENDOR}</code> → <code id="tokenPreviewVendor">HPE ProLiant</code> (URL-encoded)</li>
+              <li><code>{VENDOR_SLUG}</code> → <code id="tokenPreviewVendorSlug">hpe-proliant</code></li>
+              <li><code>{PN_SLUG}</code> → <code id="tokenPreviewPnSlug">mcx653106a-ecat</code></li>
+              <li><code>{QUERY}</code> → <code id="tokenPreviewQuery">HPE ProLiant MCX653106A-ECAT</code> (URL-encoded)</li>
+              <li><code>{QUERY_PLUS}</code> → <code id="tokenPreviewQueryPlus">HPE+ProLiant+MCX653106A-ECAT</code></li>
+            </ul>
+            <div class="admin-meta">`slug` = wersja tekstu uproszczona do URL: małe litery, spacje zamienione na `-`, znaki specjalne usunięte.</div>
+          </details>
+          <div class="admin-log-controls source-config-controls">
+            <div class="admin-log-field source-field source-field-select">
+              <label for="sourceConfigSelect">Źródło</label>
+              <select id="sourceConfigSelect"></select>
+            </div>
+            <div class="admin-log-field admin-log-field-wide source-field source-field-name">
+              <label for="sourceConfigName">Nazwa</label>
+              <input type="text" id="sourceConfigName" maxlength="64" placeholder="Np. eBay">
+            </div>
+            <div class="admin-log-field admin-log-field-wide source-field source-field-icon">
+              <label for="sourceConfigIcon">Ikona (URL/ścieżka)</label>
+              <input type="text" id="sourceConfigIcon" maxlength="200" placeholder="resources/icon-ebay.svg">
+              <div class="admin-meta">Wpisz <code>PLACEHOLDER</code>, aby zamiast ikonki pokazać tekstowy badge z nazwą źródła.</div>
+            </div>
+            <div class="admin-log-field admin-log-field-wide source-field source-field-search">
+              <label for="sourceConfigSearchUrl">URL wyszukiwania</label>
+              <div class="source-insert-inline-wrap">
+                <input type="text" id="sourceConfigSearchUrl" maxlength="500" placeholder="https://...{PN}">
+                <div class="source-insert-dropdown source-insert-inline" data-insert-for="sourceConfigSearchUrl">
+                  <button type="button" class="source-insert-btn source-insert-inline-btn">{+}</button>
+                  <div class="source-insert-list" role="menu" aria-label="Znaczniki do wstawienia">
+                    <button type="button" class="source-insert-item" data-token="{PN}" role="menuitem">{PN}</button>
+                    <button type="button" class="source-insert-item" data-token="{QUERY}" role="menuitem">{QUERY}</button>
+                    <button type="button" class="source-insert-item" data-token="{VENDOR}" role="menuitem">{VENDOR}</button>
+                    <button type="button" class="source-insert-item" data-token="{PN_RAW}" role="menuitem">{PN_RAW}</button>
+                    <button type="button" class="source-insert-item" data-token="{VENDOR_SLUG}" role="menuitem">{VENDOR_SLUG}</button>
+                    <button type="button" class="source-insert-item" data-token="{PN_SLUG}" role="menuitem">{PN_SLUG}</button>
+                    <button type="button" class="source-insert-item" data-token="{QUERY_PLUS}" role="menuitem">{QUERY_PLUS}</button>
+                  </div>
+                </div>
+              </div>
+              <div class="admin-meta source-preview-line">
+                Podgląd: <code id="sourcePreviewSearchUrl">—</code>
+              </div>
+            </div>
+            <div class="admin-log-field source-field source-field-direct-mode">
+              <label for="sourceConfigDirectMode">Tryb URL bezpośredniego</label>
+              <select id="sourceConfigDirectMode">
+                <option value="off">Wyłączony (zawsze URL wyszukiwania)</option>
+                <option value="auto">Auto (tylko gdy wykryto producent + PN)</option>
+                <option value="always">Zawsze (gdy URL bezpośredni jest ustawiony)</option>
+              </select>
+            </div>
+            <div class="admin-log-field admin-log-field-wide source-field source-field-direct">
+              <label for="sourceConfigDirectUrl">URL bezpośredni (opcjonalnie)</label>
+              <div class="source-insert-inline-wrap">
+                <input type="text" id="sourceConfigDirectUrl" maxlength="500" placeholder="https://...{VENDOR}-{PN}.html">
+                <div class="source-insert-dropdown source-insert-inline" data-insert-for="sourceConfigDirectUrl">
+                  <button type="button" class="source-insert-btn source-insert-inline-btn">{+}</button>
+                  <div class="source-insert-list" role="menu" aria-label="Znaczniki do wstawienia">
+                    <button type="button" class="source-insert-item" data-token="{PN}" role="menuitem">{PN}</button>
+                    <button type="button" class="source-insert-item" data-token="{QUERY}" role="menuitem">{QUERY}</button>
+                    <button type="button" class="source-insert-item" data-token="{VENDOR}" role="menuitem">{VENDOR}</button>
+                    <button type="button" class="source-insert-item" data-token="{PN_RAW}" role="menuitem">{PN_RAW}</button>
+                    <button type="button" class="source-insert-item" data-token="{VENDOR_SLUG}" role="menuitem">{VENDOR_SLUG}</button>
+                    <button type="button" class="source-insert-item" data-token="{PN_SLUG}" role="menuitem">{PN_SLUG}</button>
+                    <button type="button" class="source-insert-item" data-token="{QUERY_PLUS}" role="menuitem">{QUERY_PLUS}</button>
+                  </div>
+                </div>
+              </div>
+              <div class="admin-meta source-preview-line">
+                Podgląd: <code id="sourcePreviewDirectUrl">—</code>
+              </div>
+            </div>
+          </div>
+          <div id="sourceConfigDirectHint" class="admin-meta">
+            Warunek: używany będzie URL wyszukiwania.
+          </div>
+
+          <h4 class="source-variants-title">Warianty (radio)</h4>
+          <div id="sourceVariantsList" class="source-variants-list"></div>
+          <div class="admin-actions source-actions">
+            <button type="button" id="sourceConfigNewBtn">Nowe źródło</button>
+            <button type="button" id="sourceVariantAddBtn">Dodaj wariant</button>
+            <button type="button" id="sourceConfigSaveBtn">Zapisz źródło</button>
+            <button type="button" id="sourceConfigDeleteBtn">Usuń źródło</button>
+            <button type="button" id="sourceConfigSaveAllBtn">Zapisz konfigurację</button>
+          </div>
+          <div id="sourceConfigSaveHint" class="admin-meta">Brak niezapisanych zmian.</div>
+          <div class="admin-meta">Zmiany zapisują się globalnie i są czytane przez kalkulator.</div>
         </div>
       </div>
 
@@ -391,7 +503,44 @@
     const layoutPresetItems = document.getElementById('layoutPresetItems');
     const layoutPresetSaveBtn = document.getElementById('layoutPresetSaveBtn');
     const layoutPresetDeleteBtn = document.getElementById('layoutPresetDeleteBtn');
+    const adminTabButtons = Array.from(document.querySelectorAll('[data-admin-tab-btn]'));
+    const adminTabCards = Array.from(document.querySelectorAll('[data-admin-tab]'));
+    const sourceConfigSelect = document.getElementById('sourceConfigSelect');
+    const sourceConfigName = document.getElementById('sourceConfigName');
+    const sourceConfigIcon = document.getElementById('sourceConfigIcon');
+    const sourceConfigSearchUrl = document.getElementById('sourceConfigSearchUrl');
+    const sourceConfigDirectMode = document.getElementById('sourceConfigDirectMode');
+    const sourceConfigDirectUrl = document.getElementById('sourceConfigDirectUrl');
+    const sourceConfigDirectHint = document.getElementById('sourceConfigDirectHint');
+    const sourceVariantsList = document.getElementById('sourceVariantsList');
+    const sourceConfigNewBtn = document.getElementById('sourceConfigNewBtn');
+    const sourceVariantAddBtn = document.getElementById('sourceVariantAddBtn');
+    const sourceConfigSaveBtn = document.getElementById('sourceConfigSaveBtn');
+    const sourceConfigDeleteBtn = document.getElementById('sourceConfigDeleteBtn');
+    const sourceConfigSaveAllBtn = document.getElementById('sourceConfigSaveAllBtn');
+    const sourceConfigSaveHint = document.getElementById('sourceConfigSaveHint');
+    const sourceTokenPreviewInput = document.getElementById('sourceTokenPreviewInput');
+    const tokenPreviewPn = document.getElementById('tokenPreviewPn');
+    const tokenPreviewPnRaw = document.getElementById('tokenPreviewPnRaw');
+    const tokenPreviewVendor = document.getElementById('tokenPreviewVendor');
+    const tokenPreviewVendorSlug = document.getElementById('tokenPreviewVendorSlug');
+    const tokenPreviewPnSlug = document.getElementById('tokenPreviewPnSlug');
+    const tokenPreviewQuery = document.getElementById('tokenPreviewQuery');
+    const tokenPreviewQueryPlus = document.getElementById('tokenPreviewQueryPlus');
+    const tokenPreviewDetected = document.getElementById('tokenPreviewDetected');
+    const sourcePreviewSearchUrl = document.getElementById('sourcePreviewSearchUrl');
+    const sourcePreviewDirectUrl = document.getElementById('sourcePreviewDirectUrl');
+    const adminTabDescription = document.getElementById('adminTabDescription');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
+    const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
+    const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
+    const ADMIN_TAB_DESCRIPTIONS = {
+      logs: 'Backupy, przywracanie, migracje i pełna historia operacji.',
+      reports: 'Obsługa zgłoszeń mapowań oraz błędów działania strony.',
+      mappings: 'Szybki podgląd liczby wpisów exact/wzorce.',
+      sources: 'Konfiguracja URL-i wyszukiwania, ikon i wariantów źródeł.',
+      presets: 'Globalne presety układu widoczne dla wszystkich użytkowników.'
+    };
     const LAYOUT_SECTION_SCHEMA = [
       { id: 'calc-presets', label: 'Presety waluta/VAT', column: 'calc' },
       { id: 'calc-netto', label: 'Kwota netto', column: 'calc' },
@@ -414,6 +563,9 @@
     let pendingReportApply = null;
     let pendingReportDismiss = null;
     let pendingReportRetype = null;
+    let sourceConfig = null;
+    let sourceConfigDirty = false;
+    let isSourceEditorFilling = false;
     const exactCountEl = document.getElementById('exactCount');
     const patternCountEl = document.getElementById('patternCount');
     const totalCountEl = document.getElementById('totalCount');
@@ -433,6 +585,146 @@
       const base = normalizePn(value);
       if (!stripSpecial) return base;
       return base.replace(/[^A-Z0-9-]/g, '');
+    }
+
+    function toSlug(value) {
+      return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    }
+
+    function getBestPatternMatchForPreview(patterns, normalized) {
+      if (!Array.isArray(patterns) || !window.PN_MAPPINGS_API?.matchPattern) return null;
+      const scored = [];
+      for (const rule of patterns) {
+        if (!rule?.pattern || !rule?.vendor) continue;
+        if (!window.PN_MAPPINGS_API.matchPattern(rule.pattern, normalized)) continue;
+        const pattern = window.PN_MAPPINGS_API.normalizePattern
+          ? window.PN_MAPPINGS_API.normalizePattern(String(rule.pattern))
+          : String(rule.pattern);
+        let literalCount = 0;
+        let wildcardCount = 0;
+        for (const char of pattern) {
+          if (char === 'x' || char === '*' || char === '+') wildcardCount += 1;
+          else literalCount += 1;
+        }
+        scored.push({
+          vendor: String(rule.vendor || '').trim(),
+          pattern,
+          literalCount,
+          wildcardCount,
+          length: pattern.length
+        });
+      }
+      if (!scored.length) return null;
+      scored.sort((a, b) => {
+        if (b.literalCount !== a.literalCount) return b.literalCount - a.literalCount;
+        if (b.length !== a.length) return b.length - a.length;
+        return a.wildcardCount - b.wildcardCount;
+      });
+      return scored[0];
+    }
+
+    function resolvePreviewVendor(pnNormalizedRaw) {
+      const normalized = normalizePn(pnNormalizedRaw);
+      if (!normalized) return { vendor: '', source: '', detail: '' };
+      if (/^\d{6}-\d{3}$/.test(normalized)) {
+        return { vendor: 'HPE', source: 'rule', detail: 'xxxxxx-xxx' };
+      }
+      const data = window.PN_MAPPINGS_API?.get?.() || { exact: {}, patterns: [] };
+      const exactVendor = window.PN_MAPPINGS_API?.getExactVendor
+        ? window.PN_MAPPINGS_API.getExactVendor(data, normalized)
+        : data?.exact?.[normalized];
+      if (exactVendor) {
+        return { vendor: String(exactVendor).trim(), source: 'exact', detail: normalized };
+      }
+      const best = getBestPatternMatchForPreview(data?.patterns, normalized);
+      if (best?.vendor) {
+        return { vendor: best.vendor, source: 'pattern', detail: best.pattern };
+      }
+      const hasMappings = (data?.exact && Object.keys(data.exact).length > 0)
+        || (Array.isArray(data?.patterns) && data.patterns.length > 0);
+      if (hasMappings) return { vendor: '', source: '', detail: '' };
+      if (normalized.length === 5) return { vendor: 'Dell', source: 'fallback', detail: 'xxxxx' };
+      if (normalized.length === 6 && normalized.startsWith('0')) return { vendor: 'Dell', source: 'fallback', detail: '0xxxxx' };
+      if (/^\d{5}-\d{3}$/.test(normalized)) return { vendor: 'HPE', source: 'fallback', detail: 'xxxxx-xxx' };
+      return { vendor: '', source: '', detail: '' };
+    }
+
+    function applySourceTemplate(template, values) {
+      return String(template || '').replace(/\{([A-Z_]+)\}/g, (_match, token) => String(values?.[token] ?? ''));
+    }
+
+    function updateSourceTokenPreview() {
+      const raw = String(sourceTokenPreviewInput?.value || '').trim();
+      const defaultPhrase = 'HPE ProLiant MCX653106A-ECAT';
+      const phrase = raw || defaultPhrase;
+      const phraseCompact = phrase.replace(/\s+/g, ' ').trim();
+      const parts = phraseCompact.split(' ').filter(Boolean);
+      const manualVendor = parts.length > 1 ? parts.slice(0, -1).join(' ') : '';
+      const pnCandidate = parts.length > 1 ? parts[parts.length - 1] : phraseCompact;
+      const resolved = resolvePreviewVendor(pnCandidate) || resolvePreviewVendor(phraseCompact);
+      const vendor = resolved.vendor || manualVendor || '';
+      const sourceDetail = resolved.detail ? ` (${resolved.detail})` : '';
+      if (tokenPreviewDetected) {
+        tokenPreviewDetected.textContent = vendor
+          ? `Wykrywanie producenta: ${vendor} • źródło: ${resolved.source || 'manual'}${sourceDetail}`
+          : 'Wykrywanie producenta: brak dopasowania mapowania';
+      }
+      const pnNormalized = pnCandidate.replace(/\s+/g, ' ').trim();
+      const query = vendor
+        ? `${vendor} ${pnNormalized}`
+        : pnNormalized;
+
+      if (tokenPreviewPn) tokenPreviewPn.textContent = encodeURIComponent(pnNormalized || '');
+      if (tokenPreviewPnRaw) tokenPreviewPnRaw.textContent = encodeURIComponent(phrase);
+      if (tokenPreviewVendor) tokenPreviewVendor.textContent = encodeURIComponent(vendor || '');
+      if (tokenPreviewVendorSlug) tokenPreviewVendorSlug.textContent = toSlug(vendor);
+      if (tokenPreviewPnSlug) tokenPreviewPnSlug.textContent = toSlug(pnNormalized);
+      if (tokenPreviewQuery) tokenPreviewQuery.textContent = encodeURIComponent(query);
+      const queryPlus = query
+        .replace(/"/g, '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => encodeURIComponent(part))
+        .join('+');
+      if (tokenPreviewQueryPlus) tokenPreviewQueryPlus.textContent = queryPlus;
+
+      const vendorSlug = toSlug(vendor);
+      const pnSlug = toSlug(pnNormalized);
+      const renewtechState = encodeURIComponent(JSON.stringify({
+        'hr-search': {
+          search_term: pnNormalized || phraseCompact || '',
+          filters: [],
+          sorting: [],
+          offsets: { product: 42 }
+        }
+      }));
+      const templateValues = {
+        PN: encodeURIComponent(pnNormalized || ''),
+        PN_RAW: encodeURIComponent(phraseCompact || ''),
+        QUERY: encodeURIComponent(query || ''),
+        QUERY_PLUS: queryPlus,
+        VENDOR: encodeURIComponent(vendor || ''),
+        VENDOR_SLUG: vendorSlug,
+        PN_SLUG: pnSlug,
+        RENEWTECH_STATE: renewtechState
+      };
+      const previewSearchRaw = String(sourceConfigSearchUrl?.value || '').trim();
+      const previewDirectRaw = String(sourceConfigDirectUrl?.value || '').trim();
+      const previewSearch = previewSearchRaw ? applySourceTemplate(previewSearchRaw, templateValues) : '';
+      const previewDirect = previewDirectRaw ? applySourceTemplate(previewDirectRaw, templateValues) : '';
+      if (sourcePreviewSearchUrl) {
+        sourcePreviewSearchUrl.textContent = previewSearch || '—';
+      }
+      if (sourcePreviewDirectUrl) {
+        sourcePreviewDirectUrl.textContent = previewDirect || '—';
+      }
     }
 
     function longestCommonPrefix(values) {
@@ -583,8 +875,9 @@
       const data = window.PN_MAPPINGS_API.get();
       const vendors = new Set();
       const exact = data?.exact || {};
-      Object.values(exact).forEach((val) => {
-        if (val) vendors.add(String(val).trim());
+      Object.entries(exact).forEach(([key]) => {
+        const vendor = window.PN_MAPPINGS_API.getExactVendor(data, key);
+        if (vendor) vendors.add(String(vendor).trim());
       });
       const patterns = Array.isArray(data?.patterns) ? data.patterns : [];
       patterns.forEach((p) => {
@@ -598,6 +891,444 @@
         ${sorted.map((v) => `<option value="${v}">${v}</option>`).join('')}
       `;
       patternVendorSelect.value = sorted.includes(current) ? current : (current === '__custom__' ? current : '');
+    }
+
+    function createDefaultSourcesConfig() {
+      return {
+        version: 1,
+        sources: [
+          {
+            id: 'google',
+            name: 'Google',
+            icon: 'resources/icon-google.svg',
+            enabled: true,
+            searchUrl: 'https://www.google.com/search?q={QUERY}',
+            directUrl: '',
+            directMode: 'off',
+            variants: [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }]
+          },
+          {
+            id: 'allegro',
+            name: 'Allegro',
+            icon: 'resources/icon-allegro.svg',
+            enabled: true,
+            searchUrl: 'https://allegro.pl/kategoria/komputery?string={PN}',
+            directUrl: '',
+            directMode: 'off',
+            variants: [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }]
+          },
+          {
+            id: 'ebay',
+            name: 'eBay',
+            icon: 'resources/icon-ebay.svg',
+            enabled: true,
+            searchUrl: 'https://www.ebay.com/sch/58058/i.html?_oac=1&_from=R40&_nkw={PN}',
+            directUrl: '',
+            directMode: 'off',
+            variants: [
+              { id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true },
+              { id: 'nearest', label: 'Nearest first', append: '&_sop=7', isDefault: false, resetAfterSearch: true }
+            ]
+          },
+          {
+            id: 'renewtech',
+            name: 'Renewtech',
+            icon: 'resources/icon-renewtech.webp',
+            enabled: true,
+            searchUrl: 'https://www.renewtech.pl/#{RENEWTECH_STATE}',
+            directUrl: 'https://www.renewtech.pl/{VENDOR_SLUG}-{PN_SLUG}.html',
+            directMode: 'auto',
+            variants: [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }]
+          }
+        ]
+      };
+    }
+
+    function normalizeSourceVariant(item) {
+      const id = String(item?.id || '').trim() || `v-${Math.random().toString(36).slice(2, 7)}`;
+      const label = String(item?.label || '').trim() || id;
+      const append = String(item?.append || '').trim();
+      return {
+        id,
+        label,
+        append,
+        isDefault: !!item?.isDefault,
+        resetAfterSearch: item?.resetAfterSearch !== false
+      };
+    }
+
+    function normalizeSourcesConfig(raw) {
+      const base = createDefaultSourcesConfig();
+      const incoming = raw && typeof raw === 'object' ? raw : {};
+      const list = Array.isArray(incoming.sources) ? incoming.sources : base.sources;
+      const normalized = {
+        version: Number.isFinite(Number(incoming.version)) ? Number(incoming.version) : 1,
+        sources: list.map((item) => {
+          const id = String(item?.id || '').trim().toLowerCase();
+          const name = String(item?.name || '').trim() || id;
+          const icon = String(item?.icon || '').trim();
+          const searchUrl = String(item?.searchUrl || '').trim();
+          const directUrl = String(item?.directUrl || '').trim();
+          const modeRaw = String(item?.directMode || '').trim().toLowerCase();
+          const inferredMode = directUrl && id === 'renewtech' ? 'auto' : 'off';
+          const directMode = ['off', 'auto', 'always'].includes(modeRaw) ? modeRaw : inferredMode;
+          const variantsRaw = Array.isArray(item?.variants) ? item.variants : [];
+          const variants = variantsRaw.map(normalizeSourceVariant);
+          if (!variants.length) {
+            variants.push({ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true });
+          }
+          if (!variants.some((v) => v.isDefault)) variants[0].isDefault = true;
+          return { id, name, icon, enabled: item?.enabled !== false, searchUrl, directUrl, directMode, variants };
+        }).filter((item) => item.id)
+      };
+      if (!normalized.sources.length) return base;
+      return normalized;
+    }
+
+    function updateSourceSaveUi() {
+      const isDirty = !!sourceConfigDirty;
+      [sourceConfigSaveBtn, sourceConfigSaveAllBtn].forEach((btn) => {
+        if (!btn) return;
+        btn.classList.toggle('is-dirty', isDirty);
+      });
+      if (sourceConfigSaveHint) {
+        sourceConfigSaveHint.textContent = isDirty
+          ? 'Masz niezapisane zmiany w konfiguracji źródeł.'
+          : 'Brak niezapisanych zmian.';
+        sourceConfigSaveHint.classList.toggle('is-dirty', isDirty);
+      }
+    }
+
+    function setSourceConfigDirty(value) {
+      sourceConfigDirty = !!value;
+      updateSourceSaveUi();
+    }
+
+    function getSelectedSourceConfig() {
+      if (!sourceConfigSelect || !sourceConfig) return null;
+      const id = sourceConfigSelect.value;
+      return sourceConfig.sources.find((s) => s.id === id) || null;
+    }
+
+    function renderSourceVariantRows(source) {
+      if (!sourceVariantsList) return;
+      const variants = Array.isArray(source?.variants) ? source.variants : [];
+      sourceVariantsList.innerHTML = variants.map((variant, index) => `
+        <div class="source-variant-row" data-variant-index="${index}">
+          <input type="text" class="source-variant-label" maxlength="40" placeholder="Nazwa wariantu" value="${escapeHtml(variant.label || '')}">
+          <div class="source-insert-inline-wrap">
+            <input type="text" class="source-variant-append" maxlength="180" placeholder="Dopisanie do URL, np. &_sop=7" value="${escapeHtml(variant.append || '')}">
+            <div class="source-insert-dropdown source-insert-inline">
+              <button type="button" class="source-insert-btn source-insert-inline-btn">{+}</button>
+              <div class="source-insert-list" role="menu" aria-label="Znaczniki do wstawienia">
+                <button type="button" class="source-insert-item" data-token="{PN}" role="menuitem">{PN}</button>
+                <button type="button" class="source-insert-item" data-token="{QUERY}" role="menuitem">{QUERY}</button>
+                <button type="button" class="source-insert-item" data-token="{VENDOR}" role="menuitem">{VENDOR}</button>
+                <button type="button" class="source-insert-item" data-token="{PN_RAW}" role="menuitem">{PN_RAW}</button>
+                <button type="button" class="source-insert-item" data-token="{VENDOR_SLUG}" role="menuitem">{VENDOR_SLUG}</button>
+                <button type="button" class="source-insert-item" data-token="{PN_SLUG}" role="menuitem">{PN_SLUG}</button>
+                <button type="button" class="source-insert-item" data-token="{QUERY_PLUS}" role="menuitem">{QUERY_PLUS}</button>
+              </div>
+            </div>
+          </div>
+          <label class="source-variant-flag">
+            <input type="radio" name="sourceVariantDefault" class="source-variant-default" ${variant.isDefault ? 'checked' : ''}>
+            <span>Domyślny</span>
+          </label>
+          <label class="source-variant-flag">
+            <input type="checkbox" class="source-variant-reset" ${variant.resetAfterSearch !== false ? 'checked' : ''}>
+            <span>Reset po szukaniu</span>
+          </label>
+          <button type="button" class="source-variant-remove" aria-label="Usuń wariant">×</button>
+        </div>
+      `).join('');
+      if (!variants.length) {
+        sourceVariantsList.innerHTML = '<div class="admin-meta">Brak wariantów.</div>';
+      }
+    }
+
+    function getDirectModeHint(mode) {
+      if (mode === 'always') {
+        return 'Warunek: najpierw URL bezpośredni. Gdy jest pusty, fallback do URL wyszukiwania.';
+      }
+      if (mode === 'auto') {
+        return 'Warunek: URL bezpośredni tylko gdy wykryto producent i PN. W innym przypadku URL wyszukiwania.';
+      }
+      return 'Warunek: używany będzie URL wyszukiwania.';
+    }
+
+    function updateDirectModeHint() {
+      if (!sourceConfigDirectHint) return;
+      const mode = String(sourceConfigDirectMode?.value || 'off');
+      sourceConfigDirectHint.textContent = getDirectModeHint(mode);
+    }
+
+    function fillSourceEditor(source) {
+      if (!source) return;
+      isSourceEditorFilling = true;
+      if (sourceConfigName) sourceConfigName.value = source.name || '';
+      if (sourceConfigIcon) sourceConfigIcon.value = source.icon || '';
+      if (sourceConfigSearchUrl) sourceConfigSearchUrl.value = source.searchUrl || '';
+      if (sourceConfigDirectMode) sourceConfigDirectMode.value = source.directMode || 'off';
+      if (sourceConfigDirectUrl) sourceConfigDirectUrl.value = source.directUrl || '';
+      updateDirectModeHint();
+      renderSourceVariantRows(source);
+      isSourceEditorFilling = false;
+      updateSourceTokenPreview();
+    }
+
+    function renderSourceSelect() {
+      if (!sourceConfigSelect || !sourceConfig) return;
+      const current = sourceConfigSelect.value;
+      sourceConfigSelect.innerHTML = sourceConfig.sources
+        .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || s.id)}</option>`)
+        .join('');
+      const next = sourceConfig.sources.find((s) => s.id === current)?.id || sourceConfig.sources[0]?.id || '';
+      sourceConfigSelect.value = next;
+      fillSourceEditor(getSelectedSourceConfig());
+    }
+
+    function collectVariantsFromEditor() {
+      const rows = Array.from(sourceVariantsList?.querySelectorAll('.source-variant-row') || []);
+      const variants = rows.map((row, idx) => {
+        const label = row.querySelector('.source-variant-label')?.value?.trim() || `Wariant ${idx + 1}`;
+        const append = row.querySelector('.source-variant-append')?.value?.trim() || '';
+        const isDefault = !!row.querySelector('.source-variant-default')?.checked;
+        const resetAfterSearch = !!row.querySelector('.source-variant-reset')?.checked;
+        return normalizeSourceVariant({
+          id: `v-${idx + 1}`,
+          label,
+          append,
+          isDefault,
+          resetAfterSearch
+        });
+      });
+      if (!variants.length) {
+        variants.push({ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true });
+      }
+      if (!variants.some((v) => v.isDefault)) variants[0].isDefault = true;
+      return variants.map((v, idx) => ({ ...v, id: idx === 0 ? 'default' : `v-${idx + 1}` }));
+    }
+
+    async function saveSourcesConfig() {
+      if (!window.PN_MAPPINGS_API?.request || !sourceConfig) return;
+      const t0 = performance.now();
+      const payload = JSON.stringify(sourceConfig);
+      const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(SEARCH_SOURCES_CONFIG_NOTE_ID)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: payload })
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      setSourceConfigDirty(false);
+      showToast('Konfiguracja źródeł zapisana.', 'ok', performance.now() - t0);
+    }
+
+    async function loadSourcesConfig() {
+      if (!window.PN_MAPPINGS_API?.request) return;
+      try {
+        const t0 = performance.now();
+        const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(SEARCH_SOURCES_CONFIG_NOTE_ID)}`, {
+          method: 'GET'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const parsed = payload?.note ? JSON.parse(payload.note) : createDefaultSourcesConfig();
+        sourceConfig = normalizeSourcesConfig(parsed);
+        renderSourceSelect();
+        setSourceConfigDirty(false);
+        showToast('Konfiguracja źródeł załadowana.', 'ok', performance.now() - t0);
+      } catch (_error) {
+        sourceConfig = createDefaultSourcesConfig();
+        renderSourceSelect();
+        setSourceConfigDirty(false);
+        showToast('Użyto domyślnej konfiguracji źródeł.', 'info');
+      }
+    }
+
+    function applyAdminTab(tab) {
+      const validTab = tab || 'logs';
+      adminTabButtons.forEach((btn) => {
+        const isActive = btn.getAttribute('data-admin-tab-btn') === validTab;
+        btn.classList.toggle('is-active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      adminTabCards.forEach((card) => {
+        const cardTab = card.getAttribute('data-admin-tab') || 'logs';
+        card.style.display = cardTab === validTab ? '' : 'none';
+      });
+      if (adminTabDescription) {
+        adminTabDescription.textContent = ADMIN_TAB_DESCRIPTIONS[validTab] || '';
+      }
+      localStorage.setItem(ADMIN_ACTIVE_TAB_KEY, validTab);
+    }
+
+    function setupAdminTabs() {
+      if (!adminTabButtons.length) return;
+      adminTabButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const tab = btn.getAttribute('data-admin-tab-btn') || 'logs';
+          applyAdminTab(tab);
+        });
+      });
+      const savedRaw = localStorage.getItem(ADMIN_ACTIVE_TAB_KEY) || 'logs';
+      const saved = savedRaw === 'operations' ? 'logs' : savedRaw;
+      applyAdminTab(saved);
+    }
+
+    function setupSourcesEditor() {
+      if (!sourceConfigSelect) return;
+      const insertTokenAtCursor = (input, token) => {
+        if (!input || typeof token !== 'string') return;
+        const start = Number.isFinite(input.selectionStart) ? input.selectionStart : input.value.length;
+        const end = Number.isFinite(input.selectionEnd) ? input.selectionEnd : input.value.length;
+        const value = input.value || '';
+        input.value = `${value.slice(0, start)}${token}${value.slice(end)}`;
+        const pos = start + token.length;
+        input.focus();
+        input.setSelectionRange(pos, pos);
+      };
+      const sourceInputs = [
+        sourceConfigName,
+        sourceConfigIcon,
+        sourceConfigSearchUrl,
+        sourceConfigDirectUrl
+      ].filter(Boolean);
+      sourceInputs.forEach((input) => {
+        const changeEvent = input.tagName === 'SELECT' ? 'change' : 'input';
+        input.addEventListener(changeEvent, () => {
+          if (isSourceEditorFilling) return;
+          setSourceConfigDirty(true);
+        });
+      });
+      document.addEventListener('click', (event) => {
+        const button = event.target.closest('.source-insert-item');
+        if (!button) return;
+        const token = String(button.getAttribute('data-token') || '').trim();
+        if (!token) return;
+        const dropdown = button.closest('.source-insert-inline');
+        const wrapper = dropdown?.closest('.source-insert-inline-wrap');
+        const targetInput = wrapper?.querySelector('input[type="text"]');
+        if (!targetInput) {
+          showToast('Nie znaleziono pola do wstawienia znacznika.', 'warn');
+          return;
+        }
+        insertTokenAtCursor(targetInput, token);
+        setSourceConfigDirty(true);
+      });
+      sourceConfigSelect.addEventListener('change', () => {
+        fillSourceEditor(getSelectedSourceConfig());
+        updateSourceTokenPreview();
+      });
+      sourceConfigDirectMode?.addEventListener('change', updateDirectModeHint);
+      sourceConfigDirectUrl?.addEventListener('input', () => {
+        updateDirectModeHint();
+        updateSourceTokenPreview();
+      });
+      sourceConfigSearchUrl?.addEventListener('input', updateSourceTokenPreview);
+      sourceConfigNewBtn?.addEventListener('click', () => {
+        const raw = prompt('Podaj ID źródła (np. amazon):');
+        const id = String(raw || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+        if (!id) return;
+        if (sourceConfig.sources.some((s) => s.id === id)) {
+          showToast('Źródło o tym ID już istnieje.', 'warn');
+          return;
+        }
+        sourceConfig.sources.push({
+          id,
+          name: id,
+          icon: '',
+          enabled: true,
+          searchUrl: '',
+          directUrl: '',
+          directMode: 'off',
+          variants: [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }]
+        });
+        setSourceConfigDirty(true);
+        renderSourceSelect();
+        sourceConfigSelect.value = id;
+        fillSourceEditor(getSelectedSourceConfig());
+      });
+      sourceVariantAddBtn?.addEventListener('click', () => {
+        const source = getSelectedSourceConfig();
+        if (!source) return;
+        source.variants = source.variants || [];
+        source.variants.push({ id: `v-${source.variants.length + 1}`, label: 'Nowy wariant', append: '', isDefault: false, resetAfterSearch: true });
+        fillSourceEditor(source);
+        setSourceConfigDirty(true);
+        updateSourceTokenPreview();
+      });
+      sourceVariantsList?.addEventListener('input', () => {
+        if (isSourceEditorFilling) return;
+        setSourceConfigDirty(true);
+      });
+      sourceVariantsList?.addEventListener('change', () => {
+        if (isSourceEditorFilling) return;
+        setSourceConfigDirty(true);
+      });
+      sourceVariantsList?.addEventListener('click', (event) => {
+        const removeBtn = event.target.closest('.source-variant-remove');
+        if (!removeBtn) return;
+        const row = removeBtn.closest('.source-variant-row');
+        if (!row) return;
+        row.remove();
+        setSourceConfigDirty(true);
+      });
+      sourceConfigSaveBtn?.addEventListener('click', async () => {
+        const source = getSelectedSourceConfig();
+        if (!source) return;
+        source.name = sourceConfigName?.value?.trim() || source.id;
+        source.icon = sourceConfigIcon?.value?.trim() || '';
+        source.searchUrl = sourceConfigSearchUrl?.value?.trim() || '';
+        source.directUrl = sourceConfigDirectUrl?.value?.trim() || '';
+        source.directMode = String(sourceConfigDirectMode?.value || 'off');
+        source.variants = collectVariantsFromEditor();
+        setSourceConfigDirty(true);
+        renderSourceSelect();
+        try {
+          await saveSourcesConfig();
+        } catch (error) {
+          showToast(`Błąd zapisu źródła: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+      sourceConfigDeleteBtn?.addEventListener('click', async () => {
+        const source = getSelectedSourceConfig();
+        if (!source) return;
+        sourceConfig.sources = sourceConfig.sources.filter((s) => s.id !== source.id);
+        if (!sourceConfig.sources.length) {
+          sourceConfig.sources = createDefaultSourcesConfig().sources;
+        }
+        setSourceConfigDirty(true);
+        renderSourceSelect();
+        try {
+          await saveSourcesConfig();
+        } catch (error) {
+          showToast(`Błąd usuwania źródła: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+      sourceConfigSaveAllBtn?.addEventListener('click', async () => {
+        const source = getSelectedSourceConfig();
+        if (source) {
+          source.name = sourceConfigName?.value?.trim() || source.id;
+          source.icon = sourceConfigIcon?.value?.trim() || '';
+          source.searchUrl = sourceConfigSearchUrl?.value?.trim() || '';
+          source.directUrl = sourceConfigDirectUrl?.value?.trim() || '';
+          source.directMode = String(sourceConfigDirectMode?.value || 'off');
+          source.variants = collectVariantsFromEditor();
+        }
+        setSourceConfigDirty(true);
+        try {
+          await saveSourcesConfig();
+        } catch (error) {
+          showToast(`Błąd zapisu konfiguracji: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+      sourceTokenPreviewInput?.addEventListener('input', updateSourceTokenPreview);
+      updateSourceTokenPreview();
+      updateSourceSaveUi();
     }
 
     function showToast(message, variant, durationMs) {
@@ -984,9 +1715,17 @@
           const exists = (data.patterns || []).some((p) => window.PN_MAPPINGS_API.normalizePattern(p.pattern) === normalized);
           if (!exists) {
             data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
-            data.patterns.push({ pattern: normalized, vendor: vendor.trim() });
+            const createdAt = new Date().toISOString();
+            data.patterns.push({ pattern: normalized, vendor: vendor.trim(), createdAt, updatedAt: createdAt });
             window.PN_MAPPINGS_API.set(data);
-            window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-pattern', pattern: normalized, vendor: vendor.trim() });
+            window.PN_MAPPINGS_API?.log?.('mapping', {
+              action: 'creator-pattern',
+              mappingType: 'pattern',
+              pattern: normalized,
+              vendor: vendor.trim(),
+              createdAt,
+              updatedAt: createdAt
+            });
             showToast('Dodano wzorzec z kreatora.', 'ok');
             refreshVendorOptions();
             saved = true;
@@ -995,10 +1734,16 @@
           }
         } else {
           const key = window.PN_MAPPINGS_API.normalize(rawPattern);
-          data.exact = data.exact || {};
-          data.exact[key] = vendor.trim();
+          const { createdAt, updatedAt } = window.PN_MAPPINGS_API.setExactEntry(data, key, vendor.trim());
           window.PN_MAPPINGS_API.set(data);
-          window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-exact', key, vendor: vendor.trim() });
+          window.PN_MAPPINGS_API?.log?.('mapping', {
+            action: 'creator-exact',
+            mappingType: 'exact',
+            key,
+            vendor: vendor.trim(),
+            createdAt,
+            updatedAt
+          });
           showToast('Dodano PN exact z kreatora.', 'ok');
           refreshVendorOptions();
           saved = true;
@@ -1086,6 +1831,10 @@
       loadLayoutPresetIntoEditor('');
     }
 
+    setupAdminTabs();
+    setupSourcesEditor();
+    loadSourcesConfig();
+
     if (window.PN_MAPPINGS_API?.load) {
       const dbLoadStart = performance.now();
       showToast('Ładowanie bazy danych…', 'info', 0);
@@ -1103,6 +1852,7 @@
           resolveCurrentAppVersion();
           fetchLogsBackupStatus();
           refreshVendorOptions();
+          updateSourceTokenPreview();
         })
         .catch(() => {
           const dbLoadEnd = performance.now();
@@ -2064,21 +2814,46 @@
         const pattern = window.PN_MAPPINGS_API.normalizePattern(rawKey);
         data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
         const existing = data.patterns.find((rule) => rule.pattern === pattern);
+        let createdAt = '';
+        let updatedAt = '';
         if (existing) {
           existing.vendor = vendor;
+          existing.createdAt = window.PN_MAPPINGS_API.normalizeCreatedAt(existing.createdAt) || new Date().toISOString();
+          existing.updatedAt = new Date().toISOString();
+          createdAt = existing.createdAt;
+          updatedAt = existing.updatedAt;
         } else {
-          data.patterns.push({ pattern, vendor });
+          createdAt = new Date().toISOString();
+          updatedAt = createdAt;
+          data.patterns.push({ pattern, vendor, createdAt, updatedAt });
         }
         window.PN_MAPPINGS_API.set(data);
         showToast(`Zapisano wzorzec: ${pattern} → ${vendor}`, 'ok');
-        window.PN_MAPPINGS_API.log('mapping', { action: 'apply-report-pattern', pattern, vendor, note });
+        window.PN_MAPPINGS_API.log('mapping', {
+          action: 'apply-report-pattern',
+          mappingType: 'pattern',
+          pattern,
+          vendor,
+          createdAt,
+          updatedAt,
+          note
+        });
       } else {
         const key = window.PN_MAPPINGS_API.normalize(rawKey);
-        data.exact = data.exact || {};
-        data.exact[key] = vendor;
+        const createdAt = window.PN_MAPPINGS_API.getExactCreatedAt(data, key) || new Date().toISOString();
+        const updatedAt = new Date().toISOString();
+        window.PN_MAPPINGS_API.setExactEntry(data, key, vendor, { createdAt, updatedAt });
         window.PN_MAPPINGS_API.set(data);
         showToast(`Zapisano PN: ${key} → ${vendor}`, 'ok');
-        window.PN_MAPPINGS_API.log('mapping', { action: 'apply-report-exact', key, vendor, note });
+        window.PN_MAPPINGS_API.log('mapping', {
+          action: 'apply-report-exact',
+          mappingType: 'exact',
+          key,
+          vendor,
+          createdAt,
+          updatedAt,
+          note
+        });
       }
       updateStats(window.PN_MAPPINGS_API.get());
     }

@@ -308,8 +308,9 @@
       const data = window.PN_MAPPINGS_API.get();
       const vendors = new Set();
       const exact = data?.exact || {};
-      Object.values(exact).forEach((val) => {
-        if (val) vendors.add(String(val).trim());
+      Object.entries(exact).forEach(([key]) => {
+        const vendor = window.PN_MAPPINGS_API.getExactVendor(data, key);
+        if (vendor) vendors.add(String(vendor).trim());
       });
       const patterns = Array.isArray(data?.patterns) ? data.patterns : [];
       patterns.forEach((p) => {
@@ -520,9 +521,17 @@
             const exists = (data.patterns || []).some((p) => window.PN_MAPPINGS_API.normalizePattern(p.pattern) === normalized);
             if (!exists) {
               data.patterns = Array.isArray(data.patterns) ? data.patterns : [];
-              data.patterns.push({ pattern: normalized, vendor: vendor.trim() });
+              const createdAt = new Date().toISOString();
+              data.patterns.push({ pattern: normalized, vendor: vendor.trim(), createdAt, updatedAt: createdAt });
               window.PN_MAPPINGS_API.set(data);
-              window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-pattern', pattern: normalized, vendor: vendor.trim() });
+              window.PN_MAPPINGS_API?.log?.('mapping', {
+                action: 'creator-pattern',
+                mappingType: 'pattern',
+                pattern: normalized,
+                vendor: vendor.trim(),
+                createdAt,
+                updatedAt: createdAt
+              });
               showToast('Dodano wzorzec z kreatora.', 'ok');
               refreshVendorOptions();
               saved = true;
@@ -531,10 +540,16 @@
             }
           } else {
             const key = window.PN_MAPPINGS_API.normalize(rawPattern);
-            data.exact = data.exact || {};
-            data.exact[key] = vendor.trim();
+            const { createdAt, updatedAt } = window.PN_MAPPINGS_API.setExactEntry(data, key, vendor.trim());
             window.PN_MAPPINGS_API.set(data);
-            window.PN_MAPPINGS_API?.log?.('mapping', { action: 'creator-exact', key, vendor: vendor.trim() });
+            window.PN_MAPPINGS_API?.log?.('mapping', {
+              action: 'creator-exact',
+              mappingType: 'exact',
+              key,
+              vendor: vendor.trim(),
+              createdAt,
+              updatedAt
+            });
             showToast('Dodano PN exact z kreatora.', 'ok');
             refreshVendorOptions();
             saved = true;

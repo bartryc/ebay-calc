@@ -25,6 +25,8 @@ const LOG_MAX_OBJECT_KEYS = 40;
 let preferDirectLog = false;
 let isLogFlushInProgress = false;
 const recentLogMap = new Map();
+const BACKFILL_MAX_LOG_PAGES = 20;
+const BACKFILL_PAGE_SIZE = 200;
 
 function getClientFingerprint() {
   try {
@@ -233,23 +235,117 @@ function normalizePattern(value) {
   return out;
 }
 
+function normalizeCreatedAt(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const ts = Date.parse(text);
+  if (Number.isNaN(ts)) return '';
+  return new Date(ts).toISOString();
+}
+
+function normalizeExactMetaEntry(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const createdAt = normalizeCreatedAt(value.createdAt);
+    const updatedAt = normalizeCreatedAt(value.updatedAt) || createdAt;
+    return { createdAt, updatedAt };
+  }
+  const createdAt = normalizeCreatedAt(value);
+  return { createdAt, updatedAt: createdAt };
+}
+
+function extractExactEntry(entry) {
+  if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    const vendor = String(entry.vendor || '').trim();
+    const createdAt = normalizeCreatedAt(entry.createdAt);
+    const updatedAt = normalizeCreatedAt(entry.updatedAt) || createdAt;
+    return { vendor, createdAt, updatedAt };
+  }
+  return { vendor: String(entry || '').trim(), createdAt: '', updatedAt: '' };
+}
+
+function getExactVendorFromData(data, key) {
+  if (!data || !data.exact) return '';
+  const normalizedKey = normalizePnKey(String(key || ''));
+  const entry = data.exact[normalizedKey];
+  return extractExactEntry(entry).vendor;
+}
+
+function getExactCreatedAtFromData(data, key) {
+  if (!data) return '';
+  const normalizedKey = normalizePnKey(String(key || ''));
+  const fromMeta = normalizeExactMetaEntry(data.exactMeta?.[normalizedKey]);
+  if (fromMeta.createdAt) return fromMeta.createdAt;
+  const entry = data.exact?.[normalizedKey];
+  return extractExactEntry(entry).createdAt;
+}
+
+function getExactUpdatedAtFromData(data, key) {
+  if (!data) return '';
+  const normalizedKey = normalizePnKey(String(key || ''));
+  const fromMeta = normalizeExactMetaEntry(data.exactMeta?.[normalizedKey]);
+  if (fromMeta.updatedAt) return fromMeta.updatedAt;
+  const entry = data.exact?.[normalizedKey];
+  return extractExactEntry(entry).updatedAt;
+}
+
+function setExactEntry(data, key, vendor, options = '') {
+  if (!data || typeof data !== 'object') return '';
+  const normalizedKey = normalizePnKey(String(key || ''));
+  const cleanVendor = String(vendor || '').trim();
+  if (!normalizedKey || !cleanVendor) return '';
+  const nowIso = new Date().toISOString();
+  const opt = (options && typeof options === 'object' && !Array.isArray(options))
+    ? options
+    : { createdAt: options };
+  const existingMeta = normalizeExactMetaEntry(data.exactMeta?.[normalizedKey]);
+  const existingCreated = existingMeta.createdAt || getExactCreatedAtFromData(data, normalizedKey);
+  const normalizedCreatedAt = normalizeCreatedAt(opt.createdAt)
+    || existingCreated
+    || nowIso;
+  const normalizedUpdatedAt = normalizeCreatedAt(opt.updatedAt)
+    || (opt.touch === false ? (existingMeta.updatedAt || normalizedCreatedAt) : nowIso);
+  data.exact = data.exact || {};
+  data.exactMeta = data.exactMeta || {};
+  data.exact[normalizedKey] = cleanVendor;
+  data.exactMeta[normalizedKey] = {
+    createdAt: normalizedCreatedAt,
+    updatedAt: normalizedUpdatedAt
+  };
+  return { createdAt: normalizedCreatedAt, updatedAt: normalizedUpdatedAt };
+}
+
 function normalizeData(raw) {
   if (!raw || typeof raw !== 'object') {
     return structuredClone(DEFAULT_PN_DATA);
   }
   let exactSource = raw.exact;
+  let exactMetaSource = raw.exactMeta;
   let patternsSource = raw.patterns;
   if (!raw.exact && !raw.patterns) {
     exactSource = raw;
+    exactMetaSource = {};
     patternsSource = structuredClone(DEFAULT_PN_DATA.patterns);
   }
 
   const exact = {};
+  const exactMeta = {};
   if (exactSource && typeof exactSource === 'object') {
-    for (const [key, vendor] of Object.entries(exactSource)) {
+    for (const [key, entry] of Object.entries(exactSource)) {
       const normalizedKey = normalizePnKey(String(key || ''));
-      if (!normalizedKey || !vendor) continue;
+      if (!normalizedKey) continue;
+      const parsedEntry = extractExactEntry(entry);
+      const { vendor, createdAt } = parsedEntry;
+      if (!vendor) continue;
       exact[normalizedKey] = vendor;
+      const fromMeta = normalizeExactMetaEntry(exactMetaSource?.[normalizedKey] || exactMetaSource?.[key]);
+      const normalizedCreatedAt = fromMeta.createdAt || createdAt;
+      const normalizedUpdatedAt = fromMeta.updatedAt || parsedEntry.updatedAt || normalizedCreatedAt;
+      if (normalizedCreatedAt || normalizedUpdatedAt) {
+        exactMeta[normalizedKey] = {
+          createdAt: normalizedCreatedAt || '',
+          updatedAt: normalizedUpdatedAt || normalizedCreatedAt || ''
+        };
+      }
     }
   }
 
@@ -257,14 +353,105 @@ function normalizeData(raw) {
   const normalizedPatterns = patterns
     .map((rule) => ({
       pattern: normalizePattern(String(rule?.pattern || '')),
-      vendor: String(rule?.vendor || '').trim()
+      vendor: String(rule?.vendor || '').trim(),
+      createdAt: normalizeCreatedAt(rule?.createdAt),
+      updatedAt: normalizeCreatedAt(rule?.updatedAt) || normalizeCreatedAt(rule?.createdAt)
     }))
     .filter((rule) => rule.pattern && rule.vendor);
 
   return {
     exact,
+    exactMeta,
     patterns: normalizedPatterns
   };
+}
+
+function hasMissingCreatedAt(data) {
+  if (!data || typeof data !== 'object') return false;
+  const exactKeys = Object.keys(data.exact || {});
+  for (const key of exactKeys) {
+    if (!getExactCreatedAtFromData(data, key)) return true;
+    if (!getExactUpdatedAtFromData(data, key)) return true;
+  }
+  const patterns = Array.isArray(data.patterns) ? data.patterns : [];
+  for (const rule of patterns) {
+    if (!normalizeCreatedAt(rule?.createdAt)) return true;
+    if (!normalizeCreatedAt(rule?.updatedAt)) return true;
+  }
+  return false;
+}
+
+function isMappingAddAction(action) {
+  return action === 'add-exact'
+    || action === 'add-pattern'
+    || action === 'creator-exact'
+    || action === 'creator-pattern'
+    || action === 'apply-report-exact'
+    || action === 'apply-report-pattern';
+}
+
+async function fetchLogsForBackfill() {
+  const all = [];
+  for (let page = 0; page < BACKFILL_MAX_LOG_PAGES; page += 1) {
+    const offset = page * BACKFILL_PAGE_SIZE;
+    const resp = await fetch(
+      `${PN_MAPPINGS_API_URL}/logs?limit=${BACKFILL_PAGE_SIZE}&offset=${offset}&type=mapping`,
+      { headers: buildHeaders() }
+    );
+    if (!resp.ok) break;
+    const payload = await resp.json();
+    const logs = Array.isArray(payload?.logs) ? payload.logs : [];
+    if (!logs.length) break;
+    all.push(...logs);
+    if (logs.length < BACKFILL_PAGE_SIZE) break;
+  }
+  return all;
+}
+
+function backfillCreatedAtFromLogs(data, logs) {
+  if (!data || typeof data !== 'object' || !Array.isArray(logs) || !logs.length) return false;
+  const ordered = logs.slice().reverse();
+  let changed = false;
+  data.exactMeta = data.exactMeta || {};
+  const patterns = Array.isArray(data.patterns) ? data.patterns : [];
+  const patternByKey = new Map();
+  for (const rule of patterns) {
+    const key = normalizePattern(String(rule?.pattern || ''));
+    if (key) patternByKey.set(key, rule);
+  }
+  for (const entry of ordered) {
+    const meta = entry?.meta || {};
+    const action = String(meta?.action || '').trim();
+    if (!isMappingAddAction(action)) continue;
+    const createdAt = normalizeCreatedAt(meta?.createdAt || entry?.ts);
+    if (!createdAt) continue;
+    const mappingType = String(meta?.mappingType || '').trim();
+    const key = normalizePnKey(String(meta?.key || ''));
+    const pattern = normalizePattern(String(meta?.pattern || ''));
+    if ((mappingType === 'exact' || key) && key && data.exact && data.exact[key]) {
+      const meta = normalizeExactMetaEntry(data.exactMeta?.[key]);
+      if (!meta.createdAt || !meta.updatedAt) {
+        data.exactMeta[key] = {
+          createdAt: meta.createdAt || createdAt,
+          updatedAt: meta.updatedAt || meta.createdAt || createdAt
+        };
+        changed = true;
+      }
+      continue;
+    }
+    if ((mappingType === 'pattern' || pattern) && patternByKey.has(pattern)) {
+      const rule = patternByKey.get(pattern);
+      if (!normalizeCreatedAt(rule?.createdAt)) {
+        rule.createdAt = createdAt;
+        rule.updatedAt = normalizeCreatedAt(rule?.updatedAt) || createdAt;
+        changed = true;
+      } else if (!normalizeCreatedAt(rule?.updatedAt)) {
+        rule.updatedAt = rule.createdAt;
+        changed = true;
+      }
+    }
+  }
+  return changed;
 }
 
 function getPnData() {
@@ -299,6 +486,17 @@ async function loadPnData() {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     pnCache = normalizeData(data);
+    if (hasMissingCreatedAt(pnCache)) {
+      try {
+        const logs = await fetchLogsForBackfill();
+        const changed = backfillCreatedAtFromLogs(pnCache, logs);
+        if (changed) {
+          await syncPnData(pnCache);
+        }
+      } catch (error) {
+        // keep best-effort backfill silent
+      }
+    }
     localStorage.setItem(PN_MAPPINGS_STORAGE_KEY, JSON.stringify(pnCache));
     return pnCache;
   } catch (error) {
@@ -342,6 +540,11 @@ window.PN_MAPPINGS_API = {
   normalizePattern,
   matchPattern,
   normalizeData,
+  getExactVendor: getExactVendorFromData,
+  getExactCreatedAt: getExactCreatedAtFromData,
+  getExactUpdatedAt: getExactUpdatedAtFromData,
+  setExactEntry,
+  normalizeCreatedAt,
   load: loadPnData,
   log: enqueueLog,
   request: (path, options = {}) => {

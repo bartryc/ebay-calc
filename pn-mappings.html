@@ -138,10 +138,14 @@
         modal.dataset.originalKey = payload.key;
         modalKeyLabel.textContent = 'PN';
         modalKey.value = payload.key;
+        modal.dataset.createdAt = payload.createdAt || '';
+        modal.dataset.updatedAt = payload.updatedAt || '';
       } else {
         modal.dataset.patternIndex = payload.index;
         modalKeyLabel.textContent = 'Wzorzec';
         modalKey.value = payload.pattern;
+        modal.dataset.createdAt = payload.createdAt || '';
+        modal.dataset.updatedAt = payload.updatedAt || '';
       }
       modalVendor.value = payload.vendor;
       modal.style.display = 'flex';
@@ -153,6 +157,8 @@
       modal.dataset.mode = '';
       modal.dataset.originalKey = '';
       modal.dataset.patternIndex = '';
+      modal.dataset.createdAt = '';
+      modal.dataset.updatedAt = '';
     }
 
     function openConfirm({ title, message, confirmLabel = 'Usuń', cancelLabel = 'Anuluj' }) {
@@ -225,6 +231,12 @@
       return /[x*+]/.test(value);
     }
 
+    function formatCreatedAt(value) {
+      const iso = window.PN_MAPPINGS_API?.normalizeCreatedAt?.(value) || '';
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('pl-PL');
+    }
+
     function downloadBackup() {
       const data = window.PN_MAPPINGS_API.get();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -262,25 +274,34 @@
       const data = window.PN_MAPPINGS_API.get();
       const activeFilter = typeof filterValue === 'string' ? filterValue : currentFilter;
       const filter = activeFilter.trim().toLowerCase();
-      const entries = Object.entries(data.exact || {}).filter(([key, vendor]) => {
-        if (!filter) return true;
-        return key.toLowerCase().includes(filter) || String(vendor).toLowerCase().includes(filter);
-      });
+      const entries = Object.entries(data.exact || {})
+        .map(([key]) => ({
+          key,
+          vendor: window.PN_MAPPINGS_API.getExactVendor(data, key),
+          createdAt: window.PN_MAPPINGS_API.getExactCreatedAt(data, key),
+          updatedAt: window.PN_MAPPINGS_API.getExactUpdatedAt(data, key)
+        }))
+        .filter((entry) => {
+          if (!filter) return true;
+          return entry.key.toLowerCase().includes(filter) || String(entry.vendor).toLowerCase().includes(filter);
+        });
       if (!entries.length) {
         list.innerHTML = '<div class="history-item"><strong>Brak mapowań</strong><div class="history-meta">Dodaj pierwsze mapowanie powyżej.</div></div>';
       } else {
         list.innerHTML = entries
-          .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([key, vendor]) => `
+          .sort((a, b) => a.key.localeCompare(b.key))
+          .map((entry) => `
             <div class="history-item">
               <div class="history-row">
-                <strong>${key}</strong>
+                <strong>${entry.key}</strong>
                 <div class="history-actions-inline">
-                  <button type="button" class="history-copy" data-key="${key}" aria-label="Edytuj">Edytuj</button>
-                  <button type="button" class="history-remove" data-key="${key}" aria-label="Usuń">×</button>
+                  <button type="button" class="history-copy" data-key="${entry.key}" aria-label="Edytuj">Edytuj</button>
+                  <button type="button" class="history-remove" data-key="${entry.key}" aria-label="Usuń">×</button>
                 </div>
               </div>
-              <div class="history-summary">Producent: <span class="history-value">${vendor}</span></div>
+              <div class="history-summary">Producent: <span class="history-value">${entry.vendor}</span></div>
+              <div class="history-meta">Dodano: ${formatCreatedAt(entry.createdAt)}</div>
+              <div class="history-meta">Ostatnia modyfikacja: ${formatCreatedAt(entry.updatedAt)}</div>
             </div>
           `)
           .join('');
@@ -307,6 +328,8 @@
                   </div>
                 </div>
                 <div class="history-summary">Producent: <span class="history-value">${rule.vendor}</span></div>
+                <div class="history-meta">Dodano: ${formatCreatedAt(rule.createdAt)}</div>
+                <div class="history-meta">Ostatnia modyfikacja: ${formatCreatedAt(rule.updatedAt)}</div>
               </div>
             `)
             .join('');
@@ -334,21 +357,22 @@
           showToast(`Wzorzec ${pattern} już istnieje.`, 'warn');
           return;
         }
-        data.patterns.push({ pattern, vendor });
+        const createdAt = new Date().toISOString();
+        data.patterns.push({ pattern, vendor, createdAt, updatedAt: createdAt });
         window.PN_MAPPINGS_API.set(data);
         showToast(`Zapisano wzorzec: ${pattern} → ${vendor}`, 'ok');
-        logMappingAction('add-pattern', { pattern, vendor });
+        logMappingAction('add-pattern', { mappingType: 'pattern', pattern, vendor, createdAt, updatedAt: createdAt });
       } else {
         const key = window.PN_MAPPINGS_API.normalize(rawKey);
         data.exact = data.exact || {};
-        if (data.exact[key]) {
+        if (window.PN_MAPPINGS_API.getExactVendor(data, key)) {
           showToast(`PN ${key} już istnieje.`, 'warn');
           return;
         }
-        data.exact[key] = vendor;
+        const { createdAt, updatedAt } = window.PN_MAPPINGS_API.setExactEntry(data, key, vendor);
         window.PN_MAPPINGS_API.set(data);
         showToast(`Zapisano: ${key} → ${vendor}`, 'ok');
-        logMappingAction('add-exact', { key, vendor });
+        logMappingAction('add-exact', { mappingType: 'exact', key, vendor, createdAt, updatedAt });
       }
       keyInput.value = '';
       vendorInput.value = '';
@@ -397,6 +421,7 @@
         const data = window.PN_MAPPINGS_API.get();
         if (data.exact) {
           delete data.exact[key];
+          if (data.exactMeta) delete data.exactMeta[key];
           window.PN_MAPPINGS_API.set(data);
         }
         renderMappings();
@@ -407,8 +432,14 @@
       if (target.classList.contains('history-copy')) {
         const key = target.getAttribute('data-key');
         const data = window.PN_MAPPINGS_API.get();
-        if (data.exact && data.exact[key]) {
-          openModal('exact', { key, vendor: data.exact[key] });
+        const vendor = window.PN_MAPPINGS_API.getExactVendor(data, key);
+        if (data.exact && vendor) {
+          openModal('exact', {
+            key,
+            vendor,
+            createdAt: window.PN_MAPPINGS_API.getExactCreatedAt(data, key),
+            updatedAt: window.PN_MAPPINGS_API.getExactUpdatedAt(data, key)
+          });
         }
       }
     });
@@ -450,7 +481,9 @@
           openModal('pattern', {
             index,
             pattern: data.patterns[index].pattern,
-            vendor: data.patterns[index].vendor
+            vendor: data.patterns[index].vendor,
+            createdAt: data.patterns[index].createdAt || '',
+            updatedAt: data.patterns[index].updatedAt || ''
           });
         }
       }
@@ -482,8 +515,10 @@
       if (nextMode === 'exact') {
         const originalKey = modal.dataset.originalKey;
         const newKey = window.PN_MAPPINGS_API.normalize(rawKey);
+        const inheritedCreatedAt = modal.dataset.createdAt || '';
+        const updatedAt = new Date().toISOString();
         data.exact = data.exact || {};
-        if (newKey !== originalKey && data.exact[newKey]) {
+        if (newKey !== originalKey && window.PN_MAPPINGS_API.getExactVendor(data, newKey)) {
           showToast(`PN ${newKey} już istnieje.`, 'warn');
           return;
         }
@@ -495,8 +530,9 @@
         }
         if (originalKey && originalKey !== newKey) {
           delete data.exact[originalKey];
+          if (data.exactMeta) delete data.exactMeta[originalKey];
         }
-        data.exact[newKey] = vendor;
+        window.PN_MAPPINGS_API.setExactEntry(data, newKey, vendor, { createdAt: inheritedCreatedAt, updatedAt });
       } else if (nextMode === 'pattern') {
         if (!isValidPattern(rawKey)) {
           showToast('Wzorzec może zawierać tylko litery/cyfry oraz x (małe), *, + i -.', 'warn');
@@ -511,18 +547,40 @@
         }
         if (mode === 'exact') {
           const originalKey = modal.dataset.originalKey;
+          const inheritedCreatedAt = modal.dataset.createdAt || '';
+          const updatedAt = new Date().toISOString();
           if (originalKey && data.exact) {
             delete data.exact[originalKey];
+            if (data.exactMeta) delete data.exactMeta[originalKey];
           }
-          data.patterns.push({ pattern: newPattern, vendor });
+          data.patterns.push({
+            pattern: newPattern,
+            vendor,
+            createdAt: window.PN_MAPPINGS_API.normalizeCreatedAt(inheritedCreatedAt) || updatedAt,
+            updatedAt
+          });
         } else if (!Number.isNaN(index) && Array.isArray(data.patterns)) {
-          data.patterns[index] = { pattern: newPattern, vendor };
+          const inheritedCreatedAt = modal.dataset.createdAt || data.patterns[index]?.createdAt || '';
+          const updatedAt = new Date().toISOString();
+          data.patterns[index] = {
+            pattern: newPattern,
+            vendor,
+            createdAt: window.PN_MAPPINGS_API.normalizeCreatedAt(inheritedCreatedAt) || updatedAt,
+            updatedAt
+          };
         }
       }
       window.PN_MAPPINGS_API.set(data);
       renderMappings();
       showToast('Zapisano zmiany.', 'ok');
-      logMappingAction('edit', { mode: nextMode });
+      logMappingAction('edit', {
+        mode: nextMode,
+        key: nextMode === 'exact' ? window.PN_MAPPINGS_API.normalize(rawKey) : '',
+        pattern: nextMode === 'pattern' ? window.PN_MAPPINGS_API.normalizePattern(rawKey) : '',
+        vendor,
+        createdAt: modal.dataset.createdAt || '',
+        updatedAt: new Date().toISOString()
+      });
       closeModal();
     });
 

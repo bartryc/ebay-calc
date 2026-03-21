@@ -242,7 +242,7 @@
             </div>
           </div>
           <div class="pn-suggestion" id="pnSuggestion"></div>
-          <div class="search-sources">
+          <div class="search-sources" id="searchSources">
             <label class="source-option">
               <input type="checkbox" id="sourceGoogle" checked>
               <img class="source-icon" src="resources/icon-google.svg" alt="" aria-hidden="true">
@@ -251,10 +251,22 @@
               <input type="checkbox" id="sourceAllegro" checked>
               <img class="source-icon" src="resources/icon-allegro.svg" alt="" aria-hidden="true">
             </label>
-            <label class="source-option">
-              <input type="checkbox" id="sourceEbay" checked>
-              <img class="source-icon" src="resources/icon-ebay.svg" alt="" aria-hidden="true">
-            </label>
+            <div class="source-option-wrap source-option-wrap-ebay">
+              <label class="source-option">
+                <input type="checkbox" id="sourceEbay" checked>
+                <img class="source-icon" src="resources/icon-ebay.svg" alt="" aria-hidden="true">
+              </label>
+              <div class="source-submenu" role="group" aria-label="Opcje eBay">
+                <label class="source-submenu-option">
+                  <input type="radio" id="sourceEbaySortDefault" name="sourceEbaySort" value="default" checked>
+                  <span>Domyślnie</span>
+                </label>
+                <label class="source-submenu-option">
+                  <input type="radio" id="sourceEbaySortNearest" name="sourceEbaySort" value="nearest">
+                  <span>Nearest first</span>
+                </label>
+              </div>
+            </div>
             <label class="source-option">
               <input type="checkbox" id="sourceRenewtech" checked>
               <img class="source-icon" src="resources/icon-renewtech.webp" data-dark-src="resources/icon-renewtech-white.png" alt="" aria-hidden="true">
@@ -307,7 +319,7 @@
           </div>
         </details>
         </div>
-        <footer>Wersja <span id="appVersion">1.94</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
+        <footer>Wersja <span id="appVersion">1.95</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
       </aside>
     </div>
   </div>
