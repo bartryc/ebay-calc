@@ -92,6 +92,22 @@
         </div>
 
         <div class="admin-card" data-admin-tab="logs">
+          <h3>Domyślne API kursu</h3>
+          <p>Wybierz źródło kursu, które ma być ustawiane domyślnie po wejściu na kalkulator.</p>
+          <div class="admin-log-controls">
+            <div class="admin-log-field admin-log-field-wide">
+              <label for="defaultRateProviderSelect">Domyślne źródło</label>
+              <select id="defaultRateProviderSelect"></select>
+            </div>
+            <div class="admin-log-field">
+              <label>&nbsp;</label>
+              <button type="button" id="defaultRateProviderSaveBtn">Zapisz domyślne API</button>
+            </div>
+          </div>
+          <div class="admin-meta">Aktualnie zapisane: <span id="defaultRateProviderValue">—</span></div>
+        </div>
+
+        <div class="admin-card" data-admin-tab="logs">
           <h3>Przywracanie</h3>
           <p>Wczytaj plik JSON i nadpisz mapowania w bazie.</p>
           <div class="admin-actions">
@@ -537,9 +553,18 @@
     const tokenPreviewDetected = document.getElementById('tokenPreviewDetected');
     const sourcePreviewSearchUrl = document.getElementById('sourcePreviewSearchUrl');
     const sourcePreviewDirectUrl = document.getElementById('sourcePreviewDirectUrl');
+    const defaultRateProviderSelect = document.getElementById('defaultRateProviderSelect');
+    const defaultRateProviderSaveBtn = document.getElementById('defaultRateProviderSaveBtn');
+    const defaultRateProviderValue = document.getElementById('defaultRateProviderValue');
     const adminTabDescription = document.getElementById('adminTabDescription');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
     const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
+    const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
+    const RATE_PROVIDER_OPTIONS = [
+      { id: 'frankfurter', label: 'Frankfurter' },
+      { id: 'exchangerate', label: 'NBP API' },
+      { id: 'erapi', label: 'open.er-api.com' }
+    ];
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
     const ADMIN_TAB_DESCRIPTIONS = {
       logs: 'Backupy, przywracanie, migracje i pełna historia operacji.',
@@ -1267,6 +1292,58 @@
       applyAdminTab(saved);
     }
 
+    function normalizeRateProvider(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return RATE_PROVIDER_OPTIONS.some((item) => item.id === key) ? key : 'frankfurter';
+    }
+
+    function renderDefaultRateProviderOptions() {
+      if (!defaultRateProviderSelect) return;
+      defaultRateProviderSelect.innerHTML = RATE_PROVIDER_OPTIONS
+        .map((item) => `<option value="${item.id}">${item.label}</option>`)
+        .join('');
+    }
+
+    async function loadDefaultRateProviderSetting() {
+      if (!defaultRateProviderSelect) return;
+      renderDefaultRateProviderOptions();
+      if (!window.PN_MAPPINGS_API?.request) {
+        defaultRateProviderSelect.value = 'frankfurter';
+        if (defaultRateProviderValue) defaultRateProviderValue.textContent = 'Frankfurter';
+        return;
+      }
+      try {
+        const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(RATE_PROVIDER_DEFAULT_NOTE_ID)}`, {
+          method: 'GET'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const key = normalizeRateProvider(payload?.note || 'frankfurter');
+        defaultRateProviderSelect.value = key;
+        if (defaultRateProviderValue) defaultRateProviderValue.textContent = RATE_PROVIDER_OPTIONS.find((item) => item.id === key)?.label || key;
+      } catch (_error) {
+        defaultRateProviderSelect.value = 'frankfurter';
+        if (defaultRateProviderValue) defaultRateProviderValue.textContent = 'Frankfurter';
+      }
+    }
+
+    async function saveDefaultRateProviderSetting() {
+      if (!defaultRateProviderSelect || !window.PN_MAPPINGS_API?.request) return;
+      const t0 = performance.now();
+      const key = normalizeRateProvider(defaultRateProviderSelect.value);
+      const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(RATE_PROVIDER_DEFAULT_NOTE_ID)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: key })
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      if (defaultRateProviderValue) defaultRateProviderValue.textContent = RATE_PROVIDER_OPTIONS.find((item) => item.id === key)?.label || key;
+      showToast('Domyślne API kursu zapisane.', 'ok', performance.now() - t0);
+    }
+
     function setupSourcesEditor() {
       if (!sourceConfigSelect) return;
       const insertTokenAtCursor = (input, token) => {
@@ -1932,6 +2009,15 @@
     setupAdminTabs();
     setupSourcesEditor();
     loadSourcesConfig();
+    loadDefaultRateProviderSetting();
+
+    defaultRateProviderSaveBtn?.addEventListener('click', async () => {
+      try {
+        await saveDefaultRateProviderSetting();
+      } catch (error) {
+        showToast(`Błąd zapisu domyślnego API: ${error.message || 'unknown'}`, 'warn');
+      }
+    });
 
     if (window.PN_MAPPINGS_API?.load) {
       const dbLoadStart = performance.now();

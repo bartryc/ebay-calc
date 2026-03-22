@@ -48,6 +48,8 @@ if (appVersion) {
 }
 const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
 const SEARCH_SOURCES_CONFIG_CACHE_KEY = 'searchSourcesConfigV1';
+const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
+const RATE_PROVIDER_DEFAULT_CACHE_KEY = 'rateProviderDefaultV1';
 
 const INDEX_LAYOUT_STORAGE_KEY = 'indexLayoutOrderV1';
 const INDEX_LAYOUT_COOKIE_KEY = 'indexLayoutOrderV1';
@@ -2022,6 +2024,39 @@ function fetchExchangeRate(currency, options = {}) {
     });
 }
 
+function normalizeRateProviderKey(value) {
+  const key = String(value || '').trim().toLowerCase();
+  return RATE_PROVIDERS[key] ? key : 'frankfurter';
+}
+
+function applyRateProviderSelection(value, options = {}) {
+  const rateSourceSelect = document.getElementById('rateSource');
+  if (!rateSourceSelect) return;
+  const providerKey = normalizeRateProviderKey(value);
+  rateSourceSelect.value = providerKey;
+  if (options.persist !== false) {
+    localStorage.setItem(RATE_PROVIDER_DEFAULT_CACHE_KEY, providerKey);
+  }
+}
+
+async function loadDefaultRateProviderSelection() {
+  const localDefault = localStorage.getItem(RATE_PROVIDER_DEFAULT_CACHE_KEY);
+  if (localDefault) {
+    applyRateProviderSelection(localDefault, { persist: false });
+  }
+  if (!window.PN_MAPPINGS_API?.request) return;
+  try {
+    const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(RATE_PROVIDER_DEFAULT_NOTE_ID)}`, { method: 'GET' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const note = String(payload?.note || '').trim();
+    if (!note) return;
+    applyRateProviderSelection(note);
+  } catch (_error) {
+    // fallback to local/default value
+  }
+}
+
 function updateRateStatusBadge(key, status) {
   const container = document.getElementById('rateStatusRow');
   if (!container) return;
@@ -2298,6 +2333,7 @@ document.getElementById('refreshRateBtn').addEventListener('click', () => {
 const rateSourceSelect = document.getElementById('rateSource');
 if (rateSourceSelect) {
   rateSourceSelect.addEventListener('change', () => {
+    applyRateProviderSelection(rateSourceSelect.value);
     fetchExchangeRate(document.getElementById('currency').value, { notify: true });
     checkRateProvidersStatus(document.getElementById('currency').value);
   });
@@ -2306,12 +2342,17 @@ if (rateSourceSelect) {
 updateEbayCurrencyLabel();
 updatePurchaseAmountModeUI();
 updateMarkupAmountModeUI();
-fetchExchangeRate(document.getElementById('currency').value, { notify: false });
 renderHistory();
-checkRateProvidersStatus(document.getElementById('currency').value);
 updateMinSaleByMarkup();
 updateMarkupFromSale();
 updateCommissionFromBaseMultiplier();
+
+(async () => {
+  await loadDefaultRateProviderSelection();
+  const currency = document.getElementById('currency').value;
+  fetchExchangeRate(currency, { notify: false });
+  checkRateProvidersStatus(currency);
+})();
 
 document.getElementById('historyList').addEventListener('click', (event) => {
   const target = event.target;
@@ -3057,6 +3098,15 @@ if (partNumberInput) {
 
 const adminKeys = new Set();
 window.addEventListener('keydown', (event) => {
+  const target = event.target;
+  const isEditableTarget = !!(
+    target?.isContentEditable
+    || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName)
+    || target?.closest?.('[contenteditable="true"]')
+    || document.activeElement?.isContentEditable
+    || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)
+  );
+  if (isEditableTarget) return;
   adminKeys.add(event.key.toLowerCase());
   if (adminKeys.has('a') && adminKeys.has('d') && adminKeys.has('m')) {
     adminKeys.clear();
