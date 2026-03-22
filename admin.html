@@ -2419,8 +2419,8 @@
           const asn = geo.asn ? `AS${geo.asn}` : 'unknown';
           const ray = entry.ray || '—';
           const hasMeta = entry.meta && Object.keys(entry.meta).length > 0;
-          const entryIndex = Math.max(0, ((logPage - 1) * pageSize) + localIndex);
-          const metaId = `meta-${entryIndex}`;
+          const entryIndex = localIndex;
+          const metaId = `meta-${logPage}-${localIndex}`;
           const rawMeta = hasMeta ? escapeHtml(JSON.stringify(entry.meta)) : '';
           return `
             <div class="admin-log-item">
@@ -3176,7 +3176,8 @@
         const idx = Number(prettyBtn.getAttribute('data-log-index'));
         if (Number.isNaN(idx)) return;
         const entry = logsCache[idx];
-        const pre = document.getElementById(`meta-${idx}`);
+        const logItem = prettyBtn.closest('.admin-log-item');
+        const pre = logItem?.querySelector('.log-pretty-content');
         if (!pre || !entry?.meta) return;
         const raw = pre.closest('.log-meta')?.querySelector('.log-meta-raw');
         if (pre.hasAttribute('hidden')) {
