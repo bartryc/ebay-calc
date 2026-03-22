@@ -1057,6 +1057,7 @@ function getDefaultSearchSourcesConfig() {
       {
         id: 'renewtech',
         name: 'Renewtech',
+        icon: 'resources/icon-renewtech.webp',
         searchUrl: 'https://www.renewtech.pl/#{RENEWTECH_STATE}',
         directUrl: 'https://www.renewtech.pl/{VENDOR_SLUG}-{PN_SLUG}.html',
         directMode: 'auto',
@@ -2491,6 +2492,26 @@ if (partNumberInput) {
     ebay: 'resources/icon-ebay.svg',
     renewtech: 'resources/icon-renewtech.webp'
   };
+  const syncSourceIconTheme = (iconEl, lightSrc, darkSrc) => {
+    if (!iconEl) return;
+    const nextLight = String(lightSrc || '').trim();
+    const nextDark = String(darkSrc || '').trim();
+    if (nextLight) {
+      iconEl.dataset.lightSrc = nextLight;
+    }
+    if (nextDark) {
+      iconEl.dataset.darkSrc = nextDark;
+    } else {
+      iconEl.removeAttribute('data-dark-src');
+    }
+    const isDark = document.body?.classList.contains('dark-mode');
+    const finalSrc = isDark && nextDark
+      ? nextDark
+      : (nextLight || iconEl.getAttribute('src') || '');
+    if (finalSrc) {
+      iconEl.setAttribute('src', finalSrc);
+    }
+  };
   const applySourceVisuals = () => {
     sourceInputMap.forEach((inputEl, sourceId) => {
       if (!inputEl || !searchSourcesContainer) return;
@@ -2508,6 +2529,7 @@ if (partNumberInput) {
       const cfg = getSourceConfig(sourceId);
       const sourceName = String(cfg?.name || sourceId || '').trim() || sourceId.toUpperCase();
       const iconRaw = String(cfg?.icon || '').trim();
+      const iconDarkRaw = String(cfg?.iconDark || '').trim();
       const isPlaceholder = iconRaw.toUpperCase() === 'PLACEHOLDER';
       if (isPlaceholder) {
         label.classList.add('source-option-has-placeholder');
@@ -2522,14 +2544,8 @@ if (partNumberInput) {
       placeholderEl.title = '';
       const fallbackIcon = defaultSourceIcons[sourceId] || iconEl.getAttribute('src') || '';
       const nextIcon = iconRaw || fallbackIcon;
-      if (nextIcon) {
-        iconEl.setAttribute('src', nextIcon);
-      }
-      if (sourceId === 'renewtech' && (!iconRaw || iconRaw === defaultSourceIcons.renewtech)) {
-        iconEl.setAttribute('data-dark-src', 'resources/icon-renewtech-white.png');
-      } else if (sourceId !== 'renewtech') {
-        iconEl.removeAttribute('data-dark-src');
-      }
+      const nextDark = iconDarkRaw;
+      syncSourceIconTheme(iconEl, nextIcon, nextDark);
     });
   };
   const getSourceSubmenu = (sourceId) => searchSourcesContainer?.querySelector(`.source-option-wrap-${sourceId} .source-submenu`);
@@ -2605,8 +2621,10 @@ if (partNumberInput) {
       icon.src = String(cfg?.icon || defaultSourceIcons[sourceId] || '');
       icon.alt = '';
       icon.setAttribute('aria-hidden', 'true');
-      if (sourceId === 'renewtech') {
-        icon.setAttribute('data-dark-src', 'resources/icon-renewtech-white.png');
+      if (cfg?.iconDark) {
+        icon.setAttribute('data-dark-src', String(cfg.iconDark));
+      } else {
+        icon.removeAttribute('data-dark-src');
       }
 
       label.append(checkbox, icon);
@@ -2640,6 +2658,8 @@ if (partNumberInput) {
         if (!id) return null;
         const def = defaults.sources.find((src) => src.id === id) || {};
         const directUrl = String(item?.directUrl ?? def.directUrl ?? '').trim();
+        const icon = String(item?.icon ?? def.icon ?? '').trim();
+        const iconDark = String(item?.iconDark ?? def.iconDark ?? '').trim();
         const modeRaw = String(item?.directMode || '').trim().toLowerCase();
         const inferredMode = directUrl && id === 'renewtech' ? 'auto' : (def.directMode || 'off');
         const directMode = ['off', 'auto', 'always'].includes(modeRaw) ? modeRaw : inferredMode;
@@ -2647,6 +2667,8 @@ if (partNumberInput) {
           ...def,
           ...item,
           id,
+          icon,
+          iconDark,
           directUrl,
           directMode
         };

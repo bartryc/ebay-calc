@@ -1574,7 +1574,7 @@ footer a:hover {
   color: var(--accent);
 }
 
-.source-config-controls .admin-log-field input {
+.source-config-controls .admin-log-field input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
 }
 
@@ -1602,10 +1602,33 @@ footer a:hover {
   align-items: center;
 }
 
-.source-config-controls .admin-log-field input,
+.source-config-controls .admin-log-field input:not([type="checkbox"]):not([type="radio"]),
 .source-config-controls .admin-log-field select {
   min-height: 42px;
   border-radius: 14px;
+}
+
+.source-dual-icon-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+
+.source-dual-icon-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.source-dual-icon-toggle span {
+  line-height: 1.2;
 }
 
 .source-variants-title {
@@ -2281,7 +2304,7 @@ body.dark-mode.builder-page #patternApplyBtn {
   font-weight: 600;
 }
 
-.admin-log-field input,
+.admin-log-field input:not([type="checkbox"]):not([type="radio"]),
 .admin-log-field select {
   padding: 8px 12px;
   border-radius: 999px;

@@ -272,8 +272,13 @@
               <input type="text" id="sourceConfigName" maxlength="64" placeholder="Np. eBay">
             </div>
             <div class="admin-log-field admin-log-field-wide source-field source-field-icon">
-              <label for="sourceConfigIcon">Ikona (URL/ścieżka)</label>
+              <label for="sourceConfigIcon">Ikona light (URL/ścieżka)</label>
               <input type="text" id="sourceConfigIcon" maxlength="200" placeholder="resources/icon-ebay.svg">
+              <label class="source-dual-icon-toggle">
+                <input type="checkbox" id="sourceConfigUseDarkIcon">
+                <span>Dodaj wersję dark mode</span>
+              </label>
+              <input type="text" id="sourceConfigIconDark" maxlength="200" placeholder="resources/icon-ebay-dark.svg" style="display:none;">
               <div class="admin-meta">Wpisz <code>PLACEHOLDER</code>, aby zamiast ikonki pokazać tekstowy badge z nazwą źródła.</div>
             </div>
             <div class="admin-log-field admin-log-field-wide source-field source-field-search">
@@ -508,6 +513,8 @@
     const sourceConfigSelect = document.getElementById('sourceConfigSelect');
     const sourceConfigName = document.getElementById('sourceConfigName');
     const sourceConfigIcon = document.getElementById('sourceConfigIcon');
+    const sourceConfigUseDarkIcon = document.getElementById('sourceConfigUseDarkIcon');
+    const sourceConfigIconDark = document.getElementById('sourceConfigIconDark');
     const sourceConfigSearchUrl = document.getElementById('sourceConfigSearchUrl');
     const sourceConfigDirectMode = document.getElementById('sourceConfigDirectMode');
     const sourceConfigDirectUrl = document.getElementById('sourceConfigDirectUrl');
@@ -565,6 +572,7 @@
     let pendingReportRetype = null;
     let sourceConfig = null;
     let sourceConfigDirty = false;
+    let sourceConfigSavedSnapshot = '';
     let isSourceEditorFilling = false;
     const exactCountEl = document.getElementById('exactCount');
     const patternCountEl = document.getElementById('patternCount');
@@ -717,13 +725,34 @@
       };
       const previewSearchRaw = String(sourceConfigSearchUrl?.value || '').trim();
       const previewDirectRaw = String(sourceConfigDirectUrl?.value || '').trim();
-      const previewSearch = previewSearchRaw ? applySourceTemplate(previewSearchRaw, templateValues) : '';
+      const previewSearchBase = previewSearchRaw ? applySourceTemplate(previewSearchRaw, templateValues) : '';
+      const variants = collectVariantsFromEditor();
+      const defaultVariant = variants.find((v) => v.isDefault) || variants[0] || null;
+      const variantAppend = String(defaultVariant?.append || '').trim();
+      const previewSearch = previewSearchBase
+        ? `${previewSearchBase}${variantAppend}`
+        : '';
       const previewDirect = previewDirectRaw ? applySourceTemplate(previewDirectRaw, templateValues) : '';
+      const directMode = String(sourceConfigDirectMode?.value || 'off');
+      let effectiveDirectPreview = previewDirect || '—';
+      if (directMode === 'off') {
+        effectiveDirectPreview = previewSearch
+          ? `Wyłączony (użyty będzie URL wyszukiwania): ${previewSearch}`
+          : 'Wyłączony (użyty będzie URL wyszukiwania)';
+      } else if (directMode === 'auto' && !previewDirect) {
+        effectiveDirectPreview = previewSearch
+          ? `Brak URL bezpośredniego (fallback do URL wyszukiwania): ${previewSearch}`
+          : 'Brak URL bezpośredniego';
+      } else if (directMode === 'always' && !previewDirect) {
+        effectiveDirectPreview = previewSearch
+          ? `Brak URL bezpośredniego (fallback do URL wyszukiwania): ${previewSearch}`
+          : 'Brak URL bezpośredniego';
+      }
       if (sourcePreviewSearchUrl) {
         sourcePreviewSearchUrl.textContent = previewSearch || '—';
       }
       if (sourcePreviewDirectUrl) {
-        sourcePreviewDirectUrl.textContent = previewDirect || '—';
+        sourcePreviewDirectUrl.textContent = effectiveDirectPreview;
       }
     }
 
@@ -967,6 +996,7 @@
           const id = String(item?.id || '').trim().toLowerCase();
           const name = String(item?.name || '').trim() || id;
           const icon = String(item?.icon || '').trim();
+          const iconDark = String(item?.iconDark || '').trim();
           const searchUrl = String(item?.searchUrl || '').trim();
           const directUrl = String(item?.directUrl || '').trim();
           const modeRaw = String(item?.directMode || '').trim().toLowerCase();
@@ -978,7 +1008,7 @@
             variants.push({ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true });
           }
           if (!variants.some((v) => v.isDefault)) variants[0].isDefault = true;
-          return { id, name, icon, enabled: item?.enabled !== false, searchUrl, directUrl, directMode, variants };
+          return { id, name, icon, iconDark, enabled: item?.enabled !== false, searchUrl, directUrl, directMode, variants };
         }).filter((item) => item.id)
       };
       if (!normalized.sources.length) return base;
@@ -1002,6 +1032,51 @@
     function setSourceConfigDirty(value) {
       sourceConfigDirty = !!value;
       updateSourceSaveUi();
+    }
+
+    function clonePlain(value) {
+      try {
+        return structuredClone(value);
+      } catch (_error) {
+        return JSON.parse(JSON.stringify(value));
+      }
+    }
+
+    function buildSourceConfigSnapshot(config) {
+      return JSON.stringify(normalizeSourcesConfig(config || createDefaultSourcesConfig()));
+    }
+
+    function applySourceEditorToConfigDraft(draftConfig) {
+      if (!draftConfig || !sourceConfigSelect) return draftConfig;
+      const selectedId = sourceConfigSelect.value;
+      const source = draftConfig.sources.find((s) => s.id === selectedId);
+      if (!source) return draftConfig;
+      source.name = sourceConfigName?.value?.trim() || source.id;
+      source.icon = sourceConfigIcon?.value?.trim() || '';
+      source.iconDark = sourceConfigUseDarkIcon?.checked
+        ? (sourceConfigIconDark?.value?.trim() || '')
+        : '';
+      source.searchUrl = sourceConfigSearchUrl?.value?.trim() || '';
+      source.directUrl = sourceConfigDirectUrl?.value?.trim() || '';
+      source.directMode = String(sourceConfigDirectMode?.value || 'off');
+      source.variants = collectVariantsFromEditor();
+      return draftConfig;
+    }
+
+    function refreshSourceConfigDirtyState() {
+      if (!sourceConfig) {
+        setSourceConfigDirty(false);
+        return;
+      }
+      const draft = applySourceEditorToConfigDraft(clonePlain(sourceConfig));
+      const currentSnapshot = buildSourceConfigSnapshot(draft);
+      setSourceConfigDirty(currentSnapshot !== sourceConfigSavedSnapshot);
+    }
+
+    function markSourceConfigSaved() {
+      sourceConfig = normalizeSourcesConfig(sourceConfig || createDefaultSourcesConfig());
+      sourceConfigSavedSnapshot = buildSourceConfigSnapshot(sourceConfig);
+      setSourceConfigDirty(false);
     }
 
     function getSelectedSourceConfig() {
@@ -1063,15 +1138,28 @@
       sourceConfigDirectHint.textContent = getDirectModeHint(mode);
     }
 
+    function updateDarkIconUi() {
+      if (!sourceConfigUseDarkIcon || !sourceConfigIconDark) return;
+      const enabled = !!sourceConfigUseDarkIcon.checked;
+      sourceConfigIconDark.style.display = enabled ? '' : 'none';
+      sourceConfigIconDark.disabled = !enabled;
+      if (!enabled) {
+        sourceConfigIconDark.value = '';
+      }
+    }
+
     function fillSourceEditor(source) {
       if (!source) return;
       isSourceEditorFilling = true;
       if (sourceConfigName) sourceConfigName.value = source.name || '';
       if (sourceConfigIcon) sourceConfigIcon.value = source.icon || '';
+      if (sourceConfigUseDarkIcon) sourceConfigUseDarkIcon.checked = !!source.iconDark;
+      if (sourceConfigIconDark) sourceConfigIconDark.value = source.iconDark || '';
       if (sourceConfigSearchUrl) sourceConfigSearchUrl.value = source.searchUrl || '';
       if (sourceConfigDirectMode) sourceConfigDirectMode.value = source.directMode || 'off';
       if (sourceConfigDirectUrl) sourceConfigDirectUrl.value = source.directUrl || '';
       updateDirectModeHint();
+      updateDarkIconUi();
       renderSourceVariantRows(source);
       isSourceEditorFilling = false;
       updateSourceTokenPreview();
@@ -1123,7 +1211,7 @@
         const text = await response.text().catch(() => '');
         throw new Error(text || `HTTP ${response.status}`);
       }
-      setSourceConfigDirty(false);
+      markSourceConfigSaved();
       showToast('Konfiguracja źródeł zapisana.', 'ok', performance.now() - t0);
     }
 
@@ -1139,12 +1227,12 @@
         const parsed = payload?.note ? JSON.parse(payload.note) : createDefaultSourcesConfig();
         sourceConfig = normalizeSourcesConfig(parsed);
         renderSourceSelect();
-        setSourceConfigDirty(false);
+        markSourceConfigSaved();
         showToast('Konfiguracja źródeł załadowana.', 'ok', performance.now() - t0);
       } catch (_error) {
         sourceConfig = createDefaultSourcesConfig();
         renderSourceSelect();
-        setSourceConfigDirty(false);
+        markSourceConfigSaved();
         showToast('Użyto domyślnej konfiguracji źródeł.', 'info');
       }
     }
@@ -1194,6 +1282,7 @@
       const sourceInputs = [
         sourceConfigName,
         sourceConfigIcon,
+        sourceConfigIconDark,
         sourceConfigSearchUrl,
         sourceConfigDirectUrl
       ].filter(Boolean);
@@ -1201,7 +1290,7 @@
         const changeEvent = input.tagName === 'SELECT' ? 'change' : 'input';
         input.addEventListener(changeEvent, () => {
           if (isSourceEditorFilling) return;
-          setSourceConfigDirty(true);
+          refreshSourceConfigDirtyState();
         });
       });
       document.addEventListener('click', (event) => {
@@ -1217,13 +1306,22 @@
           return;
         }
         insertTokenAtCursor(targetInput, token);
-        setSourceConfigDirty(true);
+        refreshSourceConfigDirtyState();
       });
       sourceConfigSelect.addEventListener('change', () => {
         fillSourceEditor(getSelectedSourceConfig());
         updateSourceTokenPreview();
+        refreshSourceConfigDirtyState();
       });
-      sourceConfigDirectMode?.addEventListener('change', updateDirectModeHint);
+      sourceConfigUseDarkIcon?.addEventListener('change', () => {
+        updateDarkIconUi();
+        if (isSourceEditorFilling) return;
+        refreshSourceConfigDirtyState();
+      });
+      sourceConfigDirectMode?.addEventListener('change', () => {
+        updateDirectModeHint();
+        updateSourceTokenPreview();
+      });
       sourceConfigDirectUrl?.addEventListener('input', () => {
         updateDirectModeHint();
         updateSourceTokenPreview();
@@ -1241,13 +1339,14 @@
           id,
           name: id,
           icon: '',
+          iconDark: '',
           enabled: true,
           searchUrl: '',
           directUrl: '',
           directMode: 'off',
           variants: [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }]
         });
-        setSourceConfigDirty(true);
+        refreshSourceConfigDirtyState();
         renderSourceSelect();
         sourceConfigSelect.value = id;
         fillSourceEditor(getSelectedSourceConfig());
@@ -1258,16 +1357,18 @@
         source.variants = source.variants || [];
         source.variants.push({ id: `v-${source.variants.length + 1}`, label: 'Nowy wariant', append: '', isDefault: false, resetAfterSearch: true });
         fillSourceEditor(source);
-        setSourceConfigDirty(true);
+        refreshSourceConfigDirtyState();
         updateSourceTokenPreview();
       });
       sourceVariantsList?.addEventListener('input', () => {
         if (isSourceEditorFilling) return;
-        setSourceConfigDirty(true);
+        refreshSourceConfigDirtyState();
+        updateSourceTokenPreview();
       });
       sourceVariantsList?.addEventListener('change', () => {
         if (isSourceEditorFilling) return;
-        setSourceConfigDirty(true);
+        refreshSourceConfigDirtyState();
+        updateSourceTokenPreview();
       });
       sourceVariantsList?.addEventListener('click', (event) => {
         const removeBtn = event.target.closest('.source-variant-remove');
@@ -1275,18 +1376,13 @@
         const row = removeBtn.closest('.source-variant-row');
         if (!row) return;
         row.remove();
-        setSourceConfigDirty(true);
+        refreshSourceConfigDirtyState();
       });
       sourceConfigSaveBtn?.addEventListener('click', async () => {
         const source = getSelectedSourceConfig();
         if (!source) return;
-        source.name = sourceConfigName?.value?.trim() || source.id;
-        source.icon = sourceConfigIcon?.value?.trim() || '';
-        source.searchUrl = sourceConfigSearchUrl?.value?.trim() || '';
-        source.directUrl = sourceConfigDirectUrl?.value?.trim() || '';
-        source.directMode = String(sourceConfigDirectMode?.value || 'off');
-        source.variants = collectVariantsFromEditor();
-        setSourceConfigDirty(true);
+        applySourceEditorToConfigDraft(sourceConfig);
+        refreshSourceConfigDirtyState();
         renderSourceSelect();
         try {
           await saveSourcesConfig();
@@ -1301,7 +1397,7 @@
         if (!sourceConfig.sources.length) {
           sourceConfig.sources = createDefaultSourcesConfig().sources;
         }
-        setSourceConfigDirty(true);
+        refreshSourceConfigDirtyState();
         renderSourceSelect();
         try {
           await saveSourcesConfig();
@@ -1312,14 +1408,9 @@
       sourceConfigSaveAllBtn?.addEventListener('click', async () => {
         const source = getSelectedSourceConfig();
         if (source) {
-          source.name = sourceConfigName?.value?.trim() || source.id;
-          source.icon = sourceConfigIcon?.value?.trim() || '';
-          source.searchUrl = sourceConfigSearchUrl?.value?.trim() || '';
-          source.directUrl = sourceConfigDirectUrl?.value?.trim() || '';
-          source.directMode = String(sourceConfigDirectMode?.value || 'off');
-          source.variants = collectVariantsFromEditor();
+          applySourceEditorToConfigDraft(sourceConfig);
         }
-        setSourceConfigDirty(true);
+        refreshSourceConfigDirtyState();
         try {
           await saveSourcesConfig();
         } catch (error) {
@@ -1328,8 +1419,15 @@
       });
       sourceTokenPreviewInput?.addEventListener('input', updateSourceTokenPreview);
       updateSourceTokenPreview();
+      updateDarkIconUi();
       updateSourceSaveUi();
     }
+
+    window.addEventListener('beforeunload', (event) => {
+      if (!sourceConfigDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
 
     function showToast(message, variant, durationMs) {
       if (!toastStack) return;
