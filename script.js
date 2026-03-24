@@ -2436,8 +2436,7 @@ const partNumberInput = document.getElementById('partNumberInput');
 if (partNumberInput) {
   let lastSearchQuery = '';
   let lastSuggestedVendor = '';
-  let lastOpenedPnKey = '';
-  let lastOpenedSourceId = '';
+  const openedSourcesByPn = new Map();
   let mappingsRefreshTimer = null;
   let mappingsRefreshSeq = 0;
   let mappingsAppliedSeq = 0;
@@ -2883,10 +2882,6 @@ if (partNumberInput) {
       showMainToast('Wpisz Part Number, aby wyszukać.', 'warn');
       return false;
     }
-    if (query === lastSearchQuery) {
-      showMainToast('To samo zapytanie — pomijam.', 'warn');
-      return false;
-    }
     lastSearchQuery = query;
     clearSearchStatus();
     const vendor = normalizeSearchText(partNumberInput.dataset.suggestionVendor || '');
@@ -2929,16 +2924,16 @@ if (partNumberInput) {
     };
     const sourceVariantsUsed = {};
     const calledUrls = {};
+    const openedForPn = openedSourcesByPn.get(currentPnKey) || new Set();
+    const sourcesToOpen = sources.filter((sourceId) => !openedForPn.has(sourceId));
     let openedCount = 0;
-    let openedLastSourceId = '';
-    const samePnAsPrevious = !!(currentPnKey && currentPnKey === lastOpenedPnKey && lastOpenedSourceId);
     sources.forEach((sourceId) => {
-      if (samePnAsPrevious && sourceId === lastOpenedSourceId) {
+      if (!sourcesToOpen.includes(sourceId)) {
         calledUrls[sourceId] = {
           url: '',
           mode: 'skipped',
           variant: String(getSourceVariantConfig(sourceId)?.id || 'default'),
-          reason: 'same-pn-last-source'
+          reason: 'already-opened-for-pn'
         };
         return;
       }
@@ -2966,19 +2961,18 @@ if (partNumberInput) {
       if (url) {
         window.open(url, '_blank', 'noopener');
         openedCount += 1;
-        openedLastSourceId = sourceId;
+        openedForPn.add(sourceId);
       }
     });
     if (!openedCount) {
-      showMainToast('Dla tego samego PN pominięto ostatnie źródło, brak nowych kart do otwarcia.', 'info');
+      showMainToast('Ten PN ma już otwarte wybrane źródła. Dodaj nowe źródło, aby otworzyć nową kartę.', 'info');
       return false;
     }
-    if (samePnAsPrevious && openedCount < sources.length) {
-      showMainToast(`Pominięto źródło: ${lastOpenedSourceId}.`, 'info');
+    if (currentPnKey) {
+      openedSourcesByPn.set(currentPnKey, openedForPn);
     }
-    if (currentPnKey && openedLastSourceId) {
-      lastOpenedPnKey = currentPnKey;
-      lastOpenedSourceId = openedLastSourceId;
+    if (openedCount < sources.length) {
+      showMainToast('Pominięto źródła już wcześniej otwarte dla tego PN.', 'info');
     }
     logActivity('search', {
       query,
