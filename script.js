@@ -2436,6 +2436,8 @@ const partNumberInput = document.getElementById('partNumberInput');
 if (partNumberInput) {
   let lastSearchQuery = '';
   let lastSuggestedVendor = '';
+  let lastOpenedPnKey = '';
+  let lastOpenedSourceId = '';
   let mappingsRefreshTimer = null;
   let mappingsRefreshSeq = 0;
   let mappingsAppliedSeq = 0;
@@ -2893,6 +2895,7 @@ if (partNumberInput) {
       pn = normalizeSearchText(pn.slice(vendor.length));
     }
     if (!pn) pn = query;
+    const currentPnKey = normalizePnValue(pn || query);
     const googleQuery = vendor
       ? `${vendor} ${pn}`
       : pn;
@@ -2926,7 +2929,19 @@ if (partNumberInput) {
     };
     const sourceVariantsUsed = {};
     const calledUrls = {};
+    let openedCount = 0;
+    let openedLastSourceId = '';
+    const samePnAsPrevious = !!(currentPnKey && currentPnKey === lastOpenedPnKey && lastOpenedSourceId);
     sources.forEach((sourceId) => {
+      if (samePnAsPrevious && sourceId === lastOpenedSourceId) {
+        calledUrls[sourceId] = {
+          url: '',
+          mode: 'skipped',
+          variant: String(getSourceVariantConfig(sourceId)?.id || 'default'),
+          reason: 'same-pn-last-source'
+        };
+        return;
+      }
       const cfg = getSourceConfig(sourceId) || {};
       let fallbackSearchUrl = cfg.searchUrl || 'https://www.google.com/search?q={QUERY}';
       if (sourceId === 'google') fallbackSearchUrl = 'https://www.google.com/search?q={QUERY}';
@@ -2948,8 +2963,23 @@ if (partNumberInput) {
         mode: resolved.usedDirect ? 'direct' : 'search',
         variant: String(variant?.id || 'default')
       };
-      if (url) window.open(url, '_blank', 'noopener');
+      if (url) {
+        window.open(url, '_blank', 'noopener');
+        openedCount += 1;
+        openedLastSourceId = sourceId;
+      }
     });
+    if (!openedCount) {
+      showMainToast('Dla tego samego PN pominięto ostatnie źródło, brak nowych kart do otwarcia.', 'info');
+      return false;
+    }
+    if (samePnAsPrevious && openedCount < sources.length) {
+      showMainToast(`Pominięto źródło: ${lastOpenedSourceId}.`, 'info');
+    }
+    if (currentPnKey && openedLastSourceId) {
+      lastOpenedPnKey = currentPnKey;
+      lastOpenedSourceId = openedLastSourceId;
+    }
     logActivity('search', {
       query,
       sources,
