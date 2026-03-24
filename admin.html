@@ -562,7 +562,7 @@
     const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
     const RATE_PROVIDER_OPTIONS = [
       { id: 'frankfurter', label: 'Frankfurter' },
-      { id: 'exchangerate', label: 'NBP API' },
+      { id: 'nbp', label: 'NBP API' },
       { id: 'erapi', label: 'open.er-api.com' }
     ];
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
@@ -1293,7 +1293,8 @@
     }
 
     function normalizeRateProvider(value) {
-      const key = String(value || '').trim().toLowerCase();
+      const keyRaw = String(value || '').trim().toLowerCase();
+      const key = keyRaw === 'exchangerate' ? 'nbp' : keyRaw;
       return RATE_PROVIDER_OPTIONS.some((item) => item.id === key) ? key : 'frankfurter';
     }
 

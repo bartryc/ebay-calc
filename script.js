@@ -12,7 +12,7 @@ const RATE_PROVIDERS = {
     buildUrl: (currency) => `https://api.frankfurter.app/latest?from=PLN&to=${currency}`,
     readRate: (data, currency) => data?.rates?.[currency]
   },
-  exchangerate: {
+  nbp: {
     label: 'NBP API',
     buildUrl: (currency) => `https://api.nbp.pl/api/exchangerates/rates/A/${currency}/?format=json`,
     readRate: (data) => {
@@ -1707,34 +1707,38 @@ function syncFields(source) {
   const bruttoInput = document.getElementById('plnBrutto');
   const ebayPriceInput = document.getElementById('ebayPrice');
   const vatRateInput = document.getElementById('vatRate');
+  const nettoValue = parseNumber(nettoInput.value);
+  const bruttoValue = parseNumber(bruttoInput.value);
+  const ebayValue = parseNumber(ebayPriceInput.value);
+  const vatInputValue = parseNumber(vatRateInput.value);
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
   const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
   const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
-  const vatRateRaw = parseNumber(vatRateInput.value);
+  const vatRateRaw = vatInputValue;
   const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
   const clientVatMultiplier = Number.isFinite(vatRate) ? (1 + vatRate) : NaN;
   const resultDiv = document.getElementById('result');
 
   // Validate negative inputs
-  if (source === 'netto' && Number.isFinite(parseNumber(nettoInput.value)) && parseNumber(nettoInput.value) < 0) {
+  if (source === 'netto' && Number.isFinite(nettoValue) && nettoValue < 0) {
     resultDiv.innerHTML = '<span class="error">Kwota netto nie może być ujemna.</span>';
     return;
   }
-  if (source === 'brutto' && Number.isFinite(parseNumber(bruttoInput.value)) && parseNumber(bruttoInput.value) < 0) {
+  if (source === 'brutto' && Number.isFinite(bruttoValue) && bruttoValue < 0) {
     resultDiv.innerHTML = '<span class="error">Kwota brutto nie może być ujemna.</span>';
     return;
   }
-  if (source === 'ebayPrice' && Number.isFinite(parseNumber(ebayPriceInput.value)) && parseNumber(ebayPriceInput.value) < 0) {
+  if (source === 'ebayPrice' && Number.isFinite(ebayValue) && ebayValue < 0) {
     resultDiv.innerHTML = '<span class="error">Cena na eBay nie może być ujemna.</span>';
     return;
   }
-  if (source === 'vatRate' && Number.isFinite(parseNumber(vatRateInput.value)) && parseNumber(vatRateInput.value) < 0) {
+  if (source === 'vatRate' && Number.isFinite(vatInputValue) && vatInputValue < 0) {
     resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>';
     return;
   }
 
-  if (source === 'netto' && Number.isFinite(parseNumber(nettoInput.value))) {
-    const netto = parseNumber(nettoInput.value);
+  if (source === 'netto' && Number.isFinite(nettoValue)) {
+    const netto = nettoValue;
     const brutto = netto * (1 + VAT23);
     bruttoInput.value = brutto.toFixed(2);
     if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
@@ -1745,8 +1749,8 @@ function syncFields(source) {
       originalCurrency = document.getElementById('currency').value;
       originalExchangeRate = exchangeRate;
     }
-  } else if (source === 'brutto' && Number.isFinite(parseNumber(bruttoInput.value))) {
-    const brutto = parseNumber(bruttoInput.value);
+  } else if (source === 'brutto' && Number.isFinite(bruttoValue)) {
+    const brutto = bruttoValue;
     const netto = brutto / (1 + VAT23);
     nettoInput.value = netto.toFixed(2);
     if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
@@ -1757,8 +1761,8 @@ function syncFields(source) {
       originalCurrency = document.getElementById('currency').value;
       originalExchangeRate = exchangeRate;
     }
-  } else if (source === 'ebayPrice' && Number.isFinite(parseNumber(ebayPriceInput.value))) {
-    const ebayPrice = parseNumber(ebayPriceInput.value);
+  } else if (source === 'ebayPrice' && Number.isFinite(ebayValue)) {
+    const ebayPrice = ebayValue;
     if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
       const priceInCurrency = ebayPrice / (1 + commission);
       const netto = priceInCurrency / (exchangeRate * clientVatMultiplier);
@@ -1769,8 +1773,8 @@ function syncFields(source) {
       originalCurrency = document.getElementById('currency').value;
       originalExchangeRate = exchangeRate;
     }
-  } else if (source === 'vatRate' && Number.isFinite(parseNumber(vatRateInput.value))) {
-    const vatRatePercent = Math.max(0, Math.min(100, parseNumber(vatRateInput.value)));
+  } else if (source === 'vatRate' && Number.isFinite(vatInputValue)) {
+    const vatRatePercent = Math.max(0, Math.min(100, vatInputValue));
     vatRateInput.value = vatRatePercent.toString();
     updateEbayCurrencyLabel();
     let brutto = parseNumber(bruttoInput.value);
@@ -1874,6 +1878,8 @@ function updateEbayPriceFromNettoOrBrutto() {
   const nettoInput = document.getElementById('plnNetto');
   const bruttoInput = document.getElementById('plnBrutto');
   const ebayPriceInput = document.getElementById('ebayPrice');
+  const nettoValue = parseNumber(nettoInput.value);
+  const bruttoValue = parseNumber(bruttoInput.value);
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
   const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
   const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
@@ -1881,8 +1887,8 @@ function updateEbayPriceFromNettoOrBrutto() {
   const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
   const clientVatMultiplier = Number.isFinite(vatRate) ? (1 + vatRate) : NaN;
 
-  if (lastChanged === 'netto' && Number.isFinite(parseNumber(nettoInput.value))) {
-    const netto = parseNumber(nettoInput.value);
+  if (lastChanged === 'netto' && Number.isFinite(nettoValue)) {
+    const netto = nettoValue;
     if (validateInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
       const brutto = netto * (1 + VAT23);
       bruttoInput.value = brutto.toFixed(2);
@@ -1890,8 +1896,8 @@ function updateEbayPriceFromNettoOrBrutto() {
       const finalPrice = priceInCurrency * (1 + commission);
       ebayPriceInput.value = finalPrice.toFixed(2);
     }
-  } else if (lastChanged === 'brutto' && Number.isFinite(parseNumber(bruttoInput.value))) {
-    const brutto = parseNumber(bruttoInput.value);
+  } else if (lastChanged === 'brutto' && Number.isFinite(bruttoValue)) {
+    const brutto = bruttoValue;
     if (validateInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
       const netto = brutto / (1 + VAT23);
       nettoInput.value = netto.toFixed(2);
@@ -1908,7 +1914,7 @@ function fetchExchangeRate(currency, options = {}) {
   const exchangeRateInp = document.getElementById('exchangeRate');
   const ebayPriceInput = document.getElementById('ebayPrice');
   const rateSourceSelect = document.getElementById('rateSource');
-  const providerKey = rateSourceSelect?.value || 'frankfurter';
+  const providerKey = normalizeRateProviderKey(rateSourceSelect?.value || 'frankfurter');
   const provider = RATE_PROVIDERS[providerKey] || RATE_PROVIDERS.frankfurter;
   const notify = options.notify === true;
   exchangeInfo.innerText = 'Pobieranie kursu...';
@@ -2033,7 +2039,8 @@ function fetchExchangeRate(currency, options = {}) {
 }
 
 function normalizeRateProviderKey(value) {
-  const key = String(value || '').trim().toLowerCase();
+  const keyRaw = String(value || '').trim().toLowerCase();
+  const key = keyRaw === 'exchangerate' ? 'nbp' : keyRaw;
   return RATE_PROVIDERS[key] ? key : 'frankfurter';
 }
 
@@ -2136,70 +2143,75 @@ document.getElementById('productId').addEventListener('keydown', (event) => {
   openStockFromInput();
 });
 
-document.getElementById('plnNetto').addEventListener('input', () => {
+const plnNettoInput = document.getElementById('plnNetto');
+const plnBruttoInput = document.getElementById('plnBrutto');
+const ebayPriceInputEl = document.getElementById('ebayPrice');
+const vatRateInputEl = document.getElementById('vatRate');
+const currencySelectEl = document.getElementById('currency');
+plnNettoInput.addEventListener('input', () => {
   lastChanged = 'netto';
   hideSelfTestDetails();
-  enforceTwoDecimals(document.getElementById('plnNetto'));
+  enforceTwoDecimals(plnNettoInput);
   syncFields('netto');
   scheduleHistoryLog('netto');
 });
-document.getElementById('plnNetto').addEventListener('focus', () => {
+plnNettoInput.addEventListener('focus', () => {
   setFieldBaseline('netto');
 });
-document.getElementById('plnNetto').addEventListener('blur', () => {
+plnNettoInput.addEventListener('blur', () => {
   flushHistoryLog('netto');
 });
 
-document.getElementById('plnBrutto').addEventListener('input', () => {
+plnBruttoInput.addEventListener('input', () => {
   lastChanged = 'brutto';
   hideSelfTestDetails();
-  enforceTwoDecimals(document.getElementById('plnBrutto'));
+  enforceTwoDecimals(plnBruttoInput);
   syncFields('brutto');
   scheduleHistoryLog('brutto');
 });
-document.getElementById('plnBrutto').addEventListener('focus', () => {
+plnBruttoInput.addEventListener('focus', () => {
   setFieldBaseline('brutto');
 });
-document.getElementById('plnBrutto').addEventListener('blur', () => {
+plnBruttoInput.addEventListener('blur', () => {
   flushHistoryLog('brutto');
 });
 
-document.getElementById('ebayPrice').addEventListener('input', () => {
+ebayPriceInputEl.addEventListener('input', () => {
   lastChanged = 'ebayPrice';
   hideSelfTestDetails();
-  enforceTwoDecimals(document.getElementById('ebayPrice'));
+  enforceTwoDecimals(ebayPriceInputEl);
   syncFields('ebayPrice');
   scheduleHistoryLog('ebayPrice');
 });
-document.getElementById('ebayPrice').addEventListener('focus', () => {
+ebayPriceInputEl.addEventListener('focus', () => {
   setFieldBaseline('ebayPrice');
 });
-document.getElementById('ebayPrice').addEventListener('blur', () => {
+ebayPriceInputEl.addEventListener('blur', () => {
   flushHistoryLog('ebayPrice');
 });
 
-document.getElementById('vatRate').addEventListener('input', () => {
+vatRateInputEl.addEventListener('input', () => {
   lastChanged = 'vatRate';
   hideSelfTestDetails();
   syncFields('vatRate');
   updateBaseMultiplier();
   scheduleHistoryLog('vatRate');
 });
-document.getElementById('vatRate').addEventListener('focus', () => {
+vatRateInputEl.addEventListener('focus', () => {
   setFieldBaseline('vatRate');
 });
-document.getElementById('vatRate').addEventListener('blur', () => {
+vatRateInputEl.addEventListener('blur', () => {
   flushHistoryLog('vatRate');
 });
 
 ['exchangeRate', 'commission'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => {
     hideSelfTestDetails();
-    if (lastChanged === 'ebayPrice' && !isNaN(parseFloat(document.getElementById('ebayPrice').value))) {
+    if (lastChanged === 'ebayPrice' && !isNaN(parseFloat(ebayPriceInputEl.value))) {
       syncFields('ebayPrice');
-    } else if ((lastChanged === 'netto' || lastChanged === 'brutto') && !isNaN(parseFloat(document.getElementById('plnNetto').value))) {
+    } else if ((lastChanged === 'netto' || lastChanged === 'brutto') && !isNaN(parseFloat(plnNettoInput.value))) {
       syncFields(lastChanged);
-    } else if (lastChanged === 'vatRate' && !isNaN(parseInt(document.getElementById('vatRate').value))) {
+    } else if (lastChanged === 'vatRate' && !isNaN(parseInt(vatRateInputEl.value))) {
       syncFields('vatRate');
     } else {
       calculatePrice();
@@ -2216,8 +2228,8 @@ document.getElementById('vatRate').addEventListener('blur', () => {
   });
 });
 
-document.getElementById('currency').addEventListener('change', () => {
-  const selectedCurrency = document.getElementById('currency').value;
+currencySelectEl.addEventListener('change', () => {
+  const selectedCurrency = currencySelectEl.value;
   document.getElementById('currencyLabel').innerText = selectedCurrency;
   updateEbayCurrencyLabel();
   hideSelfTestDetails();
@@ -2931,9 +2943,10 @@ if (partNumberInput) {
     }
     const openedForPn = openedSourcesCurrentPn;
     const sourcesToOpen = sources.filter((sourceId) => !openedForPn.has(sourceId));
+    const sourcesToOpenSet = new Set(sourcesToOpen);
     let openedCount = 0;
     sources.forEach((sourceId) => {
-      if (!sourcesToOpen.includes(sourceId)) {
+      if (!sourcesToOpenSet.has(sourceId)) {
         calledUrls[sourceId] = {
           url: '',
           mode: 'skipped',
