@@ -2436,7 +2436,8 @@ const partNumberInput = document.getElementById('partNumberInput');
 if (partNumberInput) {
   let lastSearchQuery = '';
   let lastSuggestedVendor = '';
-  const openedSourcesByPn = new Map();
+  let lastOpenedPnKey = '';
+  let openedSourcesCurrentPn = new Set();
   let mappingsRefreshTimer = null;
   let mappingsRefreshSeq = 0;
   let mappingsAppliedSeq = 0;
@@ -2924,7 +2925,11 @@ if (partNumberInput) {
     };
     const sourceVariantsUsed = {};
     const calledUrls = {};
-    const openedForPn = openedSourcesByPn.get(currentPnKey) || new Set();
+    if (currentPnKey !== lastOpenedPnKey) {
+      openedSourcesCurrentPn = new Set();
+      lastOpenedPnKey = currentPnKey;
+    }
+    const openedForPn = openedSourcesCurrentPn;
     const sourcesToOpen = sources.filter((sourceId) => !openedForPn.has(sourceId));
     let openedCount = 0;
     sources.forEach((sourceId) => {
@@ -2969,7 +2974,7 @@ if (partNumberInput) {
       return false;
     }
     if (currentPnKey) {
-      openedSourcesByPn.set(currentPnKey, openedForPn);
+      openedSourcesCurrentPn = openedForPn;
     }
     if (openedCount < sources.length) {
       showMainToast('Pominięto źródła już wcześniej otwarte dla tego PN.', 'info');
