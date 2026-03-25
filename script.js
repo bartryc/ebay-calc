@@ -917,22 +917,46 @@ function updateMinSaleByMarkup() {
 function updateMarkupFromSale() {
   const purchaseEl = document.getElementById('markupPurchaseAmount');
   const saleEl = document.getElementById('targetSaleAmount');
+  const ebaySaleEl = document.getElementById('ebayPrice');
   const resultEl = document.getElementById('calculatedMarkup');
+  const resultFromEbayEl = document.getElementById('calculatedMarkupFromEbay');
   if (!purchaseEl || !saleEl || !resultEl) return;
 
   const purchase = parseNumber(purchaseEl.value);
   const sale = parseNumber(saleEl.value);
-  if (!Number.isFinite(purchase) || purchase <= 0 || !Number.isFinite(sale) || sale < 0) {
+  const ebaySale = parseNumber(ebaySaleEl?.value);
+  if (!Number.isFinite(purchase) || purchase <= 0) {
     resultEl.textContent = '—';
+    if (resultFromEbayEl) resultFromEbayEl.textContent = '—';
     return;
   }
 
   const vatRate = getClientVatRateFraction();
   const vatMultiplier = 1 + (Number.isFinite(vatRate) ? vatRate : 0);
   const purchaseBrutto = isMarkupPurchaseNetMode() ? purchase * vatMultiplier : purchase;
-  const saleBrutto = isMarkupSaleNetMode() ? sale * vatMultiplier : sale;
-  const markupPercent = ((saleBrutto - purchaseBrutto) / purchaseBrutto) * 100;
-  resultEl.textContent = `${markupPercent.toFixed(2)}%`;
+
+  if (Number.isFinite(sale) && sale >= 0) {
+    const saleBrutto = isMarkupSaleNetMode() ? sale * vatMultiplier : sale;
+    const markupPercent = ((saleBrutto - purchaseBrutto) / purchaseBrutto) * 100;
+    resultEl.textContent = `${markupPercent.toFixed(2)}%`;
+  } else {
+    resultEl.textContent = '—';
+  }
+
+  if (resultFromEbayEl) {
+    const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
+    const commissionRaw = advancedOptionsToggle?.checked
+      ? parseNumber(document.getElementById('commission')?.value)
+      : 15;
+    const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+    if (!Number.isFinite(ebaySale) || ebaySale < 0 || !Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
+      resultFromEbayEl.textContent = '—';
+    } else {
+      const saleBruttoFromEbay = ebaySale / (exchangeRate * (1 + commission));
+      const markupPercentFromEbay = ((saleBruttoFromEbay - purchaseBrutto) / purchaseBrutto) * 100;
+      resultFromEbayEl.textContent = `${markupPercentFromEbay.toFixed(2)}%`;
+    }
+  }
 }
 
 function updateCommissionFromBaseMultiplier() {
@@ -1446,6 +1470,7 @@ function addHistoryEntry(source) {
   const minMarkupPercent = parseNumber(document.getElementById('minMarkup')?.value);
   const markupPurchaseAmount = parseNumber(document.getElementById('markupPurchaseAmount')?.value);
   const targetSaleAmount = parseNumber(document.getElementById('targetSaleAmount')?.value);
+  const targetSaleEbayAmount = parseNumber(document.getElementById('ebayPrice')?.value);
   const markupPurchaseMode = getMarkupPurchaseMode();
   const markupSaleMode = getMarkupSaleMode();
   const markupAmountMode = `zakup: ${markupPurchaseMode}, sprzedaż: ${markupSaleMode}`;
@@ -1473,6 +1498,7 @@ function addHistoryEntry(source) {
     minMarkup: 'Minimalny narzut',
     markupPurchaseAmount: 'Koszt zakupu (narzut)',
     targetSaleAmount: 'Cena sprzedaży (narzut)',
+    ebayPrice: 'eBay',
     markupAmountMode: 'Tryb narzutu',
     preset: 'Preset'
   }[source] || 'Przeliczenie';
@@ -1494,7 +1520,7 @@ function addHistoryEntry(source) {
 
   const isMinMarkupSource = source === 'purchaseAmount' || source === 'minMarkup' || source === 'purchaseAmountMode';
   const isBaseCommissionSource = source === 'currentBaseMultiplier';
-  const isSaleMarkupSource = source === 'markupPurchaseAmount' || source === 'targetSaleAmount' || source === 'markupAmountMode';
+  const isSaleMarkupSource = source === 'markupPurchaseAmount' || source === 'targetSaleAmount' || source === 'ebayPrice' || source === 'markupAmountMode';
   if (isSaleMarkupSource) {
     sourceLabel = `${sourceLabel} (tryb: ${markupAmountMode})`;
   }
@@ -1511,11 +1537,14 @@ function addHistoryEntry(source) {
     meta = `Min. eBay ${minSaleEbayText} <span class="history-dot">•</span> Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}% <span class="history-dot">•</span> Tryb netto → brutto liczony wg VAT klienta`;
   } else if (isSaleMarkupSource) {
     const calculatedMarkupText = document.getElementById('calculatedMarkup')?.textContent?.trim() || '—';
+    const calculatedMarkupFromEbayText = document.getElementById('calculatedMarkupFromEbay')?.textContent?.trim() || '—';
     details = [
       `Zakup (tryb: ${markupPurchaseMode}) <span class="history-value">${formatCurrency(markupPurchaseAmount)}</span> PLN`,
       `Sprzedaż (tryb: ${markupSaleMode}) <span class="history-value">${formatCurrency(targetSaleAmount)}</span> PLN`,
+      `Sprzedaż eBay <span class="history-value">${formatCurrency(targetSaleEbayAmount)}</span> ${currency}`,
       `Baza brutto <span class="history-value">${formatCurrency(markupPurchaseBrutto)}</span> / <span class="history-value">${formatCurrency(markupSaleBrutto)}</span> PLN`,
-      `Narzut <span class="history-value">${calculatedMarkupText}</span>`
+      `Narzut <span class="history-value">${calculatedMarkupText}</span>`,
+      `Narzut z eBay <span class="history-value">${calculatedMarkupFromEbayText}</span>`
     ].join(' <span class="history-dot">•</span> ');
     meta = `Wzór: (sprzedaż - zakup) / zakup × 100% <span class="history-dot">•</span> Konwersja netto/brutto wg VAT klienta`;
   } else if (isBaseCommissionSource) {
@@ -1528,7 +1557,7 @@ function addHistoryEntry(source) {
 
   const hasMainValues = Number.isFinite(netto) || Number.isFinite(brutto) || Number.isFinite(ebayPrice);
   const hasMinMarkupValues = Number.isFinite(purchaseAmount) || Number.isFinite(minMarkupPercent);
-  const hasSaleMarkupValues = Number.isFinite(markupPurchaseAmount) || Number.isFinite(targetSaleAmount);
+  const hasSaleMarkupValues = Number.isFinite(markupPurchaseAmount) || Number.isFinite(targetSaleAmount) || Number.isFinite(targetSaleEbayAmount);
   const hasBaseCommissionValues = Number.isFinite(currentBaseMultiplier);
   if (!hasMainValues && !hasMinMarkupValues && !hasSaleMarkupValues && !hasBaseCommissionValues) {
     return;
@@ -1571,6 +1600,7 @@ function addHistoryEntry(source) {
     minMarkup: Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : null,
     markupPurchaseAmount: Number.isFinite(markupPurchaseAmount) ? markupPurchaseAmount.toFixed(2) : null,
     targetSaleAmount: Number.isFinite(targetSaleAmount) ? targetSaleAmount.toFixed(2) : null,
+    targetSaleEbayAmount: Number.isFinite(targetSaleEbayAmount) ? targetSaleEbayAmount.toFixed(2) : null,
     markupAmountMode,
     markupPurchaseMode,
     markupSaleMode,
@@ -1650,7 +1680,10 @@ function updateEbayCurrencyLabel() {
   const vatRateInput = document.getElementById('vatRate');
   const vatRate = parseNumber(vatRateInput.value);
   const vatRateDisplay = Number.isFinite(vatRate) ? vatRate : 0;
-  ebayCurrencyLabel.innerText = `${currency} (z VAT ${formatPercent(vatRateDisplay)}%)`;
+  const label = `${currency} (z VAT ${formatPercent(vatRateDisplay)}%)`
+    .replace(/\s+/g, ' ')
+    .trim();
+  ebayCurrencyLabel.textContent = label;
 }
 
 // Clear button handler
@@ -1860,7 +1893,10 @@ function applyPreset(currency, vat) {
   document.getElementById('currency').value = currency;
   document.getElementById('vatRate').value = parseNumber(vat).toString();
   document.getElementById('currencyLabel').innerText = currency;
-  ebayCurrencyLabel.innerText = `${currency} (z VAT ${formatPercent(parseNumber(vat))}%)`;
+  const label = `${currency} (z VAT ${formatPercent(parseNumber(vat))}%)`
+    .replace(/\s+/g, ' ')
+    .trim();
+  ebayCurrencyLabel.textContent = label;
   lastChanged = 'vatRate';
   syncFields('vatRate');
   fetchExchangeRate(currency);
@@ -1943,6 +1979,7 @@ function fetchExchangeRate(currency, options = {}) {
     }
     updateBaseMultiplier();
     updateMinSaleByMarkup();
+    updateMarkupFromSale();
 
     if (convertEbayPriceNeeded) {
       const newEbayPrice = convertEbayPrice(rate);
@@ -2011,6 +2048,7 @@ function fetchExchangeRate(currency, options = {}) {
             }
             updateBaseMultiplier();
             updateMinSaleByMarkup();
+            updateMarkupFromSale();
             calculatePrice();
             isPresetApplied = false;
           });
@@ -2030,6 +2068,7 @@ function fetchExchangeRate(currency, options = {}) {
       }
       updateBaseMultiplier();
       updateMinSaleByMarkup();
+      updateMarkupFromSale();
       calculatePrice();
       isPresetApplied = false;
     });
@@ -2178,6 +2217,7 @@ ebayPriceInputEl.addEventListener('input', () => {
   hideSelfTestDetails();
   enforceTwoDecimals(ebayPriceInputEl);
   syncFields('ebayPrice');
+  updateMarkupFromSale();
   scheduleHistoryLog('ebayPrice');
 });
 ebayPriceInputEl.addEventListener('focus', () => {
@@ -2217,6 +2257,7 @@ vatRateInputEl.addEventListener('blur', () => {
     }
     updateBaseMultiplier();
     updateMinSaleByMarkup();
+    updateMarkupFromSale();
     scheduleHistoryLog(id);
   });
   document.getElementById(id).addEventListener('focus', () => {
@@ -2235,6 +2276,7 @@ currencySelectEl.addEventListener('change', () => {
   fetchExchangeRate(selectedCurrency, { notify: false });
   checkRateProvidersStatus(selectedCurrency);
   updateMinSaleByMarkup();
+  updateMarkupFromSale();
   addHistoryEntry('currency');
 });
 
