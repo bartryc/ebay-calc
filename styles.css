@@ -3767,6 +3767,16 @@ footer {
     gap: 8px;
   }
 
+  body[data-page-title="Kalkulator"] #calcLayoutContainer {
+    --calc-item-max-width: 300px;
+    justify-items: start;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item {
+    width: min(100%, var(--calc-item-max-width));
+    justify-self: start;
+  }
+
   body[data-page-title="Kalkulator"] label {
     margin-bottom: 4px;
     font-size: 0.96rem;
@@ -3781,13 +3791,39 @@ footer {
 
   body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > input[type="number"],
   body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > input[type="text"],
-  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > select {
-    width: min(100%, 300px);
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > select,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .input-tooltip,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .currency-row,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .min-price-box,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .toggle-row,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .advanced-options,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > p,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > label,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .field-label,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .preset-buttons {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .currency-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  body[data-page-title="Kalkulator"] #refreshRateBtn {
+    width: 100%;
   }
 
   body[data-page-title="Kalkulator"] .preset-buttons button {
     padding: 6px 6px;
     font-size: 0.84rem;
+    width: 100%;
+  }
+
+  body[data-page-title="Kalkulator"] .preset-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 
   body[data-page-title="Kalkulator"] .search-card {
@@ -3851,6 +3887,16 @@ footer {
     gap: 6px;
   }
 
+  body[data-page-title="Kalkulator"] #calcLayoutContainer {
+    --calc-item-max-width: 260px;
+    justify-items: start;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item {
+    width: min(100%, var(--calc-item-max-width));
+    justify-self: start;
+  }
+
   body[data-page-title="Kalkulator"] .preset-buttons {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
@@ -3876,8 +3922,32 @@ footer {
 
   body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > input[type="number"],
   body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > input[type="text"],
-  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > select {
-    width: min(100%, 260px);
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > select,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .input-tooltip,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .currency-row,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .min-price-box,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .toggle-row,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .advanced-options,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > p,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > label,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .field-label,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .preset-buttons {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item > .currency-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  body[data-page-title="Kalkulator"] #refreshRateBtn {
+    width: 100%;
+  }
+
+  body[data-page-title="Kalkulator"] .preset-buttons button {
+    width: 100%;
   }
 
   body[data-page-title="Kalkulator"] .search-header h3,
