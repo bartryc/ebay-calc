@@ -821,68 +821,55 @@ function getPurchaseAmountMode() {
 }
 
 function updatePurchaseAmountModeUI() {
-  const modeLabelEl = document.getElementById('purchaseAmountModeLabel');
   const purchaseLabelEl = document.querySelector('label[for="purchaseAmount"]');
   const isNet = isPurchaseNetMode();
-  if (modeLabelEl) {
-    modeLabelEl.textContent = `Tryb zakupu: ${isNet ? 'netto' : 'brutto'}`;
-  }
   if (purchaseLabelEl) {
     const helpHtml = purchaseLabelEl.querySelector('.field-help')?.outerHTML || '';
-    purchaseLabelEl.innerHTML = `Kwota zakupu (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+    const toggleHtml = `<button type="button" class="mode-inline-toggle" data-toggle="purchaseAmountNetToggle">${isNet ? 'netto' : 'brutto'}</button>`;
+    purchaseLabelEl.innerHTML = `Kwota zakupu (PLN, tryb: ${toggleHtml}) ${helpHtml}`;
   }
 }
 
-function isMarkupNetMode() {
-  return !!document.getElementById('markupAmountNetToggle')?.checked;
+function getClientVatRateFraction() {
+  const vatRateRaw = parseNumber(document.getElementById('vatRate')?.value);
+  if (!Number.isFinite(vatRateRaw) || vatRateRaw < 0) return NaN;
+  return vatRateRaw / 100;
 }
 
-function getMarkupAmountMode() {
-  return isMarkupNetMode() ? 'netto' : 'brutto';
+function isMarkupPurchaseNetMode() {
+  return !!document.getElementById('markupPurchaseNetToggle')?.checked;
 }
 
-function updateMarkupAmountModeUI() {
-  const purchaseLabelEl = document.querySelector('label[for="markupPurchaseAmount"]');
-  const saleLabelEl = document.querySelector('label[for="targetSaleAmount"]');
-  const isNet = isMarkupNetMode();
-  if (purchaseLabelEl) {
-    const helpHtml = purchaseLabelEl.querySelector('.field-help')?.outerHTML || '';
-    const toggleHtml = '<button type="button" class="mode-inline-toggle" data-toggle="markupAmountNetToggle"></button>';
-    purchaseLabelEl.innerHTML = `Kwota zakupu do narzutu (PLN ${toggleHtml}) ${helpHtml}`;
-  }
-  if (saleLabelEl) {
-    const helpHtml = saleLabelEl.querySelector('.field-help')?.outerHTML || '';
-    const toggleHtml = '<button type="button" class="mode-inline-toggle" data-toggle="markupAmountNetToggle"></button>';
-    saleLabelEl.innerHTML = `Docelowa cena sprzedaży (PLN ${toggleHtml}) ${helpHtml}`;
-  }
-  document.querySelectorAll('.mode-inline-toggle[data-toggle="markupAmountNetToggle"]').forEach((btn) => {
-    btn.textContent = isNet ? 'netto' : 'brutto';
-  });
+function isMarkupSaleNetMode() {
+  return !!document.getElementById('markupSaleNetToggle')?.checked;
 }
 
-function isMarkupNetMode() {
-  return !!document.getElementById('markupAmountNetToggle')?.checked;
+function getMarkupPurchaseMode() {
+  return isMarkupPurchaseNetMode() ? 'netto' : 'brutto';
 }
 
-function getMarkupAmountMode() {
-  return isMarkupNetMode() ? 'netto' : 'brutto';
+function getMarkupSaleMode() {
+  return isMarkupSaleNetMode() ? 'netto' : 'brutto';
 }
 
 function updateMarkupAmountModeUI() {
   const modeLabelEl = document.getElementById('markupAmountModeLabel');
   const purchaseLabelEl = document.querySelector('label[for="markupPurchaseAmount"]');
   const saleLabelEl = document.querySelector('label[for="targetSaleAmount"]');
-  const isNet = isMarkupNetMode();
+  const purchaseIsNet = isMarkupPurchaseNetMode();
+  const saleIsNet = isMarkupSaleNetMode();
   if (modeLabelEl) {
-    modeLabelEl.textContent = `Tryb narzutu: ${isNet ? 'netto' : 'brutto'}`;
+    modeLabelEl.textContent = `Tryb narzutu: zakup ${purchaseIsNet ? 'netto' : 'brutto'} / sprzedaż ${saleIsNet ? 'netto' : 'brutto'}`;
   }
   if (purchaseLabelEl) {
     const helpHtml = purchaseLabelEl.querySelector('.field-help')?.outerHTML || '';
-    purchaseLabelEl.innerHTML = `Kwota zakupu do narzutu (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+    const toggleHtml = `<button type="button" class="mode-inline-toggle" data-toggle="markupPurchaseNetToggle">${purchaseIsNet ? 'netto' : 'brutto'}</button>`;
+    purchaseLabelEl.innerHTML = `Kwota zakupu do narzutu (PLN, tryb: ${toggleHtml}) ${helpHtml}`;
   }
   if (saleLabelEl) {
     const helpHtml = saleLabelEl.querySelector('.field-help')?.outerHTML || '';
-    saleLabelEl.innerHTML = `Docelowa cena sprzedaży (PLN ${isNet ? 'netto' : 'brutto'}) ${helpHtml}`;
+    const toggleHtml = `<button type="button" class="mode-inline-toggle" data-toggle="markupSaleNetToggle">${saleIsNet ? 'netto' : 'brutto'}</button>`;
+    saleLabelEl.innerHTML = `Docelowa cena sprzedaży (PLN, tryb: ${toggleHtml}) ${helpHtml}`;
   }
 }
 
@@ -902,8 +889,7 @@ function updateMinSaleByMarkup() {
     ? parseNumber(document.getElementById('commission')?.value)
     : 15;
   const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
-  const vatRateRaw = parseNumber(document.getElementById('vatRate')?.value);
-  const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
+  const vatRate = getClientVatRateFraction();
   const currency = currencyEl.value || 'EUR';
 
   if (minSaleCurrencyLabelEl) minSaleCurrencyLabelEl.textContent = currency;
@@ -914,7 +900,8 @@ function updateMinSaleByMarkup() {
     return;
   }
 
-  const purchaseBrutto = isPurchaseNetMode() ? purchase * (1 + VAT23) : purchase;
+  const vatMultiplier = 1 + (Number.isFinite(vatRate) ? vatRate : 0);
+  const purchaseBrutto = isPurchaseNetMode() ? purchase * vatMultiplier : purchase;
   const minSalePlnBrutto = purchaseBrutto * (1 + (markupPercent / 100));
   minSalePlnEl.textContent = `${minSalePlnBrutto.toFixed(2)} PLN`;
 
@@ -923,9 +910,7 @@ function updateMinSaleByMarkup() {
     return;
   }
 
-  const minSaleNetto = minSalePlnBrutto / (1 + VAT23);
-  const clientVatMultiplier = 1 + (Number.isFinite(vatRate) ? vatRate : 0);
-  const minSaleEbay = minSaleNetto * clientVatMultiplier * exchangeRate * (1 + commission);
+  const minSaleEbay = minSalePlnBrutto * exchangeRate * (1 + commission);
   minSaleEbayEl.textContent = `${minSaleEbay.toFixed(2)} ${currency}`;
 }
 
@@ -942,8 +927,10 @@ function updateMarkupFromSale() {
     return;
   }
 
-  const purchaseBrutto = isMarkupNetMode() ? purchase * (1 + VAT23) : purchase;
-  const saleBrutto = isMarkupNetMode() ? sale * (1 + VAT23) : sale;
+  const vatRate = getClientVatRateFraction();
+  const vatMultiplier = 1 + (Number.isFinite(vatRate) ? vatRate : 0);
+  const purchaseBrutto = isMarkupPurchaseNetMode() ? purchase * vatMultiplier : purchase;
+  const saleBrutto = isMarkupSaleNetMode() ? sale * vatMultiplier : sale;
   const markupPercent = ((saleBrutto - purchaseBrutto) / purchaseBrutto) * 100;
   resultEl.textContent = `${markupPercent.toFixed(2)}%`;
 }
@@ -1450,21 +1437,25 @@ function addHistoryEntry(source) {
   const currentBaseMultiplier = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
   const calculatedCommissionFromBaseText = document.getElementById('calculatedCommissionFromBase')?.textContent?.trim() || '—';
   const purchaseAmountMode = getPurchaseAmountMode();
+  const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
+  const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
+  const vatMultiplier = 1 + (Number.isFinite(vatRate) ? vatRate : 0);
   const purchaseAmountBrutto = Number.isFinite(purchaseAmount)
-    ? (purchaseAmountMode === 'netto' ? purchaseAmount * (1 + VAT23) : purchaseAmount)
+    ? (purchaseAmountMode === 'netto' ? purchaseAmount * vatMultiplier : purchaseAmount)
     : NaN;
   const minMarkupPercent = parseNumber(document.getElementById('minMarkup')?.value);
   const markupPurchaseAmount = parseNumber(document.getElementById('markupPurchaseAmount')?.value);
   const targetSaleAmount = parseNumber(document.getElementById('targetSaleAmount')?.value);
-  const markupAmountMode = getMarkupAmountMode();
+  const markupPurchaseMode = getMarkupPurchaseMode();
+  const markupSaleMode = getMarkupSaleMode();
+  const markupAmountMode = `zakup: ${markupPurchaseMode}, sprzedaż: ${markupSaleMode}`;
   const markupPurchaseBrutto = Number.isFinite(markupPurchaseAmount)
-    ? (markupAmountMode === 'netto' ? markupPurchaseAmount * (1 + VAT23) : markupPurchaseAmount)
+    ? (markupPurchaseMode === 'netto' ? markupPurchaseAmount * vatMultiplier : markupPurchaseAmount)
     : NaN;
   const markupSaleBrutto = Number.isFinite(targetSaleAmount)
-    ? (markupAmountMode === 'netto' ? targetSaleAmount * (1 + VAT23) : targetSaleAmount)
+    ? (markupSaleMode === 'netto' ? targetSaleAmount * vatMultiplier : targetSaleAmount)
     : NaN;
   const currency = document.getElementById('currency').value;
-  const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
   const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
 
@@ -1505,28 +1496,28 @@ function addHistoryEntry(source) {
   const isBaseCommissionSource = source === 'currentBaseMultiplier';
   const isSaleMarkupSource = source === 'markupPurchaseAmount' || source === 'targetSaleAmount' || source === 'markupAmountMode';
   if (isSaleMarkupSource) {
-    sourceLabel = `${sourceLabel} (${markupAmountMode})`;
+    sourceLabel = `${sourceLabel} (tryb: ${markupAmountMode})`;
   }
 
   if (isMinMarkupSource) {
     const minSalePlnText = document.getElementById('minSalePln')?.textContent?.trim() || '—';
     const minSaleEbayText = document.getElementById('minSaleEbay')?.textContent?.trim() || '—';
     details = [
-      `Zakup (${purchaseAmountMode}) <span class="history-value">${formatCurrency(purchaseAmount)}</span> PLN`,
+      `Zakup (tryb: ${purchaseAmountMode}) <span class="history-value">${formatCurrency(purchaseAmount)}</span> PLN`,
       `Baza brutto <span class="history-value">${formatCurrency(purchaseAmountBrutto)}</span> PLN`,
       `Min. narzut <span class="history-value">${Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : '-'}</span>%`,
       `Min. sprzedaż <span class="history-value">${minSalePlnText}</span>`
     ].join(' <span class="history-dot">•</span> ');
-    meta = `Min. eBay ${minSaleEbayText} <span class="history-dot">•</span> Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}%`;
+    meta = `Min. eBay ${minSaleEbayText} <span class="history-dot">•</span> Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}% <span class="history-dot">•</span> Tryb netto → brutto liczony wg VAT klienta`;
   } else if (isSaleMarkupSource) {
     const calculatedMarkupText = document.getElementById('calculatedMarkup')?.textContent?.trim() || '—';
     details = [
-      `Zakup (${markupAmountMode}) <span class="history-value">${formatCurrency(markupPurchaseAmount)}</span> PLN`,
-      `Sprzedaż (${markupAmountMode}) <span class="history-value">${formatCurrency(targetSaleAmount)}</span> PLN`,
+      `Zakup (tryb: ${markupPurchaseMode}) <span class="history-value">${formatCurrency(markupPurchaseAmount)}</span> PLN`,
+      `Sprzedaż (tryb: ${markupSaleMode}) <span class="history-value">${formatCurrency(targetSaleAmount)}</span> PLN`,
       `Baza brutto <span class="history-value">${formatCurrency(markupPurchaseBrutto)}</span> / <span class="history-value">${formatCurrency(markupSaleBrutto)}</span> PLN`,
       `Narzut <span class="history-value">${calculatedMarkupText}</span>`
     ].join(' <span class="history-dot">•</span> ');
-    meta = `Wzór: (sprzedaż - zakup) / zakup × 100%`;
+    meta = `Wzór: (sprzedaż - zakup) / zakup × 100% <span class="history-dot">•</span> Konwersja netto/brutto wg VAT klienta`;
   } else if (isBaseCommissionSource) {
     details = [
       `Mnożnik Base <span class="history-value">${Number.isFinite(currentBaseMultiplier) ? currentBaseMultiplier.toFixed(4) : '-'}</span>`,
@@ -1581,6 +1572,8 @@ function addHistoryEntry(source) {
     markupPurchaseAmount: Number.isFinite(markupPurchaseAmount) ? markupPurchaseAmount.toFixed(2) : null,
     targetSaleAmount: Number.isFinite(targetSaleAmount) ? targetSaleAmount.toFixed(2) : null,
     markupAmountMode,
+    markupPurchaseMode,
+    markupSaleMode,
     markupPurchaseBrutto: Number.isFinite(markupPurchaseBrutto) ? markupPurchaseBrutto.toFixed(2) : null,
     markupSaleBrutto: Number.isFinite(markupSaleBrutto) ? markupSaleBrutto.toFixed(2) : null,
     currency,
@@ -1679,9 +1672,13 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   updateMinSaleByMarkup();
   document.getElementById('markupPurchaseAmount').value = '';
   document.getElementById('targetSaleAmount').value = '';
-  const markupAmountNetToggle = document.getElementById('markupAmountNetToggle');
-  if (markupAmountNetToggle) {
-    markupAmountNetToggle.checked = false;
+  const markupPurchaseNetToggle = document.getElementById('markupPurchaseNetToggle');
+  if (markupPurchaseNetToggle) {
+    markupPurchaseNetToggle.checked = false;
+  }
+  const markupSaleNetToggle = document.getElementById('markupSaleNetToggle');
+  if (markupSaleNetToggle) {
+    markupSaleNetToggle.checked = false;
   }
   updateMarkupAmountModeUI();
   updateMarkupFromSale();
@@ -2195,6 +2192,8 @@ vatRateInputEl.addEventListener('input', () => {
   hideSelfTestDetails();
   syncFields('vatRate');
   updateBaseMultiplier();
+  updateMinSaleByMarkup();
+  updateMarkupFromSale();
   scheduleHistoryLog('vatRate');
 });
 vatRateInputEl.addEventListener('focus', () => {
@@ -2296,9 +2295,18 @@ if (purchaseAmountNetToggle) {
   });
 }
 
-const markupAmountNetToggle = document.getElementById('markupAmountNetToggle');
-if (markupAmountNetToggle) {
-  markupAmountNetToggle.addEventListener('change', () => {
+const markupPurchaseNetToggle = document.getElementById('markupPurchaseNetToggle');
+if (markupPurchaseNetToggle) {
+  markupPurchaseNetToggle.addEventListener('change', () => {
+    updateMarkupAmountModeUI();
+    updateMarkupFromSale();
+    addHistoryEntry('markupAmountMode');
+  });
+}
+
+const markupSaleNetToggle = document.getElementById('markupSaleNetToggle');
+if (markupSaleNetToggle) {
+  markupSaleNetToggle.addEventListener('change', () => {
     updateMarkupAmountModeUI();
     updateMarkupFromSale();
     addHistoryEntry('markupAmountMode');
@@ -2309,10 +2317,20 @@ document.addEventListener('click', (event) => {
   const btn = event.target.closest('.mode-inline-toggle');
   if (!btn) return;
   const toggleId = btn.getAttribute('data-toggle');
-  if (toggleId !== 'markupAmountNetToggle') return;
+  if (
+    toggleId !== 'purchaseAmountNetToggle' &&
+    toggleId !== 'markupPurchaseNetToggle' &&
+    toggleId !== 'markupSaleNetToggle'
+  ) return;
   const toggleEl = document.getElementById(toggleId);
   if (!toggleEl) return;
   toggleEl.checked = !toggleEl.checked;
+  if (toggleId === 'purchaseAmountNetToggle') {
+    updatePurchaseAmountModeUI();
+    updateMinSaleByMarkup();
+    addHistoryEntry('purchaseAmountMode');
+    return;
+  }
   updateMarkupAmountModeUI();
   updateMarkupFromSale();
   addHistoryEntry('markupAmountMode');
