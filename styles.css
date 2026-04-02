@@ -1260,7 +1260,9 @@ body.layout-edit-mode .calc-actions-fixed {
   font-size: 0.82rem;
   font-weight: 600;
   padding: 4px 0;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 
 .source-submenu-option input {
@@ -1285,7 +1287,7 @@ body.layout-edit-mode .calc-actions-fixed {
 .source-icon-placeholder {
   display: none;
   min-width: 30px;
-  height: 30px;
+  min-height: 30px;
   padding: 0 8px;
   border-radius: 8px;
   align-items: center;
@@ -1293,9 +1295,10 @@ body.layout-edit-mode .calc-actions-fixed {
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.1;
   max-width: 112px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--ink);
@@ -1599,7 +1602,10 @@ footer a:hover {
 .source-config-controls .admin-log-field label {
   min-height: 22px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 
 .source-config-controls .admin-log-field input:not([type="checkbox"]):not([type="radio"]),
@@ -3768,13 +3774,12 @@ footer {
   }
 
   body[data-page-title="Kalkulator"] #calcLayoutContainer {
-    --calc-item-max-width: 300px;
-    justify-items: start;
+    justify-items: stretch;
   }
 
   body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item {
-    width: min(100%, var(--calc-item-max-width));
-    justify-self: start;
+    width: 100%;
+    justify-self: stretch;
   }
 
   body[data-page-title="Kalkulator"] label {
@@ -3888,13 +3893,12 @@ footer {
   }
 
   body[data-page-title="Kalkulator"] #calcLayoutContainer {
-    --calc-item-max-width: 260px;
-    justify-items: start;
+    justify-items: stretch;
   }
 
   body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item {
-    width: min(100%, var(--calc-item-max-width));
-    justify-self: start;
+    width: 100%;
+    justify-self: stretch;
   }
 
   body[data-page-title="Kalkulator"] .preset-buttons {

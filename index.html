@@ -122,7 +122,7 @@
               <label for="purchaseAmount" class="field-label">Kwota zakupu (PLN, tryb: <button type="button" class="mode-inline-toggle" data-toggle="purchaseAmountNetToggle">brutto</button>)
                 <span class="field-help" data-tooltip="Koszt zakupu używany do wyliczenia minimalnej sprzedaży. Gdy tryb = netto, kalkulator najpierw liczy brutto wg VAT klienta, potem narzut." aria-label="Pomoc">?</span>
               </label>
-              <input type="number" id="purchaseAmount" step="0.01" min="0" placeholder="Np. 1200.00">
+              <input type="number" id="purchaseAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1200.00">
               <input type="checkbox" id="purchaseAmountNetToggle" class="sr-only" aria-hidden="true">
 
               <label for="minMarkup" class="field-label">Minimalny narzut (%)
@@ -144,13 +144,13 @@
               <label for="markupPurchaseAmount" class="field-label">Kwota zakupu do narzutu (PLN, tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupPurchaseNetToggle">brutto</button>)
                 <span class="field-help" data-tooltip="Kwota zakupu do porównania. Gdy tryb = netto, kalkulator przelicza na brutto wg VAT klienta." aria-label="Pomoc">?</span>
               </label>
-              <input type="number" id="markupPurchaseAmount" step="0.01" min="0" placeholder="Np. 1200.00">
+              <input type="number" id="markupPurchaseAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1200.00">
               <input type="checkbox" id="markupPurchaseNetToggle" class="sr-only" aria-hidden="true">
 
               <label for="targetSaleAmount" class="field-label">Docelowa cena sprzedaży (PLN, tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupSaleNetToggle">brutto</button>)
                 <span class="field-help" data-tooltip="Kwota sprzedaży do porównania. Gdy tryb = netto, kalkulator przelicza na brutto wg VAT klienta." aria-label="Pomoc">?</span>
               </label>
-              <input type="number" id="targetSaleAmount" step="0.01" min="0" placeholder="Np. 1590.00">
+              <input type="number" id="targetSaleAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1590.00">
               <input type="checkbox" id="markupSaleNetToggle" class="sr-only" aria-hidden="true">
 
               <div class="min-price-box" id="markupFromSaleBox">

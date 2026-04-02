@@ -852,6 +852,18 @@ function getMarkupSaleMode() {
   return isMarkupSaleNetMode() ? 'netto' : 'brutto';
 }
 
+function convertInputValueForMode(inputId, toNetMode) {
+  const inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
+  const value = parseNumber(inputEl.value);
+  if (!Number.isFinite(value)) return;
+  const vatRate = getClientVatRateFraction();
+  const vatMultiplier = 1 + (Number.isFinite(vatRate) ? vatRate : 0);
+  if (!Number.isFinite(vatMultiplier) || vatMultiplier <= 0) return;
+  const converted = toNetMode ? (value / vatMultiplier) : (value * vatMultiplier);
+  inputEl.value = converted.toFixed(2);
+}
+
 function updateMarkupAmountModeUI() {
   const modeLabelEl = document.getElementById('markupAmountModeLabel');
   const purchaseLabelEl = document.querySelector('label[for="markupPurchaseAmount"]');
@@ -1216,6 +1228,19 @@ function enforceTwoDecimals(inputEl) {
   const next = match[0];
   if (next !== raw) {
     inputEl.value = next;
+  }
+}
+
+function enforceFieldMax(inputEl) {
+  if (!inputEl) return;
+  const maxRaw = inputEl.getAttribute('max');
+  if (!maxRaw) return;
+  const maxValue = parseNumber(maxRaw);
+  if (!Number.isFinite(maxValue)) return;
+  const value = parseNumber(String(inputEl.value || '').replace(',', '.'));
+  if (!Number.isFinite(value)) return;
+  if (value > maxValue) {
+    inputEl.value = String(maxValue);
   }
 }
 
@@ -1634,8 +1659,9 @@ function hasValueChangedSinceLog(source) {
   return el.value !== lastLogged;
 }
 
-function scheduleHistoryLog(source) {
-  if (!hasValueChangedSinceLog(source)) return;
+function scheduleHistoryLog(source, options = {}) {
+  const force = !!options.force;
+  if (!force && !hasValueChangedSinceLog(source)) return;
   if (historyTimers[source]) {
     clearTimeout(historyTimers[source]);
   }
@@ -1645,12 +1671,13 @@ function scheduleHistoryLog(source) {
   }, 700);
 }
 
-function flushHistoryLog(source) {
+function flushHistoryLog(source, options = {}) {
+  const force = !!options.force;
   if (historyTimers[source]) {
     clearTimeout(historyTimers[source]);
     historyTimers[source] = null;
   }
-  if (!hasFieldChanged(source)) return;
+  if (!force && !hasFieldChanged(source)) return;
   addHistoryEntry(source);
 }
 
@@ -2285,23 +2312,25 @@ currencySelectEl.addEventListener('change', () => {
   if (!el) return;
   el.addEventListener('input', () => {
     enforceTwoDecimals(el);
+    enforceFieldMax(el);
     updateMinSaleByMarkup();
-    scheduleHistoryLog(id);
+    scheduleHistoryLog(id, { force: true });
   });
   el.addEventListener('change', () => {
+    enforceFieldMax(el);
     updateMinSaleByMarkup();
-    flushHistoryLog(id);
+    flushHistoryLog(id, { force: true });
   });
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     updateMinSaleByMarkup();
-    flushHistoryLog(id);
+    flushHistoryLog(id, { force: true });
   });
   el.addEventListener('focus', () => {
     setFieldBaseline(id);
   });
   el.addEventListener('blur', () => {
-    flushHistoryLog(id);
+    flushHistoryLog(id, { force: true });
   });
 });
 
@@ -2331,6 +2360,7 @@ if (currentBaseMultiplierEl) {
 const purchaseAmountNetToggle = document.getElementById('purchaseAmountNetToggle');
 if (purchaseAmountNetToggle) {
   purchaseAmountNetToggle.addEventListener('change', () => {
+    convertInputValueForMode('purchaseAmount', purchaseAmountNetToggle.checked);
     updatePurchaseAmountModeUI();
     updateMinSaleByMarkup();
     addHistoryEntry('purchaseAmountMode');
@@ -2340,6 +2370,7 @@ if (purchaseAmountNetToggle) {
 const markupPurchaseNetToggle = document.getElementById('markupPurchaseNetToggle');
 if (markupPurchaseNetToggle) {
   markupPurchaseNetToggle.addEventListener('change', () => {
+    convertInputValueForMode('markupPurchaseAmount', markupPurchaseNetToggle.checked);
     updateMarkupAmountModeUI();
     updateMarkupFromSale();
     addHistoryEntry('markupAmountMode');
@@ -2349,6 +2380,7 @@ if (markupPurchaseNetToggle) {
 const markupSaleNetToggle = document.getElementById('markupSaleNetToggle');
 if (markupSaleNetToggle) {
   markupSaleNetToggle.addEventListener('change', () => {
+    convertInputValueForMode('targetSaleAmount', markupSaleNetToggle.checked);
     updateMarkupAmountModeUI();
     updateMarkupFromSale();
     addHistoryEntry('markupAmountMode');
@@ -2367,15 +2399,7 @@ document.addEventListener('click', (event) => {
   const toggleEl = document.getElementById(toggleId);
   if (!toggleEl) return;
   toggleEl.checked = !toggleEl.checked;
-  if (toggleId === 'purchaseAmountNetToggle') {
-    updatePurchaseAmountModeUI();
-    updateMinSaleByMarkup();
-    addHistoryEntry('purchaseAmountMode');
-    return;
-  }
-  updateMarkupAmountModeUI();
-  updateMarkupFromSale();
-  addHistoryEntry('markupAmountMode');
+  toggleEl.dispatchEvent(new Event('change', { bubbles: true }));
 });
 
 ['markupPurchaseAmount', 'targetSaleAmount'].forEach((id) => {
@@ -2383,23 +2407,25 @@ document.addEventListener('click', (event) => {
   if (!el) return;
   el.addEventListener('input', () => {
     enforceTwoDecimals(el);
+    enforceFieldMax(el);
     updateMarkupFromSale();
-    scheduleHistoryLog(id);
+    scheduleHistoryLog(id, { force: true });
   });
   el.addEventListener('change', () => {
+    enforceFieldMax(el);
     updateMarkupFromSale();
-    flushHistoryLog(id);
+    flushHistoryLog(id, { force: true });
   });
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     updateMarkupFromSale();
-    flushHistoryLog(id);
+    flushHistoryLog(id, { force: true });
   });
   el.addEventListener('focus', () => {
     setFieldBaseline(id);
   });
   el.addEventListener('blur', () => {
-    flushHistoryLog(id);
+    flushHistoryLog(id, { force: true });
   });
 });
 
@@ -2510,6 +2536,7 @@ if (partNumberInput) {
   let lastSuggestedVendor = '';
   let lastOpenedPnKey = '';
   let openedSourcesCurrentPn = new Set();
+  let samePnSearchAttempts = 0;
   let mappingsRefreshTimer = null;
   let mappingsRefreshSeq = 0;
   let mappingsAppliedSeq = 0;
@@ -3000,9 +3027,14 @@ if (partNumberInput) {
     if (currentPnKey !== lastOpenedPnKey) {
       openedSourcesCurrentPn = new Set();
       lastOpenedPnKey = currentPnKey;
+      samePnSearchAttempts = 0;
     }
+    samePnSearchAttempts += 1;
+    const bypassDuplicateLock = samePnSearchAttempts >= 3;
     const openedForPn = openedSourcesCurrentPn;
-    const sourcesToOpen = sources.filter((sourceId) => !openedForPn.has(sourceId));
+    const sourcesToOpen = bypassDuplicateLock
+      ? sources
+      : sources.filter((sourceId) => !openedForPn.has(sourceId));
     const sourcesToOpenSet = new Set(sourcesToOpen);
     let openedCount = 0;
     sources.forEach((sourceId) => {
@@ -3049,7 +3081,7 @@ if (partNumberInput) {
     if (currentPnKey) {
       openedSourcesCurrentPn = openedForPn;
     }
-    if (openedCount < sources.length) {
+    if (!bypassDuplicateLock && openedCount < sources.length) {
       showMainToast('Pominięto źródła już wcześniej otwarte dla tego PN.', 'info');
     }
     logActivity('search', {
