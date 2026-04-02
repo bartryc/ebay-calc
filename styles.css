@@ -4046,6 +4046,43 @@ footer {
   }
 }
 
+@media (max-width: 420px) {
+  .top-menu-group.has-dropdown {
+    width: 100%;
+    display: block;
+  }
+
+  .top-menu-group.has-dropdown .top-menu-dropdown {
+    position: static;
+    left: auto;
+    right: auto;
+    width: 100%;
+    min-width: 0;
+    margin-top: 4px;
+    padding: 4px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    box-shadow: none;
+    display: none;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    pointer-events: none;
+  }
+
+  .top-menu-group.has-dropdown:hover .top-menu-dropdown,
+  .top-menu-group.has-dropdown:focus-within .top-menu-dropdown {
+    display: none;
+    pointer-events: none;
+  }
+
+  .top-menu-group.has-dropdown.is-open .top-menu-dropdown {
+    display: block;
+    pointer-events: auto;
+  }
+}
+
 .self-test-modal {
   position: fixed;
   inset: 0;
