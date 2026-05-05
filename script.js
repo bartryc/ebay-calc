@@ -2360,7 +2360,6 @@ if (currentBaseMultiplierEl) {
 const purchaseAmountNetToggle = document.getElementById('purchaseAmountNetToggle');
 if (purchaseAmountNetToggle) {
   purchaseAmountNetToggle.addEventListener('change', () => {
-    convertInputValueForMode('purchaseAmount', purchaseAmountNetToggle.checked);
     updatePurchaseAmountModeUI();
     updateMinSaleByMarkup();
     addHistoryEntry('purchaseAmountMode');
@@ -2370,7 +2369,6 @@ if (purchaseAmountNetToggle) {
 const markupPurchaseNetToggle = document.getElementById('markupPurchaseNetToggle');
 if (markupPurchaseNetToggle) {
   markupPurchaseNetToggle.addEventListener('change', () => {
-    convertInputValueForMode('markupPurchaseAmount', markupPurchaseNetToggle.checked);
     updateMarkupAmountModeUI();
     updateMarkupFromSale();
     addHistoryEntry('markupAmountMode');
@@ -2380,7 +2378,6 @@ if (markupPurchaseNetToggle) {
 const markupSaleNetToggle = document.getElementById('markupSaleNetToggle');
 if (markupSaleNetToggle) {
   markupSaleNetToggle.addEventListener('change', () => {
-    convertInputValueForMode('targetSaleAmount', markupSaleNetToggle.checked);
     updateMarkupAmountModeUI();
     updateMarkupFromSale();
     addHistoryEntry('markupAmountMode');

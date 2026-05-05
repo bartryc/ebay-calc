@@ -1,6 +1,10 @@
 (() => {
   const TITLE_SUFFIX = ' | eCommerce pricing tool';
   const THEME_COOKIE_KEY = 'theme';
+  const FONT_SCALE_GLOBAL_KEY = 'fontScale:global';
+  const FONT_SCALE_MIN = 0.7;
+  const FONT_SCALE_MAX = 1.5;
+  const FONT_SCALE_STEP = 0.1;
 
   function getCookieValue(name) {
     const prefix = `${name}=`;
@@ -20,6 +24,60 @@
     const pageTitle = document.body?.dataset?.pageTitle;
     if (!pageTitle) return;
     document.title = `${pageTitle}${TITLE_SUFFIX}`;
+  }
+
+  function clampFontScale(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 1;
+    return Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, n));
+  }
+
+  function applyFontScale(scale) {
+    const safe = clampFontScale(scale);
+    document.documentElement.style.fontSize = `${(safe * 100).toFixed(0)}%`;
+    return safe;
+  }
+
+  function initFontScaleControls() {
+    const downBtn = document.getElementById('textSizeDownBtn');
+    const resetBtn = document.getElementById('textSizeResetBtn');
+    const upBtn = document.getElementById('textSizeUpBtn');
+    if (!downBtn || !upBtn) return;
+
+    const stored = localStorage.getItem(FONT_SCALE_GLOBAL_KEY);
+    let currentScale = applyFontScale(stored || 1);
+
+    const syncButtons = () => {
+      downBtn.disabled = currentScale <= FONT_SCALE_MIN + 0.0001;
+      upBtn.disabled = currentScale >= FONT_SCALE_MAX - 0.0001;
+      if (resetBtn) {
+        const pct = Math.round(currentScale * 100);
+        resetBtn.textContent = `${pct}%`;
+        resetBtn.disabled = Math.abs(currentScale - 1) < 0.0001;
+      }
+    };
+    syncButtons();
+
+    const updateScale = (next) => {
+      currentScale = applyFontScale(next);
+      localStorage.setItem(FONT_SCALE_GLOBAL_KEY, String(currentScale));
+      syncButtons();
+    };
+
+    if (!downBtn.dataset.boundTextScale) {
+      downBtn.dataset.boundTextScale = '1';
+      downBtn.addEventListener('click', () => updateScale(currentScale - FONT_SCALE_STEP));
+    }
+
+    if (!upBtn.dataset.boundTextScale) {
+      upBtn.dataset.boundTextScale = '1';
+      upBtn.addEventListener('click', () => updateScale(currentScale + FONT_SCALE_STEP));
+    }
+
+    if (resetBtn && !resetBtn.dataset.boundTextScale) {
+      resetBtn.dataset.boundTextScale = '1';
+      resetBtn.addEventListener('click', () => updateScale(1));
+    }
   }
 
   function applySourceIconsTheme(isDark) {
@@ -64,6 +122,8 @@
         setCookieValue(THEME_COOKIE_KEY, nowDark ? 'dark' : 'light');
       });
     }
+
+    initFontScaleControls();
   }
 
   window.UITheme = { init };
