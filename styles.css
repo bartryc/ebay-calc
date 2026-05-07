@@ -76,6 +76,11 @@ body.dark-mode::before {
   margin-bottom: 28px;
 }
 
+.topbar > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.2em;
@@ -92,7 +97,7 @@ h1 {
 .subtitle {
   margin: 0;
   color: var(--muted);
-  max-width: 520px;
+  max-width: 820px;
   font-size: 0.95rem;
 }
 
@@ -3854,6 +3859,29 @@ footer {
 }
 
 @media (max-width: 1180px) {
+  .topbar {
+    gap: 10px;
+  }
+
+  .topbar h1 {
+    font-size: clamp(1.55rem, 5.4vw, 2rem);
+    line-height: 1.12;
+    margin: 2px 0 4px;
+    max-width: 100%;
+    word-break: break-word;
+  }
+
+  .topbar .subtitle {
+    font-size: 0.92rem;
+    line-height: 1.35;
+    max-width: 100%;
+  }
+
+  .topbar .eyebrow {
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+  }
+
   .top-actions {
     position: relative;
     width: 100%;
@@ -3944,6 +3972,21 @@ footer {
     display: inline-flex;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar h1 {
+    font-size: clamp(1.35rem, 6vw, 1.75rem);
+  }
+
+  .topbar .subtitle {
+    font-size: 0.86rem;
+  }
+
+  .topbar .eyebrow {
+    font-size: 0.74rem;
+    letter-spacing: 0.12em;
   }
 }
 
