@@ -2,6 +2,7 @@
   const TITLE_SUFFIX = ' | eCommerce pricing tool';
   const THEME_COOKIE_KEY = 'theme';
   const FONT_SCALE_GLOBAL_KEY = 'fontScale:global';
+  const MOBILE_MENU_BREAKPOINT = 1180;
   const FONT_SCALE_MIN = 0.7;
   const FONT_SCALE_MAX = 1.5;
   const FONT_SCALE_STEP = 0.1;
@@ -99,6 +100,110 @@
     btn.setAttribute('title', label);
   }
 
+  function initResponsiveMenu() {
+    const topActions = document.querySelector('.top-actions');
+    const menu = topActions?.querySelector('.top-menu');
+    if (!topActions || !menu) return;
+    const themeBtn = topActions.querySelector('#themeToggleBtn');
+
+    let burger = topActions.querySelector('.top-menu-hamburger');
+    if (!burger) {
+      burger = document.createElement('button');
+      burger.type = 'button';
+      burger.className = 'top-menu-hamburger';
+      burger.setAttribute('aria-label', 'Menu');
+      burger.setAttribute('aria-expanded', 'false');
+      burger.innerHTML = '<span></span><span></span><span></span>';
+      topActions.insertBefore(burger, menu);
+    }
+
+    // Keep theme switch always visible outside hamburger panel (left to burger).
+    if (themeBtn && themeBtn.parentElement === menu) {
+      topActions.insertBefore(themeBtn, burger);
+    }
+
+    const closeMenu = () => {
+      topActions.classList.remove('is-menu-open');
+      burger.setAttribute('aria-expanded', 'false');
+      menu.querySelectorAll('.top-menu-group.has-dropdown.is-open').forEach((group) => {
+        group.classList.remove('is-open');
+      });
+    };
+
+    const openMenu = () => {
+      topActions.classList.add('is-menu-open');
+      burger.setAttribute('aria-expanded', 'true');
+      menu.querySelectorAll('.top-menu-group.has-dropdown').forEach((group) => {
+        if (group.querySelector('#layoutCustomizeBtn') || group.querySelector('.top-menu-dropdown-text-size')) {
+          group.classList.add('is-open');
+        }
+      });
+    };
+
+    const isMobile = () => window.innerWidth <= MOBILE_MENU_BREAKPOINT;
+
+    if (!burger.dataset.boundMenu) {
+      burger.dataset.boundMenu = '1';
+      burger.addEventListener('click', () => {
+        if (!isMobile()) return;
+        if (topActions.classList.contains('is-menu-open')) closeMenu();
+        else openMenu();
+      });
+    }
+
+    if (!menu.dataset.boundMobileDropdowns) {
+      menu.dataset.boundMobileDropdowns = '1';
+      menu.querySelectorAll('.top-menu-group.has-dropdown').forEach((group) => {
+        const trigger = group.querySelector('.top-menu-link, .top-menu-toggle');
+        const dropdown = group.querySelector('.top-menu-dropdown');
+        if (!trigger || !dropdown) return;
+        trigger.addEventListener('click', (event) => {
+          if (!isMobile()) return;
+          if (trigger.tagName.toLowerCase() === 'a') {
+            event.preventDefault();
+          }
+          const nextState = !group.classList.contains('is-open');
+          menu.querySelectorAll('.top-menu-group.has-dropdown.is-open').forEach((openGroup) => {
+            if (openGroup !== group) openGroup.classList.remove('is-open');
+          });
+          group.classList.toggle('is-open', nextState);
+        });
+      });
+    }
+
+    if (!document.documentElement.dataset.boundMenuOutsideClick) {
+      document.documentElement.dataset.boundMenuOutsideClick = '1';
+      document.addEventListener('click', (event) => {
+        if (!isMobile()) return;
+        if (!topActions.contains(event.target)) closeMenu();
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeMenu();
+      });
+    }
+
+    menu.querySelectorAll('a.top-menu-link').forEach((link) => {
+      if (!link.dataset.boundMenuLinkClose) {
+        link.dataset.boundMenuLinkClose = '1';
+        link.addEventListener('click', (event) => {
+          if (isMobile() && link.closest('.top-menu-group.has-dropdown')) {
+            event.preventDefault();
+            return;
+          }
+          if (isMobile()) closeMenu();
+        });
+      }
+    });
+
+    const syncOnResize = () => {
+      if (!isMobile()) closeMenu();
+    };
+    if (!window.__uiThemeMenuResizeBound) {
+      window.__uiThemeMenuResizeBound = true;
+      window.addEventListener('resize', syncOnResize);
+    }
+  }
+
   function init() {
     const body = document.body;
     if (!body) return;
@@ -124,6 +229,7 @@
     }
 
     initFontScaleControls();
+    initResponsiveMenu();
   }
 
   window.UITheme = { init };
