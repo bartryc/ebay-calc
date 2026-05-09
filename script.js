@@ -2270,13 +2270,28 @@ vatRateInputEl.addEventListener('blur', () => {
   flushHistoryLog('vatRate');
 });
 
+function getSourceForPricingParamChange() {
+  const bruttoValue = parseNumber(plnBruttoInput.value);
+  const nettoValue = parseNumber(plnNettoInput.value);
+
+  if (Number.isFinite(bruttoValue)) return 'brutto';
+  if (Number.isFinite(nettoValue)) return 'netto';
+  if (Number.isFinite(parseNumber(ebayPriceInputEl.value))) return 'ebayPrice';
+  return null;
+}
+
 ['exchangeRate', 'commission'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => {
     hideSelfTestDetails();
-    if (lastChanged === 'ebayPrice' && !isNaN(parseFloat(ebayPriceInputEl.value))) {
-      syncFields('ebayPrice');
-    } else if ((lastChanged === 'netto' || lastChanged === 'brutto') && !isNaN(parseFloat(plnNettoInput.value))) {
-      syncFields(lastChanged);
+    const pricingSource = getSourceForPricingParamChange();
+    const lastChangedHasValue =
+      (lastChanged === 'netto' && Number.isFinite(parseNumber(plnNettoInput.value)))
+      || (lastChanged === 'brutto' && Number.isFinite(parseNumber(plnBruttoInput.value)));
+    const sourceToSync = lastChangedHasValue ? lastChanged : pricingSource;
+
+    if (sourceToSync) {
+      lastChanged = sourceToSync;
+      syncFields(sourceToSync);
     } else if (lastChanged === 'vatRate' && !isNaN(parseInt(vatRateInputEl.value))) {
       syncFields('vatRate');
     } else {
