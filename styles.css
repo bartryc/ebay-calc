@@ -1671,6 +1671,78 @@ footer a:hover {
   color: var(--accent);
 }
 
+.default-calculator-settings {
+  --default-setting-control-height: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.default-setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.default-setting-label {
+  color: var(--ink);
+  font-weight: 700;
+  margin: 0;
+}
+
+.default-setting-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.default-setting-control-row input:not([type="checkbox"]):not([type="radio"]),
+.default-setting-control-row select {
+  display: block;
+  width: 100%;
+  height: var(--default-setting-control-height);
+  min-height: var(--default-setting-control-height);
+  padding: 8px 14px;
+  margin: 0;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.default-setting-control-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--default-setting-control-height);
+  min-height: var(--default-setting-control-height);
+  margin: 0;
+  box-sizing: border-box;
+  max-width: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.default-setting-control-row button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.default-calculator-settings .admin-meta {
+  margin: -2px 0 4px;
+  font-size: 0.86em;
+}
+
 .source-config-controls .admin-log-field input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
 }
@@ -2527,6 +2599,16 @@ body.dark-mode.builder-page #patternApplyBtn {
   .admin-log-controls {
     grid-template-columns: 1fr;
   }
+
+  .default-setting-control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .default-setting-control-row button {
+    width: 100%;
+    max-width: none;
+  }
+
   .admin-log-item {
     align-items: flex-start;
   }

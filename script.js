@@ -50,6 +50,9 @@ const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
 const SEARCH_SOURCES_CONFIG_CACHE_KEY = 'searchSourcesConfigV1';
 const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
 const RATE_PROVIDER_DEFAULT_CACHE_KEY = 'rateProviderDefaultV1';
+const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
+const DEFAULT_COMMISSION_RATE = 15;
+let defaultCommissionRate = DEFAULT_COMMISSION_RATE;
 
 const INDEX_LAYOUT_STORAGE_KEY = 'indexLayoutOrderV1';
 const INDEX_LAYOUT_COOKIE_KEY = 'indexLayoutOrderV1';
@@ -885,6 +888,33 @@ function updateMarkupAmountModeUI() {
   }
 }
 
+function normalizeCommissionRate(value, fallback = DEFAULT_COMMISSION_RATE) {
+  const parsed = parseNumber(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(100, Math.max(0, parsed));
+}
+
+function formatCommissionRate(value) {
+  return normalizeCommissionRate(value).toFixed(1).replace(/\.0$/, '');
+}
+
+function getDefaultCommissionRate() {
+  return normalizeCommissionRate(defaultCommissionRate);
+}
+
+function getActiveCommissionRate() {
+  const commissionEl = document.getElementById('commission');
+  return advancedOptionsToggle?.checked
+    ? parseNumber(commissionEl?.value)
+    : getDefaultCommissionRate();
+}
+
+function resetCommissionInputToDefault() {
+  const commissionEl = document.getElementById('commission');
+  if (!commissionEl) return;
+  commissionEl.value = formatCommissionRate(getDefaultCommissionRate());
+}
+
 function updateMinSaleByMarkup() {
   const purchaseEl = document.getElementById('purchaseAmount');
   const markupEl = document.getElementById('minMarkup');
@@ -897,9 +927,7 @@ function updateMinSaleByMarkup() {
   const purchase = parseNumber(purchaseEl.value);
   const markupPercent = parseNumber(markupEl.value);
   const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
-  const commissionRaw = advancedOptionsToggle?.checked
-    ? parseNumber(document.getElementById('commission')?.value)
-    : 15;
+  const commissionRaw = getActiveCommissionRate();
   const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
   const vatRate = getClientVatRateFraction();
   const currency = currencyEl.value || 'EUR';
@@ -957,9 +985,7 @@ function updateMarkupFromSale() {
 
   if (resultFromEbayEl) {
     const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
-    const commissionRaw = advancedOptionsToggle?.checked
-      ? parseNumber(document.getElementById('commission')?.value)
-      : 15;
+    const commissionRaw = getActiveCommissionRate();
     const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
     if (!Number.isFinite(ebaySale) || ebaySale < 0 || !Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
       resultFromEbayEl.textContent = '—';
@@ -1020,7 +1046,7 @@ function updateBaseMultiplier() {
   const multiplierSummaryEl = document.getElementById('baseMultiplierSummaryValue');
   if (!multiplierEl) return;
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
-  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const commissionRaw = getActiveCommissionRate();
   const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
   const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
   const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
@@ -1506,7 +1532,7 @@ function addHistoryEntry(source) {
     ? (markupSaleMode === 'netto' ? targetSaleAmount * vatMultiplier : targetSaleAmount)
     : NaN;
   const currency = document.getElementById('currency').value;
-  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const commissionRaw = getActiveCommissionRate();
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
 
   let sourceLabel = {
@@ -1694,6 +1720,10 @@ const ebayCurrencyLabel = document.getElementById('ebayCurrencyLabel');
 advancedOptionsToggle.addEventListener('change', () => {
   advancedOptions.style.display = advancedOptionsToggle.checked ? 'block' : 'none';
   exchangeRateInput.disabled = !advancedOptionsToggle.checked;
+  if (!advancedOptionsToggle.checked) {
+    resetCommissionInputToDefault();
+    setFieldBaseline('commission');
+  }
   hideSelfTestDetails();
   calculatePrice();
   if (advancedOptionsToggle.checked) {
@@ -1719,7 +1749,7 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   document.getElementById('plnBrutto').value = '';
   document.getElementById('ebayPrice').value = '';
   document.getElementById('vatRate').value = '23';
-  document.getElementById('commission').value = '15';
+  resetCommissionInputToDefault();
   document.getElementById('purchaseAmount').value = '';
   document.getElementById('currentBaseMultiplier').value = '';
   document.getElementById('calculatedCommissionFromBase').textContent = '—';
@@ -1769,7 +1799,7 @@ function syncFields(source) {
   const ebayValue = parseNumber(ebayPriceInput.value);
   const vatInputValue = parseNumber(vatRateInput.value);
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
-  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const commissionRaw = getActiveCommissionRate();
   const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
   const vatRateRaw = vatInputValue;
   const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
@@ -1882,7 +1912,7 @@ function calculatePrice() {
   const brutto = parseNumber(document.getElementById('plnBrutto').value);
   const ebayPrice = parseNumber(document.getElementById('ebayPrice').value);
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
-  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const commissionRaw = getActiveCommissionRate();
   const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
   const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
   const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
@@ -1941,7 +1971,7 @@ function updateEbayPriceFromNettoOrBrutto() {
   const nettoValue = parseNumber(nettoInput.value);
   const bruttoValue = parseNumber(bruttoInput.value);
   const exchangeRate = parseNumber(document.getElementById('exchangeRate').value);
-  const commissionRaw = advancedOptionsToggle.checked ? parseNumber(document.getElementById('commission').value) : 15;
+  const commissionRaw = getActiveCommissionRate();
   const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
   const vatRateRaw = parseNumber(document.getElementById('vatRate').value);
   const vatRate = Number.isFinite(vatRateRaw) ? vatRateRaw / 100 : NaN;
@@ -2132,6 +2162,29 @@ async function loadDefaultRateProviderSelection() {
     applyRateProviderSelection(note);
   } catch (_error) {
     // fallback to local/default value
+  }
+}
+
+async function loadDefaultCommissionRate() {
+  resetCommissionInputToDefault();
+  if (!window.PN_MAPPINGS_API?.request) return;
+  try {
+    const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(COMMISSION_DEFAULT_NOTE_ID)}`, { method: 'GET' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const note = String(payload?.note || '').trim();
+    if (!note) return;
+    defaultCommissionRate = normalizeCommissionRate(note);
+    if (!advancedOptionsToggle?.checked) {
+      resetCommissionInputToDefault();
+      setFieldBaseline('commission');
+    }
+    updateBaseMultiplier();
+    updateMinSaleByMarkup();
+    updateMarkupFromSale();
+    calculatePrice();
+  } catch (_error) {
+    // fallback to default 15%
   }
 }
 
@@ -2467,6 +2520,7 @@ updateCommissionFromBaseMultiplier();
 
 (async () => {
   await loadDefaultRateProviderSelection();
+  await loadDefaultCommissionRate();
   const currency = document.getElementById('currency').value;
   fetchExchangeRate(currency, { notify: false });
   checkRateProvidersStatus(currency);

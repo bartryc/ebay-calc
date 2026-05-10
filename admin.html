@@ -97,19 +97,26 @@
         </div>
 
         <div class="admin-card" data-admin-tab="logs">
-          <h3>Domyślne API kursu</h3>
-          <p>Wybierz źródło kursu, które ma być ustawiane domyślnie po wejściu na kalkulator.</p>
-          <div class="admin-log-controls">
-            <div class="admin-log-field admin-log-field-wide">
-              <label for="defaultRateProviderSelect">Domyślne źródło</label>
-              <select id="defaultRateProviderSelect"></select>
+          <h3>Domyślne ustawienia kalkulatora</h3>
+          <p>Ustaw domyślne źródło kursu i prowizję używaną po wejściu na kalkulator oraz po zamknięciu opcji zaawansowanych.</p>
+          <div class="default-calculator-settings">
+            <div class="default-setting-row">
+              <label class="default-setting-label" for="defaultRateProviderSelect">Domyślne źródło</label>
+              <div class="default-setting-control-row">
+                <select id="defaultRateProviderSelect"></select>
+                <button type="button" id="defaultRateProviderSaveBtn">Zapisz API</button>
+              </div>
             </div>
-            <div class="admin-log-field">
-              <label>&nbsp;</label>
-              <button type="button" id="defaultRateProviderSaveBtn">Zapisz domyślne API</button>
+            <div class="admin-meta">Aktualnie zapisane: <span id="defaultRateProviderValue">—</span></div>
+            <div class="default-setting-row">
+              <label class="default-setting-label" for="defaultCommissionInput">Domyślna prowizja (%)</label>
+              <div class="default-setting-control-row">
+                <input type="number" id="defaultCommissionInput" min="0" max="100" step="0.1" placeholder="15">
+                <button type="button" id="defaultCommissionSaveBtn">Zapisz prowizję</button>
+              </div>
             </div>
+            <div class="admin-meta">Aktualna prowizja domyślna: <span id="defaultCommissionValue">15%</span></div>
           </div>
-          <div class="admin-meta">Aktualnie zapisane: <span id="defaultRateProviderValue">—</span></div>
         </div>
 
         <div class="admin-card" data-admin-tab="logs">
@@ -561,10 +568,15 @@
     const defaultRateProviderSelect = document.getElementById('defaultRateProviderSelect');
     const defaultRateProviderSaveBtn = document.getElementById('defaultRateProviderSaveBtn');
     const defaultRateProviderValue = document.getElementById('defaultRateProviderValue');
+    const defaultCommissionInput = document.getElementById('defaultCommissionInput');
+    const defaultCommissionSaveBtn = document.getElementById('defaultCommissionSaveBtn');
+    const defaultCommissionValue = document.getElementById('defaultCommissionValue');
     const adminTabDescription = document.getElementById('adminTabDescription');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
     const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
     const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
+    const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
+    const DEFAULT_COMMISSION_RATE = 15;
     const RATE_PROVIDER_OPTIONS = [
       { id: 'frankfurter', label: 'Frankfurter' },
       { id: 'nbp', label: 'NBP API' },
@@ -1303,6 +1315,16 @@
       return RATE_PROVIDER_OPTIONS.some((item) => item.id === key) ? key : 'frankfurter';
     }
 
+    function normalizeCommissionDefault(value, fallback = DEFAULT_COMMISSION_RATE) {
+      const parsed = parseFloat(String(value ?? '').replace(',', '.'));
+      if (!Number.isFinite(parsed)) return fallback;
+      return Math.min(100, Math.max(0, parsed));
+    }
+
+    function formatCommissionDefault(value) {
+      return `${normalizeCommissionDefault(value).toFixed(1).replace(/\.0$/, '')}%`;
+    }
+
     function renderDefaultRateProviderOptions() {
       if (!defaultRateProviderSelect) return;
       defaultRateProviderSelect.innerHTML = RATE_PROVIDER_OPTIONS
@@ -1348,6 +1370,44 @@
       }
       if (defaultRateProviderValue) defaultRateProviderValue.textContent = RATE_PROVIDER_OPTIONS.find((item) => item.id === key)?.label || key;
       showToast('Domyślne API kursu zapisane.', 'ok', performance.now() - t0);
+    }
+
+    async function loadDefaultCommissionSetting() {
+      if (!defaultCommissionInput) return;
+      defaultCommissionInput.value = String(DEFAULT_COMMISSION_RATE);
+      if (defaultCommissionValue) defaultCommissionValue.textContent = formatCommissionDefault(DEFAULT_COMMISSION_RATE);
+      if (!window.PN_MAPPINGS_API?.request) return;
+      try {
+        const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(COMMISSION_DEFAULT_NOTE_ID)}`, {
+          method: 'GET'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const value = normalizeCommissionDefault(payload?.note || DEFAULT_COMMISSION_RATE);
+        defaultCommissionInput.value = value.toFixed(1).replace(/\.0$/, '');
+        if (defaultCommissionValue) defaultCommissionValue.textContent = formatCommissionDefault(value);
+      } catch (_error) {
+        defaultCommissionInput.value = String(DEFAULT_COMMISSION_RATE);
+        if (defaultCommissionValue) defaultCommissionValue.textContent = formatCommissionDefault(DEFAULT_COMMISSION_RATE);
+      }
+    }
+
+    async function saveDefaultCommissionSetting() {
+      if (!defaultCommissionInput || !window.PN_MAPPINGS_API?.request) return;
+      const t0 = performance.now();
+      const value = normalizeCommissionDefault(defaultCommissionInput.value);
+      defaultCommissionInput.value = value.toFixed(1).replace(/\.0$/, '');
+      const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(COMMISSION_DEFAULT_NOTE_ID)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: defaultCommissionInput.value })
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      if (defaultCommissionValue) defaultCommissionValue.textContent = formatCommissionDefault(value);
+      showToast('Domyślna prowizja zapisana.', 'ok', performance.now() - t0);
     }
 
     function setupSourcesEditor() {
@@ -2016,12 +2076,21 @@
     setupSourcesEditor();
     loadSourcesConfig();
     loadDefaultRateProviderSetting();
+    loadDefaultCommissionSetting();
 
     defaultRateProviderSaveBtn?.addEventListener('click', async () => {
       try {
         await saveDefaultRateProviderSetting();
       } catch (error) {
         showToast(`Błąd zapisu domyślnego API: ${error.message || 'unknown'}`, 'warn');
+      }
+    });
+
+    defaultCommissionSaveBtn?.addEventListener('click', async () => {
+      try {
+        await saveDefaultCommissionSetting();
+      } catch (error) {
+        showToast(`Błąd zapisu domyślnej prowizji: ${error.message || 'unknown'}`, 'warn');
       }
     });
 
