@@ -954,6 +954,12 @@ body.layout-edit-mode .calc-actions-fixed {
   border-color: rgba(170, 160, 150, 0.35);
 }
 
+.info-column-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
 .search-header {
   display: flex;
   align-items: center;

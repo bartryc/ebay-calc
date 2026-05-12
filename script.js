@@ -815,8 +815,17 @@ function formatCurrency(value) {
   return value.toFixed(2);
 }
 
+function isInlineModeNet(toggleId) {
+  const toggleEl = document.getElementById(toggleId);
+  const visibleToggle = document.querySelector(`.mode-inline-toggle[data-toggle="${toggleId}"]`);
+  const visibleMode = visibleToggle?.textContent?.trim()?.toLowerCase();
+  if (visibleMode === 'netto') return true;
+  if (visibleMode === 'brutto') return false;
+  return !!toggleEl?.checked;
+}
+
 function isPurchaseNetMode() {
-  return !!document.getElementById('purchaseAmountNetToggle')?.checked;
+  return isInlineModeNet('purchaseAmountNetToggle');
 }
 
 function getPurchaseAmountMode() {
@@ -825,7 +834,7 @@ function getPurchaseAmountMode() {
 
 function updatePurchaseAmountModeUI() {
   const purchaseLabelEl = document.querySelector('label[for="purchaseAmount"]');
-  const isNet = isPurchaseNetMode();
+  const isNet = !!document.getElementById('purchaseAmountNetToggle')?.checked;
   if (purchaseLabelEl) {
     const helpHtml = purchaseLabelEl.querySelector('.field-help')?.outerHTML || '';
     const toggleHtml = `<button type="button" class="mode-inline-toggle" data-toggle="purchaseAmountNetToggle">${isNet ? 'netto' : 'brutto'}</button>`;
@@ -840,11 +849,11 @@ function getClientVatRateFraction() {
 }
 
 function isMarkupPurchaseNetMode() {
-  return !!document.getElementById('markupPurchaseNetToggle')?.checked;
+  return isInlineModeNet('markupPurchaseNetToggle');
 }
 
 function isMarkupSaleNetMode() {
-  return !!document.getElementById('markupSaleNetToggle')?.checked;
+  return isInlineModeNet('markupSaleNetToggle');
 }
 
 function getMarkupPurchaseMode() {
@@ -871,8 +880,8 @@ function updateMarkupAmountModeUI() {
   const modeLabelEl = document.getElementById('markupAmountModeLabel');
   const purchaseLabelEl = document.querySelector('label[for="markupPurchaseAmount"]');
   const saleLabelEl = document.querySelector('label[for="targetSaleAmount"]');
-  const purchaseIsNet = isMarkupPurchaseNetMode();
-  const saleIsNet = isMarkupSaleNetMode();
+  const purchaseIsNet = !!document.getElementById('markupPurchaseNetToggle')?.checked;
+  const saleIsNet = !!document.getElementById('markupSaleNetToggle')?.checked;
   if (modeLabelEl) {
     modeLabelEl.textContent = `Tryb narzutu: zakup ${purchaseIsNet ? 'netto' : 'brutto'} / sprzedaż ${saleIsNet ? 'netto' : 'brutto'}`;
   }
@@ -995,6 +1004,11 @@ function updateMarkupFromSale() {
       resultFromEbayEl.textContent = `${markupPercentFromEbay.toFixed(2)}%`;
     }
   }
+}
+
+function updateMarkupCalculations() {
+  updateMinSaleByMarkup();
+  updateMarkupFromSale();
 }
 
 function updateCommissionFromBaseMultiplier() {
@@ -2429,7 +2443,7 @@ const purchaseAmountNetToggle = document.getElementById('purchaseAmountNetToggle
 if (purchaseAmountNetToggle) {
   purchaseAmountNetToggle.addEventListener('change', () => {
     updatePurchaseAmountModeUI();
-    updateMinSaleByMarkup();
+    updateMarkupCalculations();
     addHistoryEntry('purchaseAmountMode');
   });
 }
@@ -2438,7 +2452,7 @@ const markupPurchaseNetToggle = document.getElementById('markupPurchaseNetToggle
 if (markupPurchaseNetToggle) {
   markupPurchaseNetToggle.addEventListener('change', () => {
     updateMarkupAmountModeUI();
-    updateMarkupFromSale();
+    updateMarkupCalculations();
     addHistoryEntry('markupAmountMode');
   });
 }
@@ -2447,7 +2461,7 @@ const markupSaleNetToggle = document.getElementById('markupSaleNetToggle');
 if (markupSaleNetToggle) {
   markupSaleNetToggle.addEventListener('change', () => {
     updateMarkupAmountModeUI();
-    updateMarkupFromSale();
+    updateMarkupCalculations();
     addHistoryEntry('markupAmountMode');
   });
 }
@@ -2455,6 +2469,8 @@ if (markupSaleNetToggle) {
 document.addEventListener('click', (event) => {
   const btn = event.target.closest('.mode-inline-toggle');
   if (!btn) return;
+  event.preventDefault();
+  event.stopPropagation();
   const toggleId = btn.getAttribute('data-toggle');
   if (
     toggleId !== 'purchaseAmountNetToggle' &&
@@ -2465,6 +2481,7 @@ document.addEventListener('click', (event) => {
   if (!toggleEl) return;
   toggleEl.checked = !toggleEl.checked;
   toggleEl.dispatchEvent(new Event('change', { bubbles: true }));
+  updateMarkupCalculations();
 });
 
 ['markupPurchaseAmount', 'targetSaleAmount'].forEach((id) => {
