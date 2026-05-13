@@ -1097,7 +1097,9 @@ function updateMarkupFromSale() {
   const saleEl = document.getElementById('targetSaleAmount');
   const ebaySaleEl = document.getElementById('ebayPrice');
   const resultEl = document.getElementById('calculatedMarkup');
+  const netProfitEl = document.getElementById('calculatedNetProfit');
   const resultFromEbayEl = document.getElementById('calculatedMarkupFromEbay');
+  const netProfitFromEbayEl = document.getElementById('calculatedNetProfitFromEbay');
   if (!purchaseEl || !saleEl || !resultEl) return;
 
   const purchase = parseNumber(purchaseEl.value);
@@ -1105,20 +1107,27 @@ function updateMarkupFromSale() {
   const ebaySale = parseNumber(ebaySaleEl?.value);
   if (!Number.isFinite(purchase) || purchase <= 0) {
     resultEl.textContent = '—';
+    if (netProfitEl) netProfitEl.textContent = '—';
     if (resultFromEbayEl) resultFromEbayEl.textContent = '—';
+    if (netProfitFromEbayEl) netProfitFromEbayEl.textContent = '—';
     return;
   }
 
   const vatRate = getClientVatRateFraction();
   const vatMultiplier = 1 + (Number.isFinite(vatRate) ? vatRate : 0);
   const purchaseBrutto = isMarkupPurchaseNetMode() ? purchase * vatMultiplier : purchase;
+  const purchaseNetto = isMarkupPurchaseNetMode() ? purchase : purchase / vatMultiplier;
 
   if (Number.isFinite(sale) && sale >= 0) {
     const saleBrutto = isMarkupSaleNetMode() ? sale * vatMultiplier : sale;
+    const saleNetto = isMarkupSaleNetMode() ? sale : sale / vatMultiplier;
     const markupPercent = ((saleBrutto - purchaseBrutto) / purchaseBrutto) * 100;
+    const netProfit = saleNetto - purchaseNetto;
     resultEl.textContent = `${markupPercent.toFixed(2)}%`;
+    if (netProfitEl) netProfitEl.textContent = `${netProfit.toFixed(2)} PLN`;
   } else {
     resultEl.textContent = '—';
+    if (netProfitEl) netProfitEl.textContent = '—';
   }
 
   if (resultFromEbayEl) {
@@ -1127,10 +1136,14 @@ function updateMarkupFromSale() {
     const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
     if (!Number.isFinite(ebaySale) || ebaySale < 0 || !Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
       resultFromEbayEl.textContent = '—';
+      if (netProfitFromEbayEl) netProfitFromEbayEl.textContent = '—';
     } else {
       const saleBruttoFromEbay = ebaySale / (exchangeRate * (1 + commission));
+      const saleNettoFromEbay = saleBruttoFromEbay / vatMultiplier;
       const markupPercentFromEbay = ((saleBruttoFromEbay - purchaseBrutto) / purchaseBrutto) * 100;
+      const netProfitFromEbay = saleNettoFromEbay - purchaseNetto;
       resultFromEbayEl.textContent = `${markupPercentFromEbay.toFixed(2)}%`;
+      if (netProfitFromEbayEl) netProfitFromEbayEl.textContent = `${netProfitFromEbay.toFixed(2)} PLN`;
     }
   }
 }
@@ -1745,14 +1758,18 @@ function addHistoryEntry(source) {
     meta = `Min. eBay ${minSaleEbayText} <span class="history-dot">•</span> Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}% <span class="history-dot">•</span> Tryb netto → brutto liczony wg VAT klienta`;
   } else if (isSaleMarkupSource) {
     const calculatedMarkupText = document.getElementById('calculatedMarkup')?.textContent?.trim() || '—';
+    const calculatedNetProfitText = document.getElementById('calculatedNetProfit')?.textContent?.trim() || '—';
     const calculatedMarkupFromEbayText = document.getElementById('calculatedMarkupFromEbay')?.textContent?.trim() || '—';
+    const calculatedNetProfitFromEbayText = document.getElementById('calculatedNetProfitFromEbay')?.textContent?.trim() || '—';
     details = [
       `Zakup (tryb: ${markupPurchaseMode}) <span class="history-value">${formatCurrency(markupPurchaseAmount)}</span> PLN`,
       `Sprzedaż (tryb: ${markupSaleMode}) <span class="history-value">${formatCurrency(targetSaleAmount)}</span> PLN`,
       `Sprzedaż eBay <span class="history-value">${formatCurrency(targetSaleEbayAmount)}</span> ${currency}`,
       `Baza brutto <span class="history-value">${formatCurrency(markupPurchaseBrutto)}</span> / <span class="history-value">${formatCurrency(markupSaleBrutto)}</span> PLN`,
       `Narzut <span class="history-value">${calculatedMarkupText}</span>`,
-      `Narzut z eBay <span class="history-value">${calculatedMarkupFromEbayText}</span>`
+      `Zysk netto <span class="history-value">${calculatedNetProfitText}</span>`,
+      `Narzut z eBay <span class="history-value">${calculatedMarkupFromEbayText}</span>`,
+      `Zysk netto z eBay <span class="history-value">${calculatedNetProfitFromEbayText}</span>`
     ].join(' <span class="history-dot">•</span> ');
     meta = `Wzór: (sprzedaż - zakup) / zakup × 100% <span class="history-dot">•</span> Konwersja netto/brutto wg VAT klienta`;
   } else if (isBaseCommissionSource) {
