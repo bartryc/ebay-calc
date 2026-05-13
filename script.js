@@ -60,8 +60,13 @@ const INDEX_LAYOUT_VISIBILITY_STORAGE_KEY = 'indexLayoutVisibilityV1';
 const INDEX_LAYOUT_VISIBILITY_COOKIE_KEY = 'indexLayoutVisibilityV1';
 const INDEX_LAYOUT_COLORS_STORAGE_KEY = 'indexLayoutColorsV1';
 const INDEX_LAYOUT_COLORS_COOKIE_KEY = 'indexLayoutColorsV1';
+const INDEX_LAYOUT_COLUMN_WIDTH_STORAGE_KEY = 'indexLayoutColumnWidthV1';
+const INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY = 'indexLayoutColumnWidthV1';
 const INDEX_LAYOUT_GLOBAL_PRESETS_NOTE_ID = 'layout-presets-v1';
 const INDEX_LAYOUT_ACTIVE_PRESET_KEY = 'indexLayoutActivePresetV1';
+const DEFAULT_LAYOUT_COLUMN_WIDTH = 62;
+const MIN_LAYOUT_COLUMN_WIDTH = 35;
+const MAX_LAYOUT_COLUMN_WIDTH = 80;
 const LAYOUT_TINTS = ['', 'mint', 'blue', 'amber', 'violet', 'rose'];
 const LAYOUT_TINT_LABELS = {
   '': 'Brak',
@@ -83,6 +88,8 @@ const layoutSaveBtn = document.getElementById('layoutSaveBtn');
 const layoutResetBtn = document.getElementById('layoutResetBtn');
 const layoutExitBtn = document.getElementById('layoutExitBtn');
 const layoutGlobalPresetsEl = document.getElementById('layoutGlobalPresets');
+const pageLayoutRoot = document.querySelector('body[data-page-title="Kalkulator"] .layout');
+const columnResizer = document.getElementById('columnResizer');
 const layoutResetModal = document.getElementById('layoutResetModal');
 const layoutResetModalClose = document.getElementById('layoutResetModalClose');
 const layoutResetModalCancel = document.getElementById('layoutResetModalCancel');
@@ -94,6 +101,8 @@ let defaultLayoutVisibility = null;
 let preEditLayoutVisibility = null;
 let defaultLayoutColors = null;
 let preEditLayoutColors = null;
+let defaultLayoutColumnWidth = DEFAULT_LAYOUT_COLUMN_WIDTH;
+let preEditLayoutColumnWidth = null;
 let currentDraggedItem = null;
 let currentDraggedEl = null;
 let layoutResetModalResolver = null;
@@ -293,6 +302,40 @@ function applyLayoutColors(colorMap) {
   });
 }
 
+function normalizeLayoutColumnWidth(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_LAYOUT_COLUMN_WIDTH;
+  return Math.min(MAX_LAYOUT_COLUMN_WIDTH, Math.max(MIN_LAYOUT_COLUMN_WIDTH, parsed));
+}
+
+function applyLayoutColumnWidth(value) {
+  const width = normalizeLayoutColumnWidth(value);
+  const rightWidth = Math.max(1, 100 - width);
+  const leftFr = `${width}fr`;
+  const rightFr = `${rightWidth}fr`;
+
+  document.documentElement.style.setProperty('--layout-left-fr', leftFr);
+  document.documentElement.style.setProperty('--layout-right-fr', rightFr);
+  if (pageLayoutRoot) {
+    pageLayoutRoot.style.setProperty('--layout-left-fr', leftFr);
+    pageLayoutRoot.style.setProperty('--layout-right-fr', rightFr);
+    pageLayoutRoot.dataset.columnWidth = String(width);
+  }
+  if (columnResizer) {
+    columnResizer.setAttribute('aria-valuenow', String(Math.round(width)));
+    columnResizer.setAttribute('aria-valuemin', String(MIN_LAYOUT_COLUMN_WIDTH));
+    columnResizer.setAttribute('aria-valuemax', String(MAX_LAYOUT_COLUMN_WIDTH));
+    columnResizer.setAttribute('aria-valuetext', `Lewa kolumna ${Math.round(width)}%`);
+  }
+  return width;
+}
+
+function getCurrentLayoutColumnWidth() {
+  const raw = pageLayoutRoot?.dataset.columnWidth;
+  if (raw) return normalizeLayoutColumnWidth(raw);
+  return DEFAULT_LAYOUT_COLUMN_WIDTH;
+}
+
 function loadSavedLayoutOrder() {
   const raw = localStorage.getItem(INDEX_LAYOUT_STORAGE_KEY) || layoutGetCookieValue(INDEX_LAYOUT_COOKIE_KEY);
   if (!raw) return null;
@@ -323,15 +366,27 @@ function loadSavedLayoutColors() {
   }
 }
 
+function loadSavedLayoutColumnWidth() {
+  const raw = localStorage.getItem(INDEX_LAYOUT_COLUMN_WIDTH_STORAGE_KEY) || layoutGetCookieValue(INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY);
+  if (!raw) return null;
+  try {
+    return normalizeLayoutColumnWidth(JSON.parse(raw));
+  } catch (_error) {
+    return normalizeLayoutColumnWidth(raw);
+  }
+}
+
 function loadSavedLayoutFromLocal() {
   const order = loadSavedLayoutOrder();
   const visibility = loadSavedLayoutVisibility();
   const colors = loadSavedLayoutColors();
-  if (!order && !visibility && !colors) return null;
+  const columnWidth = loadSavedLayoutColumnWidth();
+  if (!order && !visibility && !colors && columnWidth === null) return null;
   return {
     order: order || getCurrentLayoutOrder(),
     visibility: visibility || getCurrentLayoutVisibility(),
-    colors: colors || getCurrentLayoutColors()
+    colors: colors || getCurrentLayoutColors(),
+    columnWidth: columnWidth ?? getCurrentLayoutColumnWidth()
   };
 }
 
@@ -339,7 +394,7 @@ function flattenLayoutOrder(order) {
   return [...(order?.calc || []), ...(order?.info || [])];
 }
 
-function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisibility) {
+function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisibility, beforeColumnWidth, afterColumnWidth) {
   const allIds = Array.from(new Set([
     ...flattenLayoutOrder(beforeOrder),
     ...flattenLayoutOrder(afterOrder),
@@ -374,13 +429,20 @@ function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisib
     if (beforeVisible && !afterVisible) hidden.push(id);
   });
 
-  return { moved, columnChanged, shown, hidden };
+  const normalizedBeforeWidth = normalizeLayoutColumnWidth(beforeColumnWidth);
+  const normalizedAfterWidth = normalizeLayoutColumnWidth(afterColumnWidth);
+  const columnWidth = Math.abs(normalizedBeforeWidth - normalizedAfterWidth) >= 0.5
+    ? { from: normalizedBeforeWidth, to: normalizedAfterWidth }
+    : null;
+
+  return { moved, columnChanged, shown, hidden, columnWidth };
 }
 
-function saveLayoutToLocal(orderMap, visibilityMap, colorMap) {
+function saveLayoutToLocal(orderMap, visibilityMap, colorMap, columnWidth) {
   saveLayoutOrder(orderMap);
   saveLayoutVisibility(visibilityMap);
   saveLayoutColors(colorMap || getCurrentLayoutColors());
+  saveLayoutColumnWidth(columnWidth ?? getCurrentLayoutColumnWidth());
 }
 
 function clearSavedLayoutLocal() {
@@ -396,7 +458,8 @@ function normalizeGlobalLayoutPreset(rawPreset) {
     id,
     name,
     order: normalizeLayoutOrder(rawPreset.order || {}),
-    visibility: normalizeLayoutVisibility(rawPreset.visibility || {})
+    visibility: normalizeLayoutVisibility(rawPreset.visibility || {}),
+    columnWidth: normalizeLayoutColumnWidth(rawPreset.columnWidth)
   };
 }
 
@@ -440,6 +503,7 @@ function applyGlobalPresetById(presetId) {
   selectedLayoutPresetKey = `global:${preset.id}`;
   applyLayoutOrder(preset.order);
   applyLayoutVisibility(preset.visibility, { forceShowAll: isLayoutEditMode });
+  applyLayoutColumnWidth(preset.columnWidth);
   if (isLayoutEditMode) {
     renderLayoutItemControls();
     updateLayoutDiffHighlight();
@@ -471,13 +535,80 @@ function saveLayoutColors(colorMap) {
   layoutSetCookieValue(INDEX_LAYOUT_COLORS_COOKIE_KEY, payload);
 }
 
+function saveLayoutColumnWidth(columnWidth) {
+  const normalized = normalizeLayoutColumnWidth(columnWidth);
+  const payload = JSON.stringify(normalized);
+  localStorage.setItem(INDEX_LAYOUT_COLUMN_WIDTH_STORAGE_KEY, payload);
+  layoutSetCookieValue(INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY, payload);
+}
+
 function clearSavedLayoutOrder() {
   localStorage.removeItem(INDEX_LAYOUT_STORAGE_KEY);
   localStorage.removeItem(INDEX_LAYOUT_VISIBILITY_STORAGE_KEY);
   localStorage.removeItem(INDEX_LAYOUT_COLORS_STORAGE_KEY);
+  localStorage.removeItem(INDEX_LAYOUT_COLUMN_WIDTH_STORAGE_KEY);
   document.cookie = `${INDEX_LAYOUT_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   document.cookie = `${INDEX_LAYOUT_VISIBILITY_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   document.cookie = `${INDEX_LAYOUT_COLORS_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  document.cookie = `${INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+}
+
+function markLayoutAsCustomAfterWidthChange() {
+  selectedLayoutPresetKey = 'custom';
+  localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
+  applyPresetSelectionVisual();
+}
+
+function bindColumnResizer() {
+  if (!columnResizer || !pageLayoutRoot) return;
+  applyLayoutColumnWidth(getCurrentLayoutColumnWidth());
+
+  const updateFromPointer = (clientX) => {
+    const rect = pageLayoutRoot.getBoundingClientRect();
+    if (!rect.width) return getCurrentLayoutColumnWidth();
+    const relative = ((clientX - rect.left) / rect.width) * 100;
+    const width = applyLayoutColumnWidth(relative);
+    markLayoutAsCustomAfterWidthChange();
+    if (isLayoutEditMode) updateLayoutDiffHighlight();
+    return width;
+  };
+
+  columnResizer.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    document.body.classList.add('is-column-resizing');
+    columnResizer.setPointerCapture?.(event.pointerId);
+    updateFromPointer(event.clientX);
+
+    const handleMove = (moveEvent) => {
+      moveEvent.preventDefault();
+      updateFromPointer(moveEvent.clientX);
+    };
+
+    const handleEnd = (endEvent) => {
+      document.body.classList.remove('is-column-resizing');
+      columnResizer.releasePointerCapture?.(endEvent.pointerId);
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('pointerup', handleEnd);
+      document.removeEventListener('pointercancel', handleEnd);
+      if (!isLayoutEditMode) {
+        saveLayoutColumnWidth(getCurrentLayoutColumnWidth());
+      }
+    };
+
+    document.addEventListener('pointermove', handleMove);
+    document.addEventListener('pointerup', handleEnd);
+    document.addEventListener('pointercancel', handleEnd);
+  });
+
+  columnResizer.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const delta = event.key === 'ArrowLeft' ? -2 : 2;
+    const width = applyLayoutColumnWidth(getCurrentLayoutColumnWidth() + delta);
+    markLayoutAsCustomAfterWidthChange();
+    if (!isLayoutEditMode) saveLayoutColumnWidth(width);
+    if (isLayoutEditMode) updateLayoutDiffHighlight();
+  });
 }
 
 function updateLayoutDiffHighlight() {
@@ -742,6 +873,7 @@ function setLayoutEditMode(enabled) {
     preEditLayoutOrder = getCurrentLayoutOrder();
     preEditLayoutVisibility = getCurrentLayoutVisibility();
     preEditLayoutColors = getCurrentLayoutColors();
+    preEditLayoutColumnWidth = getCurrentLayoutColumnWidth();
     preEditLayoutPresetKey = selectedLayoutPresetKey;
     applyLayoutVisibility(preEditLayoutVisibility, { forceShowAll: true });
     renderLayoutItemControls();
@@ -753,7 +885,8 @@ function setLayoutEditMode(enabled) {
         action: 'enter',
         preset: selectedLayoutPresetKey || 'custom',
         order: preEditLayoutOrder,
-        visibility: preEditLayoutVisibility
+        visibility: preEditLayoutVisibility,
+        columnWidth: preEditLayoutColumnWidth
       });
     }
     return;
@@ -1320,11 +1453,14 @@ function renderHistory() {
 defaultLayoutOrder = getCurrentLayoutOrder();
 defaultLayoutVisibility = getCurrentLayoutVisibility();
 defaultLayoutColors = getCurrentLayoutColors();
+defaultLayoutColumnWidth = applyLayoutColumnWidth(DEFAULT_LAYOUT_COLUMN_WIDTH);
+bindColumnResizer();
 const savedLocalLayout = loadSavedLayoutFromLocal();
 if (savedLocalLayout) {
   applyLayoutOrder(savedLocalLayout.order);
   applyLayoutVisibility(savedLocalLayout.visibility);
   applyLayoutColors(savedLocalLayout.colors);
+  applyLayoutColumnWidth(savedLocalLayout.columnWidth);
 }
 loadGlobalLayoutPresets()
   .then((presets) => {
@@ -1334,7 +1470,7 @@ loadGlobalLayoutPresets()
     if (activeGlobalId) {
       const applied = applyGlobalPresetById(activeGlobalId);
       if (applied) {
-        saveLayoutToLocal(getCurrentLayoutOrder(), getCurrentLayoutVisibility(), getCurrentLayoutColors());
+        saveLayoutToLocal(getCurrentLayoutOrder(), getCurrentLayoutVisibility(), getCurrentLayoutColors(), getCurrentLayoutColumnWidth());
       }
     }
     applyPresetSelectionVisual();
@@ -1358,6 +1494,9 @@ if (layoutCustomizeBtn) {
       }
       if (preEditLayoutColors) {
         applyLayoutColors(preEditLayoutColors);
+      }
+      if (preEditLayoutColumnWidth !== null) {
+        applyLayoutColumnWidth(preEditLayoutColumnWidth);
       }
       selectedLayoutPresetKey = preEditLayoutPresetKey || 'custom';
       applyPresetSelectionVisual();
@@ -1394,11 +1533,13 @@ if (layoutSaveBtn) {
     event.stopPropagation();
     const beforeOrder = preEditLayoutOrder || getCurrentLayoutOrder();
     const beforeVisibility = preEditLayoutVisibility || getCurrentLayoutVisibility();
+    const beforeColumnWidth = preEditLayoutColumnWidth ?? getCurrentLayoutColumnWidth();
     const order = getCurrentLayoutOrder();
     const visibility = getCurrentLayoutVisibility();
     const colors = getCurrentLayoutColors();
-    const changes = diffLayoutChanges(beforeOrder, beforeVisibility, order, visibility);
-    saveLayoutToLocal(order, visibility, colors);
+    const columnWidth = getCurrentLayoutColumnWidth();
+    const changes = diffLayoutChanges(beforeOrder, beforeVisibility, order, visibility, beforeColumnWidth, columnWidth);
+    saveLayoutToLocal(order, visibility, colors, columnWidth);
     if (!selectedLayoutPresetKey) {
       selectedLayoutPresetKey = 'custom';
     }
@@ -1406,13 +1547,14 @@ if (layoutSaveBtn) {
     logActivity('layout-edit', {
       action: 'save',
       preset: selectedLayoutPresetKey || 'custom',
-      before: { order: beforeOrder, visibility: beforeVisibility },
-      after: { order, visibility },
+      before: { order: beforeOrder, visibility: beforeVisibility, columnWidth: beforeColumnWidth },
+      after: { order, visibility, columnWidth },
       changes
     });
     preEditLayoutOrder = order;
     preEditLayoutVisibility = visibility;
     preEditLayoutColors = colors;
+    preEditLayoutColumnWidth = columnWidth;
     setLayoutEditMode(false);
     showMainToast('Układ zapisany lokalnie dla tego użytkownika.', 'ok');
   });
@@ -1428,12 +1570,14 @@ if (layoutResetBtn) {
     applyLayoutOrder(defaultLayoutOrder);
     applyLayoutVisibility(defaultLayoutVisibility || {});
     applyLayoutColors(defaultLayoutColors || {});
+    applyLayoutColumnWidth(defaultLayoutColumnWidth);
     clearSavedLayoutLocal();
     selectedLayoutPresetKey = 'custom';
     localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
     preEditLayoutOrder = getCurrentLayoutOrder();
     preEditLayoutVisibility = getCurrentLayoutVisibility();
     preEditLayoutColors = getCurrentLayoutColors();
+    preEditLayoutColumnWidth = getCurrentLayoutColumnWidth();
     setLayoutEditMode(false);
     showMainToast('Przywrócono domyślny układ.', 'ok');
   });
@@ -1485,6 +1629,9 @@ if (layoutExitBtn) {
     }
     if (preEditLayoutColors) {
       applyLayoutColors(preEditLayoutColors);
+    }
+    if (preEditLayoutColumnWidth !== null) {
+      applyLayoutColumnWidth(preEditLayoutColumnWidth);
     }
     selectedLayoutPresetKey = preEditLayoutPresetKey || 'custom';
     applyPresetSelectionVisual();

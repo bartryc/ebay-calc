@@ -173,10 +173,14 @@
 
     if (!document.documentElement.dataset.boundMenuOutsideClick) {
       document.documentElement.dataset.boundMenuOutsideClick = '1';
-      document.addEventListener('click', (event) => {
+      const closeWhenOutsideMenu = (event) => {
         if (!isMobile()) return;
-        if (!topActions.contains(event.target)) closeMenu();
-      });
+        const target = event.target;
+        if (menu.contains(target) || burger.contains(target)) return;
+        closeMenu();
+      };
+      document.addEventListener('pointerdown', closeWhenOutsideMenu, true);
+      document.addEventListener('click', closeWhenOutsideMenu, true);
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') closeMenu();
       });

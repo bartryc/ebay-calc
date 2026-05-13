@@ -155,6 +155,10 @@
                   <option value="">---</option>
                 </select>
               </div>
+              <div class="admin-log-field">
+                <label for="layoutPresetColumnWidth">Lewa kolumna (%)</label>
+                <input type="number" id="layoutPresetColumnWidth" min="35" max="80" step="1" value="62">
+              </div>
               <div class="admin-log-field layout-preset-action">
                 <label>&nbsp;</label>
                 <button type="button" id="layoutPresetSaveBtn">Zapisz preset</button>
@@ -533,6 +537,7 @@
     const patternPreferPlus = document.getElementById('patternPreferPlus');
     const layoutPresetName = document.getElementById('layoutPresetName');
     const layoutPresetSelect = document.getElementById('layoutPresetSelect');
+    const layoutPresetColumnWidth = document.getElementById('layoutPresetColumnWidth');
     const layoutPresetItems = document.getElementById('layoutPresetItems');
     const layoutPresetSaveBtn = document.getElementById('layoutPresetSaveBtn');
     const layoutPresetDeleteBtn = document.getElementById('layoutPresetDeleteBtn');
@@ -2131,6 +2136,16 @@
       if (totalCountEl) totalCountEl.textContent = exactCount + patternCount;
     }
 
+    const LAYOUT_PRESET_DEFAULT_COLUMN_WIDTH = 62;
+    const LAYOUT_PRESET_MIN_COLUMN_WIDTH = 35;
+    const LAYOUT_PRESET_MAX_COLUMN_WIDTH = 80;
+
+    function normalizeLayoutPresetColumnWidth(value) {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return LAYOUT_PRESET_DEFAULT_COLUMN_WIDTH;
+      return Math.min(LAYOUT_PRESET_MAX_COLUMN_WIDTH, Math.max(LAYOUT_PRESET_MIN_COLUMN_WIDTH, parsed));
+    }
+
     function normalizeLayoutPresetEntry(entry) {
       if (!entry || typeof entry !== 'object') return null;
       const id = String(entry.id || '').trim() || `gp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -2157,7 +2172,13 @@
       allIds.forEach((itemId) => {
         visibility[itemId] = rawVisibility[itemId] !== false;
       });
-      return { id, name, order, visibility };
+      return {
+        id,
+        name,
+        order,
+        visibility,
+        columnWidth: normalizeLayoutPresetColumnWidth(entry.columnWidth)
+      };
     }
 
     function normalizeLayoutPresetCollection(raw) {
@@ -2194,7 +2215,8 @@
         id: id || `gp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
         name: String(name || '').trim(),
         order,
-        visibility
+        visibility,
+        columnWidth: normalizeLayoutPresetColumnWidth(layoutPresetColumnWidth?.value)
       };
     }
 
@@ -2260,6 +2282,7 @@
       if (!presetId) {
         layoutPresetRows = getDefaultLayoutRows();
         if (layoutPresetName) layoutPresetName.value = '';
+        if (layoutPresetColumnWidth) layoutPresetColumnWidth.value = String(LAYOUT_PRESET_DEFAULT_COLUMN_WIDTH);
         renderLayoutPresetRows();
         return;
       }
@@ -2267,6 +2290,7 @@
       if (!preset) return;
       layoutPresetRows = presetToRows(preset);
       if (layoutPresetName) layoutPresetName.value = preset.name;
+      if (layoutPresetColumnWidth) layoutPresetColumnWidth.value = String(normalizeLayoutPresetColumnWidth(preset.columnWidth));
       renderLayoutPresetRows();
     }
 
