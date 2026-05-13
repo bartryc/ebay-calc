@@ -541,6 +541,9 @@
     const layoutPresetItems = document.getElementById('layoutPresetItems');
     const layoutPresetSaveBtn = document.getElementById('layoutPresetSaveBtn');
     const layoutPresetDeleteBtn = document.getElementById('layoutPresetDeleteBtn');
+    const LAYOUT_PRESET_DEFAULT_COLUMN_WIDTH = 62;
+    const LAYOUT_PRESET_MIN_COLUMN_WIDTH = 35;
+    const LAYOUT_PRESET_MAX_COLUMN_WIDTH = 80;
     const adminTabButtons = Array.from(document.querySelectorAll('[data-admin-tab-btn]'));
     const adminTabCards = Array.from(document.querySelectorAll('[data-admin-tab]'));
     const sourceConfigSelect = document.getElementById('sourceConfigSelect');
@@ -2135,10 +2138,6 @@
       if (patternCountEl) patternCountEl.textContent = patternCount;
       if (totalCountEl) totalCountEl.textContent = exactCount + patternCount;
     }
-
-    const LAYOUT_PRESET_DEFAULT_COLUMN_WIDTH = 62;
-    const LAYOUT_PRESET_MIN_COLUMN_WIDTH = 35;
-    const LAYOUT_PRESET_MAX_COLUMN_WIDTH = 80;
 
     function normalizeLayoutPresetColumnWidth(value) {
       const parsed = Number(value);

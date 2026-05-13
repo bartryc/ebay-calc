@@ -4966,3 +4966,111 @@ body.layout-edit-mode .column-resizer::before {
     inset: 6px 1px;
   }
 }
+
+/* Column-resizer safety: inner modules must shrink with the column, not push it wider. */
+body[data-page-title="Kalkulator"] .layout > *,
+body[data-page-title="Kalkulator"] .app-card,
+body[data-page-title="Kalkulator"] .info-card,
+body[data-page-title="Kalkulator"] #calcLayoutContainer,
+body[data-page-title="Kalkulator"] #infoLayoutContainer,
+body[data-page-title="Kalkulator"] .layout-item,
+body[data-page-title="Kalkulator"] .collapsible-card,
+body[data-page-title="Kalkulator"] .search-card,
+body[data-page-title="Kalkulator"] .history-item,
+body[data-page-title="Kalkulator"] .min-price-box,
+body[data-page-title="Kalkulator"] .base-commission-tools {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body[data-page-title="Kalkulator"] .layout-item > *,
+body[data-page-title="Kalkulator"] .info-card > *,
+body[data-page-title="Kalkulator"] .collapsible-body > *,
+body[data-page-title="Kalkulator"] .highlight-card > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body[data-page-title="Kalkulator"] .search-card,
+body[data-page-title="Kalkulator"] .collapsible-card,
+body[data-page-title="Kalkulator"] .history-item,
+body[data-page-title="Kalkulator"] .min-price-box,
+body[data-page-title="Kalkulator"] .highlight-note,
+body[data-page-title="Kalkulator"] .highlight-card h3,
+body[data-page-title="Kalkulator"] .history-summary,
+body[data-page-title="Kalkulator"] .history-meta,
+body[data-page-title="Kalkulator"] .pn-suggestion,
+body[data-page-title="Kalkulator"] .source-submenu-option {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+body[data-page-title="Kalkulator"] .search-header,
+body[data-page-title="Kalkulator"] .history-header,
+body[data-page-title="Kalkulator"] .collapsible-summary {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+body[data-page-title="Kalkulator"] .search-header h3,
+body[data-page-title="Kalkulator"] .history-header h3,
+body[data-page-title="Kalkulator"] .collapsible-summary h3,
+body[data-page-title="Kalkulator"] .collapsible-summary-value,
+body[data-page-title="Kalkulator"] .highlight-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+body[data-page-title="Kalkulator"] .collapsible-summary-right {
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+body[data-page-title="Kalkulator"] .search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+}
+
+body[data-page-title="Kalkulator"] .search-row input[type="text"],
+body[data-page-title="Kalkulator"] .search-input-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body[data-page-title="Kalkulator"] .search-sources {
+  max-width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+}
+
+body[data-page-title="Kalkulator"] .source-option-wrap,
+body[data-page-title="Kalkulator"] .source-option,
+body[data-page-title="Kalkulator"] .source-icon-placeholder {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body[data-page-title="Kalkulator"] .source-icon-placeholder {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+body[data-page-title="Kalkulator"] .info-column-actions,
+body[data-page-title="Kalkulator"] .history-actions,
+body[data-page-title="Kalkulator"] .history-actions-inline {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+body[data-page-title="Kalkulator"] .info-column-actions button,
+body[data-page-title="Kalkulator"] .history-actions button,
+body[data-page-title="Kalkulator"] .search-actions button,
+body[data-page-title="Kalkulator"] .report-quick-btn {
+  max-width: 100%;
+  white-space: normal;
+}

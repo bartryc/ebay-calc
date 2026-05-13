@@ -950,10 +950,6 @@ function formatCurrency(value) {
 
 function isInlineModeNet(toggleId) {
   const toggleEl = document.getElementById(toggleId);
-  const visibleToggle = document.querySelector(`.mode-inline-toggle[data-toggle="${toggleId}"]`);
-  const visibleMode = visibleToggle?.textContent?.trim()?.toLowerCase();
-  if (visibleMode === 'netto') return true;
-  if (visibleMode === 'brutto') return false;
   return !!toggleEl?.checked;
 }
 
@@ -1886,7 +1882,7 @@ advancedOptionsToggle.addEventListener('change', () => {
     setFieldBaseline('commission');
   }
   hideSelfTestDetails();
-  calculatePrice();
+  resyncPricingFromCurrentSource();
   if (advancedOptionsToggle.checked) {
     checkRateProvidersStatus(document.getElementById('currency').value);
   }
@@ -2108,6 +2104,7 @@ function calculatePrice() {
 
 function applyPreset(currency, vat) {
   isPresetApplied = true;
+  const sourceBeforePreset = getSourceForPricingParamChange();
   document.getElementById('currency').value = currency;
   document.getElementById('vatRate').value = parseNumber(vat).toString();
   document.getElementById('currencyLabel').innerText = currency;
@@ -2115,8 +2112,7 @@ function applyPreset(currency, vat) {
     .replace(/\s+/g, ' ')
     .trim();
   ebayCurrencyLabel.textContent = label;
-  lastChanged = 'vatRate';
-  syncFields('vatRate');
+  resyncPricingFromCurrentSource(sourceBeforePreset || 'vatRate');
   fetchExchangeRate(currency);
 }
 
@@ -2214,11 +2210,11 @@ function fetchExchangeRate(currency, options = {}) {
       syncFields(lastChanged);
     } else if (Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice') {
       syncFields('ebayPrice');
-    } else if (isPresetApplied || lastChanged === 'vatRate') {
+    } else if (isPresetApplied) {
+      resyncPricingFromCurrentSource();
+      addHistoryEntry('preset');
+    } else if (lastChanged === 'vatRate') {
       syncFields('vatRate');
-      if (isPresetApplied) {
-        addHistoryEntry('preset');
-      }
     } else {
       calculatePrice();
     }
@@ -2487,33 +2483,59 @@ vatRateInputEl.addEventListener('blur', () => {
 function getSourceForPricingParamChange() {
   const bruttoValue = parseNumber(plnBruttoInput.value);
   const nettoValue = parseNumber(plnNettoInput.value);
+  const ebayValue = parseNumber(ebayPriceInputEl.value);
+  const sourceValues = {
+    ebayPrice: ebayValue,
+    brutto: bruttoValue,
+    netto: nettoValue
+  };
 
+  if (
+    lastChanged
+    && Object.prototype.hasOwnProperty.call(sourceValues, lastChanged)
+    && Number.isFinite(sourceValues[lastChanged])
+  ) {
+    return lastChanged;
+  }
+  if (Number.isFinite(ebayValue) && document.activeElement === ebayPriceInputEl) return 'ebayPrice';
+  if (Number.isFinite(bruttoValue) && document.activeElement === plnBruttoInput) return 'brutto';
+  if (Number.isFinite(nettoValue) && document.activeElement === plnNettoInput) return 'netto';
   if (Number.isFinite(bruttoValue)) return 'brutto';
   if (Number.isFinite(nettoValue)) return 'netto';
-  if (Number.isFinite(parseNumber(ebayPriceInputEl.value))) return 'ebayPrice';
+  if (Number.isFinite(ebayValue)) return 'ebayPrice';
   return null;
+}
+
+function resyncPricingFromCurrentSource(preferredSource = null) {
+  const preferredValue = preferredSource === 'ebayPrice'
+    ? parseNumber(ebayPriceInputEl.value)
+    : preferredSource === 'brutto'
+      ? parseNumber(plnBruttoInput.value)
+      : preferredSource === 'netto'
+        ? parseNumber(plnNettoInput.value)
+        : NaN;
+  const sourceToSync = Number.isFinite(preferredValue)
+    ? preferredSource
+    : getSourceForPricingParamChange();
+
+  if (sourceToSync) {
+    lastChanged = sourceToSync;
+    syncFields(sourceToSync);
+  } else if (lastChanged === 'vatRate' && !isNaN(parseInt(vatRateInputEl.value, 10))) {
+    syncFields('vatRate');
+  } else {
+    calculatePrice();
+  }
+  updateBaseMultiplier();
+  updateMinSaleByMarkup();
+  updateMarkupFromSale();
+  updateCommissionFromBaseMultiplier();
 }
 
 ['exchangeRate', 'commission'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => {
     hideSelfTestDetails();
-    const pricingSource = getSourceForPricingParamChange();
-    const lastChangedHasValue =
-      (lastChanged === 'netto' && Number.isFinite(parseNumber(plnNettoInput.value)))
-      || (lastChanged === 'brutto' && Number.isFinite(parseNumber(plnBruttoInput.value)));
-    const sourceToSync = lastChangedHasValue ? lastChanged : pricingSource;
-
-    if (sourceToSync) {
-      lastChanged = sourceToSync;
-      syncFields(sourceToSync);
-    } else if (lastChanged === 'vatRate' && !isNaN(parseInt(vatRateInputEl.value))) {
-      syncFields('vatRate');
-    } else {
-      calculatePrice();
-    }
-    updateBaseMultiplier();
-    updateMinSaleByMarkup();
-    updateMarkupFromSale();
+    resyncPricingFromCurrentSource();
     scheduleHistoryLog(id);
   });
   document.getElementById(id).addEventListener('focus', () => {
