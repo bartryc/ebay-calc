@@ -67,6 +67,10 @@ const INDEX_LAYOUT_ACTIVE_PRESET_KEY = 'indexLayoutActivePresetV1';
 const DEFAULT_LAYOUT_COLUMN_WIDTH = 62;
 const MIN_LAYOUT_COLUMN_WIDTH = 35;
 const MAX_LAYOUT_COLUMN_WIDTH = 80;
+const DEFAULT_LAYOUT_COLUMN_PROFILE = { count: 2, widths: { calc: 62, info: 38, extra: 0 } };
+const DEFAULT_THREE_COLUMN_PROFILE = { count: 3, widths: { calc: 46, info: 30, extra: 24 } };
+const MIN_THREE_COLUMN_WIDTH = 18;
+const LAYOUT_GROUP_KEYS = ['calc', 'info', 'extra'];
 const LAYOUT_TINTS = ['', 'mint', 'blue', 'amber', 'violet', 'rose'];
 const LAYOUT_TINT_LABELS = {
   '': 'Brak',
@@ -78,7 +82,8 @@ const LAYOUT_TINT_LABELS = {
 };
 const layoutGroups = {
   calc: document.getElementById('calcLayoutContainer'),
-  info: document.getElementById('infoLayoutContainer')
+  info: document.getElementById('infoLayoutContainer'),
+  extra: document.getElementById('extraLayoutContainer')
 };
 const topMenuLayoutGroup = document.querySelector('.top-menu-group.has-dropdown');
 const topMenuLayoutLink = topMenuLayoutGroup?.querySelector('.top-menu-link');
@@ -88,8 +93,11 @@ const layoutSaveBtn = document.getElementById('layoutSaveBtn');
 const layoutResetBtn = document.getElementById('layoutResetBtn');
 const layoutExitBtn = document.getElementById('layoutExitBtn');
 const layoutGlobalPresetsEl = document.getElementById('layoutGlobalPresets');
+const layoutColumnRatioEl = document.getElementById('layoutColumnRatio');
+const layoutColumnModeBtn = document.getElementById('layoutColumnModeBtn');
 const pageLayoutRoot = document.querySelector('body[data-page-title="Kalkulator"] .layout');
 const columnResizer = document.getElementById('columnResizer');
+const columnResizerRight = document.getElementById('columnResizerRight');
 const layoutResetModal = document.getElementById('layoutResetModal');
 const layoutResetModalClose = document.getElementById('layoutResetModalClose');
 const layoutResetModalCancel = document.getElementById('layoutResetModalCancel');
@@ -101,12 +109,13 @@ let defaultLayoutVisibility = null;
 let preEditLayoutVisibility = null;
 let defaultLayoutColors = null;
 let preEditLayoutColors = null;
-let defaultLayoutColumnWidth = DEFAULT_LAYOUT_COLUMN_WIDTH;
+let defaultLayoutColumnWidth = DEFAULT_LAYOUT_COLUMN_PROFILE;
 let preEditLayoutColumnWidth = null;
 let currentDraggedItem = null;
 let currentDraggedEl = null;
 let layoutResetModalResolver = null;
 let globalLayoutPresets = [];
+let layoutEditBarResizeObserver = null;
 let selectedLayoutPresetKey = localStorage.getItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY) || 'custom';
 let preEditLayoutPresetKey = selectedLayoutPresetKey;
 if (selectedLayoutPresetKey.startsWith('builtin:')) {
@@ -308,32 +317,173 @@ function normalizeLayoutColumnWidth(value) {
   return Math.min(MAX_LAYOUT_COLUMN_WIDTH, Math.max(MIN_LAYOUT_COLUMN_WIDTH, parsed));
 }
 
+function roundLayoutWidth(value) {
+  return Math.round(Number(value) || 0);
+}
+
+function normalizeThreeColumnWidths(rawWidths = {}) {
+  const fallback = DEFAULT_THREE_COLUMN_PROFILE.widths;
+  let calc = Number(rawWidths.calc ?? fallback.calc);
+  let info = Number(rawWidths.info ?? fallback.info);
+  let extra = Number(rawWidths.extra ?? fallback.extra);
+  if (!Number.isFinite(calc)) calc = fallback.calc;
+  if (!Number.isFinite(info)) info = fallback.info;
+  if (!Number.isFinite(extra)) extra = fallback.extra;
+
+  calc = Math.max(MIN_THREE_COLUMN_WIDTH, calc);
+  info = Math.max(MIN_THREE_COLUMN_WIDTH, info);
+  extra = Math.max(MIN_THREE_COLUMN_WIDTH, extra);
+
+  const total = calc + info + extra;
+  const scale = total > 0 ? 100 / total : 1;
+  calc *= scale;
+  info *= scale;
+  extra *= scale;
+
+  return { calc, info, extra };
+}
+
+function normalizeLayoutColumnProfile(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const count = Number(value.count) === 3 ? 3 : 2;
+    const widths = value.widths || {};
+    if (count === 3) {
+      return {
+        count: 3,
+        widths: normalizeThreeColumnWidths(widths)
+      };
+    }
+    const calc = normalizeLayoutColumnWidth(widths.calc ?? value.calc ?? DEFAULT_LAYOUT_COLUMN_WIDTH);
+    return {
+      count: 2,
+      widths: { calc, info: Math.max(1, 100 - calc), extra: 0 }
+    };
+  }
+  const calc = normalizeLayoutColumnWidth(value);
+  return {
+    count: 2,
+    widths: { calc, info: Math.max(1, 100 - calc), extra: 0 }
+  };
+}
+
+function formatLayoutColumnRatio(profile) {
+  const normalized = normalizeLayoutColumnProfile(profile);
+  const left = roundLayoutWidth(normalized.widths.calc);
+  const right = roundLayoutWidth(normalized.widths.info);
+  if (normalized.count === 3) {
+    const third = Math.max(0, 100 - left - right);
+    return `Kolumny ${left}% / ${right}% / ${third}%`;
+  }
+  return `Kolumny ${left}% / ${Math.max(0, 100 - left)}%`;
+}
+
+function updateLayoutColumnModeControls(profile) {
+  const normalized = normalizeLayoutColumnProfile(profile);
+  document.body.classList.toggle('layout-three-columns', normalized.count === 3);
+  if (layoutColumnModeBtn) {
+    layoutColumnModeBtn.textContent = normalized.count === 3 ? '2 kolumny' : '3 kolumny';
+    layoutColumnModeBtn.setAttribute('aria-pressed', normalized.count === 3 ? 'true' : 'false');
+    layoutColumnModeBtn.setAttribute('title', normalized.count === 3 ? 'Przełącz na dwie kolumny' : 'Przełącz na trzy kolumny');
+  }
+}
+
+function setLayoutColumnCount(count) {
+  const current = getCurrentLayoutColumnWidth();
+  const nextCount = count === 3 ? 3 : 2;
+  if (nextCount === 3) {
+    const calc = Math.min(64, Math.max(MIN_THREE_COLUMN_WIDTH, current.widths.calc || DEFAULT_THREE_COLUMN_PROFILE.widths.calc));
+    const remaining = 100 - calc;
+    const infoShare = current.count === 2 ? 0.56 : (current.widths.info / Math.max(1, current.widths.info + current.widths.extra));
+    applyLayoutColumnWidth({
+      count: 3,
+      widths: {
+        calc,
+        info: remaining * infoShare,
+        extra: remaining * (1 - infoShare)
+      }
+    });
+    if (isLayoutEditMode) {
+      renderLayoutItemControls();
+      updateLayoutDiffHighlight();
+    }
+    return;
+  }
+  if (layoutGroups.extra && layoutGroups.info) {
+    Array.from(layoutGroups.extra.children)
+      .filter((child) => child.getAttribute('data-layout-item'))
+      .forEach((child) => layoutGroups.info.appendChild(child));
+  }
+  applyLayoutColumnWidth({
+    count: 2,
+    widths: {
+      calc: normalizeLayoutColumnWidth(current.widths.calc || DEFAULT_LAYOUT_COLUMN_WIDTH),
+      info: 100 - normalizeLayoutColumnWidth(current.widths.calc || DEFAULT_LAYOUT_COLUMN_WIDTH),
+      extra: 0
+    }
+  });
+  if (isLayoutEditMode) {
+    renderLayoutItemControls();
+    updateLayoutDiffHighlight();
+  }
+}
+
 function applyLayoutColumnWidth(value) {
-  const width = normalizeLayoutColumnWidth(value);
-  const rightWidth = Math.max(1, 100 - width);
-  const leftFr = `${width}fr`;
-  const rightFr = `${rightWidth}fr`;
+  const profile = normalizeLayoutColumnProfile(value);
+  const { count, widths } = profile;
+  const leftFr = `${widths.calc}fr`;
+  const rightFr = `${widths.info}fr`;
+  const thirdFr = `${count === 3 ? widths.extra : 0}fr`;
+  const roundedLeft = roundLayoutWidth(widths.calc);
+  const roundedRight = count === 3 ? roundLayoutWidth(widths.info) : Math.max(0, 100 - roundedLeft);
+  const roundedThird = count === 3 ? Math.max(0, 100 - roundedLeft - roundedRight) : 0;
 
   document.documentElement.style.setProperty('--layout-left-fr', leftFr);
   document.documentElement.style.setProperty('--layout-right-fr', rightFr);
+  document.documentElement.style.setProperty('--layout-third-fr', thirdFr);
   if (pageLayoutRoot) {
     pageLayoutRoot.style.setProperty('--layout-left-fr', leftFr);
     pageLayoutRoot.style.setProperty('--layout-right-fr', rightFr);
-    pageLayoutRoot.dataset.columnWidth = String(width);
+    pageLayoutRoot.style.setProperty('--layout-third-fr', thirdFr);
+    pageLayoutRoot.dataset.columnWidth = String(widths.calc);
+    pageLayoutRoot.dataset.columnCount = String(count);
+    pageLayoutRoot.dataset.columnProfile = JSON.stringify(profile);
   }
+  if (count === 2 && layoutGroups.extra && layoutGroups.info && layoutGroups.extra.children.length) {
+    Array.from(layoutGroups.extra.children)
+      .filter((child) => child.getAttribute('data-layout-item'))
+      .forEach((child) => layoutGroups.info.appendChild(child));
+  }
+  updateLayoutColumnModeControls(profile);
   if (columnResizer) {
-    columnResizer.setAttribute('aria-valuenow', String(Math.round(width)));
-    columnResizer.setAttribute('aria-valuemin', String(MIN_LAYOUT_COLUMN_WIDTH));
-    columnResizer.setAttribute('aria-valuemax', String(MAX_LAYOUT_COLUMN_WIDTH));
-    columnResizer.setAttribute('aria-valuetext', `Lewa kolumna ${Math.round(width)}%`);
+    columnResizer.setAttribute('aria-valuenow', String(roundedLeft));
+    columnResizer.setAttribute('aria-valuemin', String(count === 3 ? MIN_THREE_COLUMN_WIDTH : MIN_LAYOUT_COLUMN_WIDTH));
+    columnResizer.setAttribute('aria-valuemax', String(count === 3 ? 100 - (MIN_THREE_COLUMN_WIDTH * 2) : MAX_LAYOUT_COLUMN_WIDTH));
+    columnResizer.setAttribute('aria-valuetext', count === 3
+      ? `Lewa kolumna ${roundedLeft}%, środkowa kolumna ${roundedRight}%, trzecia kolumna ${roundedThird}%`
+      : `Lewa kolumna ${roundedLeft}%, prawa kolumna ${roundedRight}%`);
   }
-  return width;
+  if (columnResizerRight) {
+    columnResizerRight.setAttribute('aria-valuenow', String(roundedLeft + roundedRight));
+    columnResizerRight.setAttribute('aria-valuemin', String(count === 3 ? MIN_THREE_COLUMN_WIDTH * 2 : MIN_LAYOUT_COLUMN_WIDTH));
+    columnResizerRight.setAttribute('aria-valuemax', String(count === 3 ? 100 - MIN_THREE_COLUMN_WIDTH : MAX_LAYOUT_COLUMN_WIDTH));
+    columnResizerRight.setAttribute('aria-valuetext', `Środkowa kolumna ${roundedRight}%, trzecia kolumna ${roundedThird}%`);
+  }
+  if (layoutColumnRatioEl) {
+    layoutColumnRatioEl.textContent = formatLayoutColumnRatio(profile);
+  }
+  return profile;
 }
 
 function getCurrentLayoutColumnWidth() {
-  const raw = pageLayoutRoot?.dataset.columnWidth;
-  if (raw) return normalizeLayoutColumnWidth(raw);
-  return DEFAULT_LAYOUT_COLUMN_WIDTH;
+  const raw = pageLayoutRoot?.dataset.columnProfile;
+  if (raw) {
+    try {
+      return normalizeLayoutColumnProfile(JSON.parse(raw));
+    } catch (_error) {
+      return normalizeLayoutColumnProfile(pageLayoutRoot?.dataset.columnWidth);
+    }
+  }
+  return normalizeLayoutColumnProfile(DEFAULT_LAYOUT_COLUMN_PROFILE);
 }
 
 function loadSavedLayoutOrder() {
@@ -370,9 +520,9 @@ function loadSavedLayoutColumnWidth() {
   const raw = localStorage.getItem(INDEX_LAYOUT_COLUMN_WIDTH_STORAGE_KEY) || layoutGetCookieValue(INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY);
   if (!raw) return null;
   try {
-    return normalizeLayoutColumnWidth(JSON.parse(raw));
+    return normalizeLayoutColumnProfile(JSON.parse(raw));
   } catch (_error) {
-    return normalizeLayoutColumnWidth(raw);
+    return normalizeLayoutColumnProfile(raw);
   }
 }
 
@@ -391,7 +541,7 @@ function loadSavedLayoutFromLocal() {
 }
 
 function flattenLayoutOrder(order) {
-  return [...(order?.calc || []), ...(order?.info || [])];
+  return LAYOUT_GROUP_KEYS.flatMap((groupKey) => order?.[groupKey] || []);
 }
 
 function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisibility, beforeColumnWidth, afterColumnWidth) {
@@ -429,9 +579,11 @@ function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisib
     if (beforeVisible && !afterVisible) hidden.push(id);
   });
 
-  const normalizedBeforeWidth = normalizeLayoutColumnWidth(beforeColumnWidth);
-  const normalizedAfterWidth = normalizeLayoutColumnWidth(afterColumnWidth);
-  const columnWidth = Math.abs(normalizedBeforeWidth - normalizedAfterWidth) >= 0.5
+  const normalizedBeforeWidth = normalizeLayoutColumnProfile(beforeColumnWidth);
+  const normalizedAfterWidth = normalizeLayoutColumnProfile(afterColumnWidth);
+  const beforeWidthText = formatLayoutColumnRatio(normalizedBeforeWidth);
+  const afterWidthText = formatLayoutColumnRatio(normalizedAfterWidth);
+  const columnWidth = beforeWidthText !== afterWidthText || normalizedBeforeWidth.count !== normalizedAfterWidth.count
     ? { from: normalizedBeforeWidth, to: normalizedAfterWidth }
     : null;
 
@@ -459,7 +611,7 @@ function normalizeGlobalLayoutPreset(rawPreset) {
     name,
     order: normalizeLayoutOrder(rawPreset.order || {}),
     visibility: normalizeLayoutVisibility(rawPreset.visibility || {}),
-    columnWidth: normalizeLayoutColumnWidth(rawPreset.columnWidth)
+    columnWidth: normalizeLayoutColumnProfile(rawPreset.columnWidth)
   };
 }
 
@@ -481,11 +633,13 @@ function renderGlobalLayoutPresetButtons() {
   if (!layoutGlobalPresetsEl) return;
   if (!globalLayoutPresets.length) {
     layoutGlobalPresetsEl.innerHTML = '';
+    requestAnimationFrame(updateLayoutEditBarSpace);
     return;
   }
   layoutGlobalPresetsEl.innerHTML = globalLayoutPresets
     .map((preset) => `<button type="button" class="layout-global-preset-btn" data-preset-id="${preset.id}">${preset.name}</button>`)
     .join('');
+  requestAnimationFrame(updateLayoutEditBarSpace);
 }
 
 function applyPresetSelectionVisual() {
@@ -495,6 +649,32 @@ function applyPresetSelectionVisual() {
     const buttonId = button.getAttribute('data-preset-id') || '';
     button.classList.toggle('is-active', !!activeGlobalId && activeGlobalId === buttonId);
   });
+}
+
+function updateLayoutEditBarSpace() {
+  if (!layoutEditBar || layoutEditBar.hidden) {
+    document.documentElement.style.removeProperty('--layout-edit-bar-space');
+    return;
+  }
+  const barHeight = Math.ceil(layoutEditBar.getBoundingClientRect().height);
+  document.documentElement.style.setProperty('--layout-edit-bar-space', `${barHeight}px`);
+}
+
+function watchLayoutEditBarSpace() {
+  if (!layoutEditBar || layoutEditBarResizeObserver) return;
+  if (typeof ResizeObserver === 'function') {
+    layoutEditBarResizeObserver = new ResizeObserver(updateLayoutEditBarSpace);
+    layoutEditBarResizeObserver.observe(layoutEditBar);
+  }
+  updateLayoutEditBarSpace();
+}
+
+function unwatchLayoutEditBarSpace() {
+  if (layoutEditBarResizeObserver) {
+    layoutEditBarResizeObserver.disconnect();
+    layoutEditBarResizeObserver = null;
+  }
+  updateLayoutEditBarSpace();
 }
 
 function applyGlobalPresetById(presetId) {
@@ -536,7 +716,7 @@ function saveLayoutColors(colorMap) {
 }
 
 function saveLayoutColumnWidth(columnWidth) {
-  const normalized = normalizeLayoutColumnWidth(columnWidth);
+  const normalized = normalizeLayoutColumnProfile(columnWidth);
   const payload = JSON.stringify(normalized);
   localStorage.setItem(INDEX_LAYOUT_COLUMN_WIDTH_STORAGE_KEY, payload);
   layoutSetCookieValue(INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY, payload);
@@ -563,30 +743,62 @@ function bindColumnResizer() {
   if (!columnResizer || !pageLayoutRoot) return;
   applyLayoutColumnWidth(getCurrentLayoutColumnWidth());
 
-  const updateFromPointer = (clientX) => {
+  const updateFromPointer = (clientX, resizerKey = 'left') => {
     const rect = pageLayoutRoot.getBoundingClientRect();
     if (!rect.width) return getCurrentLayoutColumnWidth();
     const relative = ((clientX - rect.left) / rect.width) * 100;
-    const width = applyLayoutColumnWidth(relative);
+    const current = getCurrentLayoutColumnWidth();
+    let nextProfile;
+    if (current.count === 3) {
+      const widths = current.widths;
+      if (resizerKey === 'right') {
+        const boundary = Math.min(100 - MIN_THREE_COLUMN_WIDTH, Math.max(widths.calc + MIN_THREE_COLUMN_WIDTH, relative));
+        nextProfile = {
+          count: 3,
+          widths: {
+            calc: widths.calc,
+            info: boundary - widths.calc,
+            extra: 100 - boundary
+          }
+        };
+      } else {
+        const calc = Math.min(100 - (MIN_THREE_COLUMN_WIDTH * 2), Math.max(MIN_THREE_COLUMN_WIDTH, relative));
+        const remaining = 100 - calc;
+        const oldRest = Math.max(1, widths.info + widths.extra);
+        nextProfile = {
+          count: 3,
+          widths: {
+            calc,
+            info: remaining * (widths.info / oldRest),
+            extra: remaining * (widths.extra / oldRest)
+          }
+        };
+      }
+    } else {
+      nextProfile = relative;
+    }
+    const width = applyLayoutColumnWidth(nextProfile);
     markLayoutAsCustomAfterWidthChange();
     if (isLayoutEditMode) updateLayoutDiffHighlight();
     return width;
   };
 
-  columnResizer.addEventListener('pointerdown', (event) => {
+  const bindPointerResizer = (resizerEl, resizerKey) => {
+    if (!resizerEl) return;
+    resizerEl.addEventListener('pointerdown', (event) => {
     event.preventDefault();
     document.body.classList.add('is-column-resizing');
-    columnResizer.setPointerCapture?.(event.pointerId);
-    updateFromPointer(event.clientX);
+    resizerEl.setPointerCapture?.(event.pointerId);
+    updateFromPointer(event.clientX, resizerKey);
 
     const handleMove = (moveEvent) => {
       moveEvent.preventDefault();
-      updateFromPointer(moveEvent.clientX);
+      updateFromPointer(moveEvent.clientX, resizerKey);
     };
 
     const handleEnd = (endEvent) => {
       document.body.classList.remove('is-column-resizing');
-      columnResizer.releasePointerCapture?.(endEvent.pointerId);
+      resizerEl.releasePointerCapture?.(endEvent.pointerId);
       document.removeEventListener('pointermove', handleMove);
       document.removeEventListener('pointerup', handleEnd);
       document.removeEventListener('pointercancel', handleEnd);
@@ -598,17 +810,34 @@ function bindColumnResizer() {
     document.addEventListener('pointermove', handleMove);
     document.addEventListener('pointerup', handleEnd);
     document.addEventListener('pointercancel', handleEnd);
-  });
+    });
 
-  columnResizer.addEventListener('keydown', (event) => {
+    resizerEl.addEventListener('keydown', (event) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
     const delta = event.key === 'ArrowLeft' ? -2 : 2;
-    const width = applyLayoutColumnWidth(getCurrentLayoutColumnWidth() + delta);
+    const current = getCurrentLayoutColumnWidth();
+    let nextProfile;
+    if (current.count === 3) {
+      const widths = current.widths;
+      if (resizerKey === 'right') {
+        const nextInfo = Math.max(MIN_THREE_COLUMN_WIDTH, widths.info + delta);
+        nextProfile = { count: 3, widths: { calc: widths.calc, info: nextInfo, extra: 100 - widths.calc - nextInfo } };
+      } else {
+        nextProfile = { count: 3, widths: { calc: widths.calc + delta, info: widths.info, extra: widths.extra - delta } };
+      }
+    } else {
+      nextProfile = current.widths.calc + delta;
+    }
+    const width = applyLayoutColumnWidth(nextProfile);
     markLayoutAsCustomAfterWidthChange();
     if (!isLayoutEditMode) saveLayoutColumnWidth(width);
     if (isLayoutEditMode) updateLayoutDiffHighlight();
-  });
+    });
+  };
+
+  bindPointerResizer(columnResizer, 'left');
+  bindPointerResizer(columnResizerRight, 'right');
 }
 
 function updateLayoutDiffHighlight() {
@@ -653,6 +882,19 @@ function removeLayoutItemControls() {
   });
 }
 
+function preserveLayoutEditScroll(callback) {
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  if (document.activeElement?.closest?.('.layout-item-controls')) {
+    document.activeElement.blur();
+  }
+  callback();
+  window.scrollTo(scrollX, scrollY);
+  requestAnimationFrame(() => {
+    window.scrollTo(scrollX, scrollY);
+  });
+}
+
 function moveLayoutItem(groupKey, itemId, direction) {
   const groupEl = layoutGroups[groupKey];
   if (!groupEl || !itemId) return;
@@ -664,10 +906,12 @@ function moveLayoutItem(groupKey, itemId, direction) {
   if (targetIndex < 0 || targetIndex >= list.length) return;
   [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
   order[groupKey] = list;
-  selectedLayoutPresetKey = 'custom';
-  applyPresetSelectionVisual();
-  applyLayoutOrder(order);
-  updateLayoutDiffHighlight();
+  preserveLayoutEditScroll(() => {
+    selectedLayoutPresetKey = 'custom';
+    applyPresetSelectionVisual();
+    applyLayoutOrder(order);
+    updateLayoutDiffHighlight();
+  });
 }
 
 function moveLayoutItemToGroup(itemId, targetGroupKey) {
@@ -680,10 +924,12 @@ function moveLayoutItemToGroup(itemId, targetGroupKey) {
   if (!currentGroupKey || currentGroupKey === targetGroupKey) return;
   order[currentGroupKey] = (order[currentGroupKey] || []).filter((id) => id !== itemId);
   order[targetGroupKey] = [...(order[targetGroupKey] || []), itemId];
-  selectedLayoutPresetKey = 'custom';
-  applyPresetSelectionVisual();
-  applyLayoutOrder(order);
-  updateLayoutDiffHighlight();
+  preserveLayoutEditScroll(() => {
+    selectedLayoutPresetKey = 'custom';
+    applyPresetSelectionVisual();
+    applyLayoutOrder(order);
+    updateLayoutDiffHighlight();
+  });
 }
 
 function getNextLayoutTint(currentTint) {
@@ -789,10 +1035,13 @@ function renderLayoutItemControls() {
       const transferBtn = document.createElement('button');
       transferBtn.type = 'button';
       transferBtn.className = 'layout-item-move layout-item-transfer';
-      const targetGroupKey = groupKey === 'calc' ? 'info' : 'calc';
-      transferBtn.textContent = groupKey === 'calc' ? '→' : '←';
-      transferBtn.setAttribute('aria-label', groupKey === 'calc' ? 'Przenieś do prawej kolumny' : 'Przenieś do lewej kolumny');
-      transferBtn.setAttribute('title', groupKey === 'calc' ? 'Przenieś do prawej kolumny' : 'Przenieś do lewej kolumny');
+      const activeGroups = getCurrentLayoutColumnWidth().count === 3 ? LAYOUT_GROUP_KEYS : ['calc', 'info'];
+      const groupIndex = activeGroups.indexOf(groupKey);
+      const targetGroupKey = activeGroups[(Math.max(0, groupIndex) + 1) % activeGroups.length];
+      const targetGroupLabel = targetGroupKey === 'calc' ? 'lewej kolumny' : targetGroupKey === 'info' ? 'środkowej kolumny' : 'trzeciej kolumny';
+      transferBtn.textContent = targetGroupKey === 'calc' ? '←' : '→';
+      transferBtn.setAttribute('aria-label', `Przenieś do ${targetGroupLabel}`);
+      transferBtn.setAttribute('title', `Przenieś do ${targetGroupLabel}`);
       transferBtn.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -866,6 +1115,11 @@ function setLayoutEditMode(enabled) {
   if (layoutEditBar) {
     layoutEditBar.hidden = !isLayoutEditMode;
   }
+  if (isLayoutEditMode) {
+    watchLayoutEditBarSpace();
+  } else {
+    unwatchLayoutEditBarSpace();
+  }
   if (layoutCustomizeBtn) {
     layoutCustomizeBtn.classList.toggle('is-active', isLayoutEditMode);
   }
@@ -895,6 +1149,12 @@ function setLayoutEditMode(enabled) {
   removeLayoutItemControls();
   applyLayoutVisibility(getCurrentLayoutVisibility());
 }
+
+window.addEventListener('resize', () => {
+  if (isLayoutEditMode) {
+    updateLayoutEditBarSpace();
+  }
+});
 
 function closeLayoutResetModal(result) {
   if (!layoutResetModal) return;
@@ -1151,6 +1411,7 @@ function updateMarkupFromSale() {
 function updateMarkupCalculations() {
   updateMinSaleByMarkup();
   updateMarkupFromSale();
+  updateSummaryMetrics();
 }
 
 function updateCommissionFromBaseMultiplier() {
@@ -1224,6 +1485,32 @@ function updateBaseMultiplier() {
   multiplierEl.dataset.value = formatted;
   if (multiplierSummaryEl) multiplierSummaryEl.textContent = formatted;
   updateCommissionFromBaseMultiplier();
+}
+
+function updateSummaryMetrics() {
+  const currency = document.getElementById('currency')?.value || 'EUR';
+  const ebay = parseNumber(document.getElementById('ebayPrice')?.value);
+  const brutto = parseNumber(document.getElementById('plnBrutto')?.value);
+  const netto = parseNumber(document.getElementById('plnNetto')?.value);
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
+  const minSaleEbayText = document.getElementById('minSaleEbay')?.textContent?.trim() || '—';
+  const markupFromEbayText = document.getElementById('calculatedMarkupFromEbay')?.textContent?.trim() || '—';
+  const directMarkupText = document.getElementById('calculatedMarkup')?.textContent?.trim() || '—';
+  const markupText = markupFromEbayText !== '—' ? markupFromEbayText : directMarkupText;
+
+  const summaryEbayPrice = document.getElementById('summaryEbayPrice');
+  const summaryCurrency = document.getElementById('summaryCurrency');
+  const summaryBruttoPrice = document.getElementById('summaryBruttoPrice');
+  const summaryNettoPrice = document.getElementById('summaryNettoPrice');
+  const summaryMinSale = document.getElementById('summaryMinSale');
+  const summaryMarkup = document.getElementById('summaryMarkup');
+
+  if (summaryEbayPrice) summaryEbayPrice.textContent = Number.isFinite(ebay) ? `${ebay.toFixed(2)} ${currency}` : '—';
+  if (summaryCurrency) summaryCurrency.textContent = Number.isFinite(exchangeRate) ? `Kurs ${exchangeRate.toFixed(4)} ${currency}` : `Waluta ${currency}`;
+  if (summaryBruttoPrice) summaryBruttoPrice.textContent = Number.isFinite(brutto) ? `${brutto.toFixed(2)} PLN` : '—';
+  if (summaryNettoPrice) summaryNettoPrice.textContent = Number.isFinite(netto) ? `Netto ${netto.toFixed(2)} PLN` : 'Netto —';
+  if (summaryMinSale) summaryMinSale.textContent = minSaleEbayText && minSaleEbayText !== '—' ? minSaleEbayText : '—';
+  if (summaryMarkup) summaryMarkup.textContent = markupText && markupText !== '—' ? `Narzut ${markupText}` : 'Narzut —';
 }
 
 function openSearch(urlBase, query) {
@@ -1462,7 +1749,7 @@ function renderHistory() {
 defaultLayoutOrder = getCurrentLayoutOrder();
 defaultLayoutVisibility = getCurrentLayoutVisibility();
 defaultLayoutColors = getCurrentLayoutColors();
-defaultLayoutColumnWidth = applyLayoutColumnWidth(DEFAULT_LAYOUT_COLUMN_WIDTH);
+defaultLayoutColumnWidth = applyLayoutColumnWidth(DEFAULT_LAYOUT_COLUMN_PROFILE);
 bindColumnResizer();
 const savedLocalLayout = loadSavedLayoutFromLocal();
 if (savedLocalLayout) {
@@ -1623,6 +1910,22 @@ if (layoutGlobalPresetsEl) {
       const presetName = globalLayoutPresets.find((item) => item.id === presetId)?.name || 'preset';
       showMainToast(`Zastosowano preset: ${presetName}.`, 'info');
     }
+  });
+}
+
+if (layoutColumnModeBtn) {
+  layoutColumnModeBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    preserveLayoutEditScroll(() => {
+      const current = getCurrentLayoutColumnWidth();
+      setLayoutColumnCount(current.count === 3 ? 2 : 3);
+      selectedLayoutPresetKey = 'custom';
+      localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
+      applyPresetSelectionVisual();
+      updateLayoutDiffHighlight();
+      updateLayoutEditBarSpace();
+    });
   });
 }
 
@@ -1950,6 +2253,7 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   document.getElementById('currency').value = 'EUR';
   document.getElementById('currencyLabel').innerText = 'EUR';
   updateEbayCurrencyLabel(); // Ensure label updates with default VAT 23%
+  updateSummaryMetrics();
   advancedOptionsToggle.checked = false;
   advancedOptions.style.display = 'none';
   exchangeRateInput.disabled = true;
@@ -1983,18 +2287,22 @@ function syncFields(source) {
   // Validate negative inputs
   if (source === 'netto' && Number.isFinite(nettoValue) && nettoValue < 0) {
     resultDiv.innerHTML = '<span class="error">Kwota netto nie może być ujemna.</span>';
+    updateSummaryMetrics();
     return;
   }
   if (source === 'brutto' && Number.isFinite(bruttoValue) && bruttoValue < 0) {
     resultDiv.innerHTML = '<span class="error">Kwota brutto nie może być ujemna.</span>';
+    updateSummaryMetrics();
     return;
   }
   if (source === 'ebayPrice' && Number.isFinite(ebayValue) && ebayValue < 0) {
     resultDiv.innerHTML = '<span class="error">Cena na eBay nie może być ujemna.</span>';
+    updateSummaryMetrics();
     return;
   }
   if (source === 'vatRate' && Number.isFinite(vatInputValue) && vatInputValue < 0) {
     resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>';
+    updateSummaryMetrics();
     return;
   }
 
@@ -2058,6 +2366,7 @@ function syncFields(source) {
       originalExchangeRate = exchangeRate;
     } else {
       resultDiv.innerHTML = '<span class="error">Wpisz kwotę netto lub brutto, aby przeliczyć cenę z nową stawką VAT.</span>';
+      updateSummaryMetrics();
       return;
     }
   }
@@ -2068,14 +2377,17 @@ function syncFields(source) {
 function validateInputs(exchangeRate, commission, vatRate, resultDiv) {
   if (isNaN(exchangeRate) || exchangeRate <= 0) {
     resultDiv.innerHTML = '<span class="error">Kurs waluty musi być dodatni.</span>';
+    updateSummaryMetrics();
     return false;
   }
   if (isNaN(commission) || commission < 0) {
     resultDiv.innerHTML = '<span class="error">Prowizja nie może być ujemna.</span>';
+    updateSummaryMetrics();
     return false;
   }
   if (isNaN(vatRate) || vatRate < 0 || vatRate > 1) {
     resultDiv.innerHTML = '<span class="error">Stawka VAT musi być w przedziale 0-100%.</span>';
+    updateSummaryMetrics();
     return false;
   }
   return true;
@@ -2106,12 +2418,14 @@ function calculatePrice() {
   updateBaseMultiplier();
   updateMinSaleByMarkup();
   updateMarkupFromSale();
+  updateSummaryMetrics();
 
   let resultHTML = ``;
 
   if (isNaN(netto) && isNaN(brutto) && isNaN(ebayPrice)) {
     resultDiv.innerHTML = `<span class="error">Wprowadź kwotę netto, brutto lub cenę na eBay, aby zobaczyć cenę końcową.</span>`;
     resultDiv.classList.add('is-visible');
+    updateSummaryMetrics();
     return;
   }
 
@@ -2582,16 +2896,19 @@ currencySelectEl.addEventListener('change', () => {
     enforceTwoDecimals(el);
     enforceFieldMax(el);
     updateMinSaleByMarkup();
+    updateSummaryMetrics();
     scheduleHistoryLog(id, { force: true });
   });
   el.addEventListener('change', () => {
     enforceFieldMax(el);
     updateMinSaleByMarkup();
+    updateSummaryMetrics();
     flushHistoryLog(id, { force: true });
   });
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     updateMinSaleByMarkup();
+    updateSummaryMetrics();
     flushHistoryLog(id, { force: true });
   });
   el.addEventListener('focus', () => {
@@ -2677,16 +2994,19 @@ document.addEventListener('click', (event) => {
     enforceTwoDecimals(el);
     enforceFieldMax(el);
     updateMarkupFromSale();
+    updateSummaryMetrics();
     scheduleHistoryLog(id, { force: true });
   });
   el.addEventListener('change', () => {
     enforceFieldMax(el);
     updateMarkupFromSale();
+    updateSummaryMetrics();
     flushHistoryLog(id, { force: true });
   });
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     updateMarkupFromSale();
+    updateSummaryMetrics();
     flushHistoryLog(id, { force: true });
   });
   el.addEventListener('focus', () => {
@@ -2720,6 +3040,7 @@ renderHistory();
 updateMinSaleByMarkup();
 updateMarkupFromSale();
 updateCommissionFromBaseMultiplier();
+updateSummaryMetrics();
 
 (async () => {
   await loadDefaultRateProviderSelection();
@@ -3503,27 +3824,3 @@ if (partNumberInput) {
     });
   }
 }
-
-
-// Start
-
-const adminKeys = new Set();
-window.addEventListener('keydown', (event) => {
-  const target = event.target;
-  const isEditableTarget = !!(
-    target?.isContentEditable
-    || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName)
-    || target?.closest?.('[contenteditable="true"]')
-    || document.activeElement?.isContentEditable
-    || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)
-  );
-  if (isEditableTarget) return;
-  adminKeys.add(event.key.toLowerCase());
-  if (adminKeys.has('a') && adminKeys.has('d') && adminKeys.has('m')) {
-    adminKeys.clear();
-    window.location.href = `admin.html?v=${Date.now()}`;
-  }
-});
-window.addEventListener('keyup', (event) => {
-  adminKeys.delete(event.key.toLowerCase());
-});

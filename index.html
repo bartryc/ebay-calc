@@ -10,19 +10,22 @@
 <body data-page-title="Kalkulator">
   <div class="page">
     <header class="topbar">
-      <div>
-        <div class="eyebrow">E-commerce tool</div>
-        <h1>eBay Calc</h1>
-        <p class="subtitle">Przeliczaj PLN na EUR/USD/GBP z VAT i prowizją, dwukierunkowo.</p>
-      </div>
       <div class="top-actions">
         <nav class="top-menu" aria-label="Główne menu">
-          <a class="top-menu-link is-active" href="index.html" aria-current="page">
-            <span class="top-menu-icon" aria-hidden="true">
-              <img src="resources/icon-calc.svg" alt="">
+          <span class="top-menu-app">
+            <a class="top-menu-link is-active" href="index.html" aria-current="page" aria-describedby="appInfoTooltip" aria-label="Kalkulator. Wersja 1.97.0. Projekt: @bartryc. Wykonanie: Codex 5.5.">
+              <span class="top-menu-icon" aria-hidden="true">
+                <img src="resources/icon-calc.svg" alt="">
+              </span>
+              <span>Kalkulator</span>
+              <span id="appVersion" class="sr-only">1.97.0</span>
+            </a>
+            <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip">
+              <span>Wersja 1.97.0</span>
+              <span>Projekt: <a href="https://github.com/bartryc" target="_blank" rel="noopener noreferrer">@bartryc</a></span>
+              <span>Wykonanie: Codex 5.5</span>
             </span>
-            <span>Kalkulator</span>
-          </a>
+          </span>
           <button type="button" id="layoutCustomizeBtn" class="top-menu-toggle">Układ</button>
           <a class="top-menu-link" href="pn-mappings.html">
             <span class="top-menu-icon" aria-hidden="true">
@@ -50,11 +53,27 @@
         </nav>
       </div>
     </header>
+    <section class="result-strip" aria-label="Najważniejsze wyniki">
+      <article class="result-metric result-metric-primary">
+        <span>Cena eBay</span>
+        <strong id="summaryEbayPrice">—</strong>
+        <small id="summaryCurrency">Waluta EUR</small>
+      </article>
+      <article class="result-metric">
+        <span>ERP brutto</span>
+        <strong id="summaryBruttoPrice">—</strong>
+        <small id="summaryNettoPrice">Netto —</small>
+      </article>
+      <article class="result-metric result-metric-ok">
+        <span>Minimalna cena</span>
+        <strong id="summaryMinSale">—</strong>
+        <small id="summaryMarkup">Narzut —</small>
+      </article>
+    </section>
     <div id="result" class="alert-banner info-alert" aria-live="polite"></div>
 
     <div class="layout">
       <section class="app-card">
-        <h2>Panel przeliczeń</h2>
         <form id="priceForm">
           <div id="calcLayoutContainer">
             <div class="preset-buttons layout-item" data-layout-item="calc-presets">
@@ -208,7 +227,7 @@
               </div>
             </div>
 
-            <div class="calc-actions-fixed">
+            <div class="calc-actions-fixed layout-item" data-layout-item="calc-clear">
               <div class="action-row">
                 <button type="button" id="clearBtn">Wyczyść</button>
               </div>
@@ -219,7 +238,7 @@
 
       </section>
 
-      <div class="column-resizer" id="columnResizer" role="separator" aria-label="Zmień szerokość kolumn" aria-orientation="vertical" tabindex="0"></div>
+      <div class="column-resizer column-resizer-left" id="columnResizer" data-resizer="left" role="separator" aria-label="Zmień szerokość kolumn" aria-orientation="vertical" tabindex="0"></div>
 
       <aside class="info-card">
         <div class="info-column-actions">
@@ -325,16 +344,23 @@
           </div>
         </details>
         </div>
-        <footer>Wersja <span id="appVersion">1.96.2</span><br>Projekt: <a class="" href="https://github.com/bartryc" target="_blank">@bartryc</a> <br>Wykonanie: Codex 5.3</footer>
+      </aside>
+
+      <div class="column-resizer column-resizer-right" id="columnResizerRight" data-resizer="right" role="separator" aria-label="Zmień szerokość drugiej i trzeciej kolumny" aria-orientation="vertical" tabindex="0"></div>
+
+      <aside class="info-card layout-extra-card" aria-label="Trzecia kolumna układu">
+        <div id="extraLayoutContainer"></div>
       </aside>
     </div>
   </div>
 
     <div id="layoutEditBar" class="layout-edit-bar" hidden>
       <strong>Tryb edycji układu</strong>
+      <span id="layoutColumnRatio" class="layout-column-ratio" aria-live="polite">Kolumny 62% / 38%</span>
       <div class="layout-edit-actions">
         <div id="layoutGlobalPresets" class="layout-global-presets"></div>
         <span class="layout-edit-separator" aria-hidden="true"></span>
+        <button type="button" id="layoutColumnModeBtn">3 kolumny</button>
         <button type="button" id="layoutSaveBtn">Zapisz</button>
         <button type="button" id="layoutResetBtn">Domyślny</button>
         <button type="button" id="layoutExitBtn">Wyjdź</button>

@@ -10,19 +10,21 @@
 <body class="builder-page" data-page-title="Kreator mapowania">
   <div class="page">
     <header class="topbar">
-      <div>
-        <div class="eyebrow">Narzędzie sprzedażowe</div>
-        <h1>Kreator mapowań PN</h1>
-        <p class="subtitle">Z listy PN wygeneruj propozycje wzorców i dodaj mapowanie.</p>
-      </div>
       <div class="top-actions">
         <nav class="top-menu" aria-label="Główne menu">
-          <a class="top-menu-link" href="index.html">
-            <span class="top-menu-icon" aria-hidden="true">
-              <img src="resources/icon-calc.svg" alt="">
+          <span class="top-menu-app">
+            <a class="top-menu-link" href="index.html" aria-describedby="appInfoTooltip" aria-label="Kalkulator. Wersja 1.96.2. Projekt: @bartryc. Wykonanie: Codex 5.3.">
+              <span class="top-menu-icon" aria-hidden="true">
+                <img src="resources/icon-calc.svg" alt="">
+              </span>
+              <span>Kalkulator</span>
+            </a>
+            <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip">
+              <span>Wersja 1.96.2</span>
+              <span>Projekt: <a href="https://github.com/bartryc" target="_blank" rel="noopener noreferrer">@bartryc</a></span>
+              <span>Wykonanie: Codex 5.3</span>
             </span>
-            <span>Kalkulator</span>
-          </a>
+          </span>
           <a class="top-menu-link" href="pn-mappings.html">
             <span class="top-menu-icon" aria-hidden="true">
               <img src="resources/icon-mapping.svg" alt="">
@@ -51,14 +53,6 @@
     </header>
 
     <section class="app-card admin-shell">
-      <div class="admin-header-row">
-        <div>
-          <div class="eyebrow">Kreator wzorców</div>
-          <h2>Generator mapowań</h2>
-          <p class="subtitle">Wklej PN-y, wybierz wzorzec i dodaj mapowanie do bazy. <strong>(wersja testowa)</strong></p>
-        </div>
-      </div>
-
       <div class="admin-grid">
         <div class="admin-card admin-card-wide">
           <h3>Propozycje wzorców</h3>

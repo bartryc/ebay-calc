@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview redesignu - Kalkulator eBay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="redesign-preview.css">
+</head>
+<body class="preview-three-columns">
+  <main class="preview-shell">
+    <header class="preview-topbar">
+      <nav class="preview-toolbar" aria-label="Narzędzia">
+        <a href="#" class="toolbar-icon-link is-active" aria-label="Kalkulator">
+          <img src="resources/icon-calc.svg" alt="">
+        </a>
+        <a href="#" class="toolbar-icon-link" aria-label="Mapowania">
+          <img src="resources/icon-mapping.svg" alt="">
+        </a>
+        <button type="button" class="toolbar-btn is-active">Układ</button>
+        <button type="button" class="toolbar-btn">A+</button>
+        <button type="button" class="toolbar-btn">A-</button>
+        <button type="button" class="toolbar-icon-btn" aria-label="Motyw">
+          <img src="resources/icon-dark-mode.svg" alt="">
+        </button>
+      </nav>
+    </header>
+
+    <section class="result-strip" aria-label="Najważniejsze wyniki">
+      <article class="metric metric-primary">
+        <span>Cena eBay</span>
+        <strong>278,40 EUR</strong>
+        <small>po prowizji 15%</small>
+      </article>
+      <article class="metric">
+        <span>ERP brutto</span>
+        <strong>1 016,80 PLN</strong>
+        <small>netto 826,67 PLN</small>
+      </article>
+      <article class="metric metric-ok">
+        <span>Minimalna cena</span>
+        <strong>264,10 EUR</strong>
+        <small>z narzutem 30%</small>
+      </article>
+      <article class="metric">
+        <span>Mnożnik Base</span>
+        <strong>0,2738</strong>
+        <small>dla aktualnego kursu</small>
+      </article>
+    </section>
+
+    <section class="preview-layout" aria-label="Preview układu kalkulatora">
+      <div class="work-column column-pricing">
+        <div class="layout-module is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <div class="field-grid">
+            <label>
+              <span>Kwota netto w PLN <button type="button" class="help-dot" data-tooltip="Netto ERP. Brutto liczone stałym VAT 23%.">?</button></span>
+              <input type="text" value="826,67">
+            </label>
+            <label>
+              <span>Kwota brutto w PLN <button type="button" class="help-dot" data-tooltip="Brutto ERP, punkt bazowy do wyceny eBay.">?</button></span>
+              <input type="text" value="1 016,80">
+            </label>
+          </div>
+        </div>
+
+        <div class="layout-module is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <label>
+            <span>Docelowa cena na eBay <button type="button" class="help-dot" data-tooltip="Cena końcowa w walucie sprzedaży. Po wpisaniu liczy wstecz ERP brutto/netto.">?</button></span>
+            <input type="text" value="278,40">
+          </label>
+        </div>
+
+        <div class="layout-module is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <div class="field-grid compact">
+            <label>
+              <span>Waluta <button type="button" class="help-dot" data-tooltip="Waluta sprzedaży na eBay.">?</button></span>
+              <select>
+                <option>EUR</option>
+                <option>USD</option>
+                <option>GBP</option>
+              </select>
+            </label>
+            <label>
+              <span>Kurs PLN / EUR <button type="button" class="help-dot" data-tooltip="Ile EUR dostajesz za 1 PLN.">?</button></span>
+              <input type="text" value="0,2354">
+            </label>
+          </div>
+          <button type="button" class="secondary-action">Odśwież kurs</button>
+        </div>
+
+        <div class="layout-module is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <div class="field-grid compact">
+            <label>
+              <span>VAT klienta <button type="button" class="help-dot" data-tooltip="VAT używany przy konwersji netto/brutto dla klienta.">?</button></span>
+              <input type="text" value="23%">
+            </label>
+            <label>
+              <span>Prowizja <button type="button" class="help-dot" data-tooltip="Marża platformy doliczana do ceny eBay.">?</button></span>
+              <input type="text" value="15%">
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="work-column column-decisions">
+        <div class="decision-panel is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <div class="decision-row">
+            <span>Status wyceny</span>
+            <strong class="status-ok">Opłacalna</strong>
+          </div>
+          <div class="decision-row">
+            <span>Narzut</span>
+            <strong>36,8%</strong>
+          </div>
+          <div class="decision-row">
+            <span>Zysk netto</span>
+            <strong>221,30 PLN</strong>
+          </div>
+        </div>
+
+        <div class="layout-module is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <div class="field-grid">
+            <label>
+              <span>Kwota zakupu <button type="button" class="help-dot" data-tooltip="Koszt zakupu używany do wyliczenia minimalnej sprzedaży.">?</button></span>
+              <input type="text" value="620,00">
+            </label>
+            <label>
+              <span>Minimalny narzut <button type="button" class="help-dot" data-tooltip="Minimalny procent narzutu wymagany do decyzji cenowej.">?</button></span>
+              <input type="text" value="30%">
+            </label>
+          </div>
+        </div>
+
+        <div class="signal-grid">
+          <article class="signal-card">
+            <span>Minimalna sprzedaż</span>
+            <strong>806,00 PLN</strong>
+          </article>
+          <article class="signal-card">
+            <span>eBay minimum</span>
+            <strong>264,10 EUR</strong>
+          </article>
+        </div>
+
+        <div class="action-cluster is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <button type="button" class="ghost-action">Wyczyść</button>
+          <button type="button" class="secondary-action no-margin">Kopiuj wynik</button>
+        </div>
+      </div>
+
+      <aside class="work-column column-tools">
+        <div class="layout-module is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <label>
+            <span>Wyszukaj ofertę po PN <button type="button" class="help-dot" data-tooltip="Part Number używany do otwarcia wyszukiwań w wybranych źródłach.">?</button></span>
+            <input type="text" value="P12345-01">
+          </label>
+          <div class="source-row" aria-label="Źródła">
+            <button type="button"><img src="resources/icon-google.svg" alt="">Google</button>
+            <button type="button"><img src="resources/icon-ebay.svg" alt="">eBay</button>
+            <button type="button"><img src="resources/icon-allegro.svg" alt="">Allegro</button>
+          </div>
+        </div>
+
+        <div class="base-widget is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <span>Mnożnik Base</span>
+          <strong>0,2738</strong>
+          <button type="button" class="secondary-action">Kopiuj</button>
+        </div>
+
+        <div class="history-list is-editable">
+          <div class="module-handle" aria-hidden="true">::</div>
+          <div class="history-item">
+            <strong>278,40 EUR</strong>
+            <span>Dzisiaj, 14:22</span>
+          </div>
+          <div class="history-item">
+            <strong>263,90 EUR</strong>
+            <span>Dzisiaj, 13:58</span>
+          </div>
+          <div class="history-item">
+            <strong>301,10 USD</strong>
+            <span>Wczoraj, 16:09</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <div class="preview-editbar">
+    <strong>Tryb edycji układu</strong>
+    <span id="previewRatio">Kolumny 46% / 30% / 24%</span>
+    <button type="button" id="previewColumnToggle">2 kolumny</button>
+    <button type="button">Zapisz</button>
+    <button type="button">Domyślny</button>
+    <button type="button">Wyjdź</button>
+  </div>
+
+  <script>
+    const body = document.body;
+    const toggle = document.getElementById('previewColumnToggle');
+    const ratio = document.getElementById('previewRatio');
+    toggle.addEventListener('click', () => {
+      const isThree = body.classList.toggle('preview-three-columns');
+      body.classList.toggle('preview-two-columns', !isThree);
+      toggle.textContent = isThree ? '2 kolumny' : '3 kolumny';
+      ratio.textContent = isThree ? 'Kolumny 46% / 30% / 24%' : 'Kolumny 62% / 38%';
+    });
+  </script>
+</body>
+</html>

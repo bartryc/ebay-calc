@@ -167,6 +167,106 @@ body.dark-mode .top-menu {
   gap: 8px;
 }
 
+.top-menu-app {
+  position: relative;
+  display: inline-flex;
+}
+
+.top-menu-app::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 14px;
+}
+
+.app-info-tooltip {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  z-index: 5000;
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid rgba(24, 32, 42, 0.18);
+  border-radius: 8px;
+  background: rgba(24, 32, 42, 0.96);
+  color: #fff;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.22);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.app-info-tooltip::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 18px;
+  width: 10px;
+  height: 10px;
+  background: rgba(24, 32, 42, 0.96);
+  border-left: 1px solid rgba(24, 32, 42, 0.18);
+  border-top: 1px solid rgba(24, 32, 42, 0.18);
+  transform: rotate(45deg);
+}
+
+.app-info-tooltip a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-info-tooltip a:hover,
+.app-info-tooltip a:focus-visible {
+  color: #a7c7ff;
+}
+
+.top-menu-app:hover .app-info-tooltip,
+.top-menu-app:focus-within .app-info-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+body.dark-mode .app-info-tooltip {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(243, 246, 251, 0.96);
+  color: #111827;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.42);
+}
+
+body.dark-mode .app-info-tooltip::before {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(243, 246, 251, 0.96);
+}
+
+body.dark-mode .app-info-tooltip a:hover,
+body.dark-mode .app-info-tooltip a:focus-visible {
+  color: #1458f5;
+}
+
+@media (max-width: 420px) {
+  .app-info-tooltip {
+    left: auto;
+    right: 0;
+  }
+
+  .app-info-tooltip::before {
+    left: auto;
+    right: 18px;
+  }
+}
+
 .top-menu-text-size-inline {
   display: inline-flex;
   align-items: center;
@@ -393,6 +493,26 @@ body.dark-mode .top-menu-icon img {
   display: none !important;
 }
 
+body.layout-edit-mode .page::after {
+  content: "";
+  display: block;
+  height: calc(var(--layout-edit-bar-space, 0px) + 16px);
+}
+
+.layout-column-ratio {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .layout-edit-actions {
   display: inline-flex;
   align-items: center;
@@ -477,27 +597,16 @@ body.dark-mode .top-menu-icon img {
     flex-wrap: wrap;
   }
 
+  .layout-column-ratio {
+    margin-left: auto;
+  }
+
   .layout-edit-separator {
     width: 100%;
     height: 1px;
     margin: 2px 0;
     background: rgba(255, 255, 255, 0.28);
   }
-}
-
-.top-admin-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 91, 255, 0.35);
-  color: var(--accent);
-  background: rgba(15, 91, 255, 0.12);
-  font-weight: 600;
-  font-size: 0.85rem;
-  box-shadow: 0 6px 16px rgba(15, 91, 255, 0.15);
-  align-self: center;
 }
 
 #selfTestPanel {
@@ -593,11 +702,6 @@ body.layout-edit-mode .layout-item.is-drop-target {
 body.layout-edit-mode .layout-item.is-layout-hidden-preview {
   opacity: 0.55;
   filter: grayscale(0.15);
-}
-
-body.layout-edit-mode .calc-actions-fixed {
-  opacity: 0.55;
-  pointer-events: none;
 }
 
 .layout-item-controls {
@@ -4840,6 +4944,13 @@ footer {
     gap: 6px;
   }
 
+  .layout-column-ratio {
+    margin-left: 0;
+    min-height: 24px;
+    padding: 4px 8px;
+    font-size: 0.68rem;
+  }
+
   .layout-edit-actions button,
   .layout-global-preset-btn {
     font-size: 0.68rem;
@@ -4885,10 +4996,28 @@ footer {
 body[data-page-title="Kalkulator"] .layout {
   --layout-left-fr: 62fr;
   --layout-right-fr: 38fr;
+  --layout-third-fr: 0fr;
   display: grid;
   grid-template-columns: minmax(0, var(--layout-left-fr)) 12px minmax(0, var(--layout-right-fr));
   gap: 12px 8px;
   align-items: start;
+}
+
+body[data-page-title="Kalkulator"].layout-three-columns .layout {
+  --layout-left-fr: 46fr;
+  --layout-right-fr: 30fr;
+  --layout-third-fr: 24fr;
+  grid-template-columns: minmax(0, var(--layout-left-fr)) 12px minmax(0, var(--layout-right-fr)) 12px minmax(0, var(--layout-third-fr));
+}
+
+.layout-extra-card,
+.column-resizer-right {
+  display: none;
+}
+
+body[data-page-title="Kalkulator"].layout-three-columns .layout-extra-card,
+body[data-page-title="Kalkulator"].layout-three-columns .column-resizer-right {
+  display: block;
 }
 
 .column-resizer {
@@ -4937,10 +5066,28 @@ body.layout-edit-mode .column-resizer::before {
   opacity: 1;
 }
 
+@media (max-width: 760px) {
+  body[data-page-title="Kalkulator"].layout-three-columns .layout {
+    grid-template-columns: minmax(0, var(--layout-left-fr)) 8px minmax(0, var(--layout-right-fr));
+  }
+
+  body[data-page-title="Kalkulator"].layout-three-columns .column-resizer-right {
+    display: none;
+  }
+
+  body[data-page-title="Kalkulator"].layout-three-columns .layout-extra-card {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 360px) {
   body[data-page-title="Kalkulator"] .layout {
     grid-template-columns: minmax(0, var(--layout-left-fr)) 6px minmax(0, var(--layout-right-fr));
     gap: 6px 3px;
+  }
+
+  body[data-page-title="Kalkulator"].layout-three-columns .layout {
+    grid-template-columns: minmax(0, var(--layout-left-fr)) 6px minmax(0, var(--layout-right-fr));
   }
 
   .column-resizer {
@@ -4958,6 +5105,10 @@ body.layout-edit-mode .column-resizer::before {
     gap: 3px 2px;
   }
 
+  body[data-page-title="Kalkulator"].layout-three-columns .layout {
+    grid-template-columns: minmax(0, var(--layout-left-fr)) 5px minmax(0, var(--layout-right-fr));
+  }
+
   .column-resizer {
     width: 5px;
   }
@@ -4973,6 +5124,7 @@ body[data-page-title="Kalkulator"] .app-card,
 body[data-page-title="Kalkulator"] .info-card,
 body[data-page-title="Kalkulator"] #calcLayoutContainer,
 body[data-page-title="Kalkulator"] #infoLayoutContainer,
+body[data-page-title="Kalkulator"] #extraLayoutContainer,
 body[data-page-title="Kalkulator"] .layout-item,
 body[data-page-title="Kalkulator"] .collapsible-card,
 body[data-page-title="Kalkulator"] .search-card,
@@ -5073,4 +5225,537 @@ body[data-page-title="Kalkulator"] .search-actions button,
 body[data-page-title="Kalkulator"] .report-quick-btn {
   max-width: 100%;
   white-space: normal;
+}
+
+/* Dashboard redesign layer */
+body[data-page-title="Kalkulator"],
+body[data-page-title="Admin"] {
+  --bg: #f4f6f8;
+  --bg-accent: #edf1f6;
+  --ink: #18202a;
+  --muted: #667085;
+  --card: #ffffff;
+  --card-2: #f8fafc;
+  --border: #d9e0ea;
+  --accent: #1458f5;
+  --accent-2: #0f8a5f;
+  --success: #16834a;
+  --shadow: 0 8px 24px rgba(25, 32, 44, 0.06);
+  --radius: 8px;
+  --radius-sm: 8px;
+  background: var(--bg);
+}
+
+body[data-page-title="Kalkulator"]::before,
+body[data-page-title="Admin"]::before {
+  display: none;
+}
+
+body.dark-mode[data-page-title="Kalkulator"],
+body.dark-mode[data-page-title="Admin"] {
+  --bg: #0f141b;
+  --bg-accent: #151c25;
+  --ink: #f3f6fb;
+  --muted: #9aa7b7;
+  --card: #151c25;
+  --card-2: #101720;
+  --border: #293342;
+  --accent: #6da2ff;
+  --accent-2: #38b885;
+  background: var(--bg);
+}
+
+body[data-page-title="Kalkulator"] .page,
+body[data-page-title="Admin"] .page {
+  max-width: 1440px;
+  padding: 18px 18px 72px;
+}
+
+body[data-page-title="Kalkulator"] .topbar,
+body[data-page-title="Admin"] .topbar {
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+body[data-page-title="Kalkulator"] .top-actions,
+body[data-page-title="Admin"] .top-actions {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+body[data-page-title="Kalkulator"] .top-menu,
+body[data-page-title="Admin"] .top-menu {
+  border-radius: 8px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: var(--shadow);
+}
+
+body.dark-mode[data-page-title="Kalkulator"] .top-menu,
+body.dark-mode[data-page-title="Admin"] .top-menu {
+  background: rgba(21, 28, 37, 0.9);
+}
+
+body[data-page-title="Kalkulator"] .top-menu-link,
+body[data-page-title="Kalkulator"] .top-menu-toggle,
+body[data-page-title="Admin"] .top-menu-link,
+body[data-page-title="Admin"] .top-menu-toggle {
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.84rem;
+}
+
+body[data-page-title="Kalkulator"] .top-menu-link.is-active,
+body[data-page-title="Admin"] .top-menu-link.is-active,
+body[data-page-title="Kalkulator"] .top-menu-toggle.is-active,
+body[data-page-title="Admin"] .top-menu-toggle.is-active {
+  border-color: rgba(20, 88, 245, 0.32);
+  background: rgba(20, 88, 245, 0.1);
+  box-shadow: none;
+}
+
+body[data-page-title="Kalkulator"] .result-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.result-metric {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.result-metric span,
+.result-metric small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.result-metric strong {
+  display: block;
+  margin: 5px 0 4px;
+  color: var(--ink);
+  font-size: 1.24rem;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.result-metric-primary {
+  border-color: rgba(20, 88, 245, 0.34);
+  background: color-mix(in srgb, var(--card) 82%, var(--accent) 18%);
+}
+
+.result-metric-primary strong {
+  color: var(--accent);
+}
+
+.result-metric-ok {
+  border-color: rgba(22, 131, 74, 0.28);
+  background: color-mix(in srgb, var(--card) 84%, var(--success) 16%);
+}
+
+.result-metric-ok strong {
+  color: var(--success);
+}
+
+body[data-page-title="Kalkulator"] .app-card,
+body[data-page-title="Kalkulator"] .info-card,
+body[data-page-title="Admin"] .app-card,
+body[data-page-title="Admin"] .admin-card {
+  border-radius: 8px;
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+body[data-page-title="Kalkulator"] .app-card,
+body[data-page-title="Kalkulator"] .info-card,
+body[data-page-title="Admin"] .admin-shell,
+body[data-page-title="Admin"] .admin-card {
+  padding: 14px;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer,
+body[data-page-title="Kalkulator"] #infoLayoutContainer,
+body[data-page-title="Kalkulator"] #extraLayoutContainer {
+  display: grid;
+  gap: 10px;
+}
+
+body[data-page-title="Kalkulator"] .layout-item {
+  border-radius: 8px;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item {
+  padding: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer > .preset-buttons {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body[data-page-title="Kalkulator"] label,
+body[data-page-title="Kalkulator"] .field-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+body[data-page-title="Kalkulator"] input[type="number"],
+body[data-page-title="Kalkulator"] input[type="text"],
+body[data-page-title="Kalkulator"] select,
+body[data-page-title="Admin"] input[type="number"],
+body[data-page-title="Admin"] input[type="text"],
+body[data-page-title="Admin"] select,
+body[data-page-title="Admin"] textarea {
+  min-height: 38px;
+  border-radius: 8px;
+  border-color: var(--border);
+  background: var(--card-2);
+  font-weight: 700;
+}
+
+body[data-page-title="Kalkulator"] .min-price-box,
+body[data-page-title="Kalkulator"] .base-commission-tools {
+  border-radius: 8px;
+  border-color: var(--border);
+  background: var(--card-2);
+}
+
+body[data-page-title="Kalkulator"] .search-card,
+body[data-page-title="Kalkulator"] .collapsible-card {
+  margin: 0;
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+body[data-page-title="Kalkulator"] .highlight-card {
+  border-color: rgba(22, 131, 74, 0.28);
+  background: color-mix(in srgb, var(--card) 88%, var(--success) 12%);
+}
+
+body[data-page-title="Kalkulator"] .highlight-value,
+body[data-page-title="Kalkulator"] .collapsible-summary-value {
+  color: var(--success);
+}
+
+body[data-page-title="Kalkulator"] #result.info-alert {
+  margin-bottom: 12px;
+  border-radius: 8px;
+}
+
+body[data-page-title="Admin"] .admin-shell {
+  gap: 14px;
+}
+
+body[data-page-title="Admin"] .admin-tabs {
+  position: sticky;
+  top: 10px;
+  z-index: 20;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  box-shadow: var(--shadow);
+}
+
+body[data-page-title="Admin"] .admin-tab-btn {
+  border-radius: 8px;
+  min-height: 34px;
+  padding: 6px 12px;
+}
+
+body[data-page-title="Admin"] .admin-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+body[data-page-title="Admin"] .admin-card-wide {
+  grid-column: 1 / -1;
+}
+
+body[data-page-title="Admin"] .admin-actions button,
+body[data-page-title="Admin"] .admin-log-field button,
+body[data-page-title="Kalkulator"] #refreshRateBtn,
+body[data-page-title="Kalkulator"] #stockUrlBtn,
+body[data-page-title="Kalkulator"] #clearBtn,
+body[data-page-title="Kalkulator"] .report-quick-btn {
+  border-radius: 8px;
+}
+
+body[data-page-title="Admin"] .admin-kpi,
+body[data-page-title="Admin"] .admin-log-item,
+body[data-page-title="Admin"] .layout-preset-row {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+@media (max-width: 1040px) {
+  body[data-page-title="Kalkulator"] .result-strip,
+  body[data-page-title="Admin"] .admin-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  body[data-page-title="Kalkulator"] .page,
+  body[data-page-title="Admin"] .page {
+    padding: 12px 10px 96px;
+  }
+
+  body[data-page-title="Kalkulator"] .result-strip,
+  body[data-page-title="Admin"] .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page-title="Kalkulator"] .top-actions,
+  body[data-page-title="Admin"] .top-actions {
+    justify-content: stretch;
+  }
+
+  body[data-page-title="Kalkulator"] .top-menu,
+  body[data-page-title="Admin"] .top-menu {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* Shared redesign for mapping subpages */
+body[data-page-title="Zapisane mapowania"],
+body[data-page-title="Kreator mapowania"] {
+  --bg: #f4f6f8;
+  --bg-accent: #edf1f6;
+  --ink: #18202a;
+  --muted: #667085;
+  --card: #ffffff;
+  --card-2: #f8fafc;
+  --border: #d9e0ea;
+  --accent: #1458f5;
+  --accent-2: #0f8a5f;
+  --success: #16834a;
+  --shadow: 0 8px 24px rgba(25, 32, 44, 0.06);
+  --radius: 8px;
+  --radius-sm: 8px;
+  background: var(--bg);
+}
+
+body[data-page-title="Zapisane mapowania"]::before,
+body[data-page-title="Kreator mapowania"]::before {
+  display: none;
+}
+
+body.dark-mode[data-page-title="Zapisane mapowania"],
+body.dark-mode[data-page-title="Kreator mapowania"] {
+  --bg: #0f141b;
+  --bg-accent: #151c25;
+  --ink: #f3f6fb;
+  --muted: #9aa7b7;
+  --card: #151c25;
+  --card-2: #101720;
+  --border: #293342;
+  --accent: #6da2ff;
+  --accent-2: #38b885;
+  background: var(--bg);
+}
+
+body[data-page-title="Zapisane mapowania"] .page,
+body[data-page-title="Kreator mapowania"] .page {
+  max-width: 1440px;
+  padding: 18px 18px 72px;
+}
+
+body[data-page-title="Zapisane mapowania"] .topbar,
+body[data-page-title="Kreator mapowania"] .topbar {
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+body[data-page-title="Zapisane mapowania"] .top-actions,
+body[data-page-title="Kreator mapowania"] .top-actions {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+body[data-page-title="Zapisane mapowania"] .top-menu,
+body[data-page-title="Kreator mapowania"] .top-menu {
+  border-radius: 8px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: var(--shadow);
+}
+
+body.dark-mode[data-page-title="Zapisane mapowania"] .top-menu,
+body.dark-mode[data-page-title="Kreator mapowania"] .top-menu {
+  background: rgba(21, 28, 37, 0.9);
+}
+
+body[data-page-title="Zapisane mapowania"] .top-menu-link,
+body[data-page-title="Zapisane mapowania"] .top-menu-toggle,
+body[data-page-title="Kreator mapowania"] .top-menu-link,
+body[data-page-title="Kreator mapowania"] .top-menu-toggle {
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.84rem;
+}
+
+body[data-page-title="Zapisane mapowania"] .top-menu-link.is-active,
+body[data-page-title="Zapisane mapowania"] .top-menu-toggle.is-active,
+body[data-page-title="Kreator mapowania"] .top-menu-link.is-active,
+body[data-page-title="Kreator mapowania"] .top-menu-toggle.is-active {
+  border-color: rgba(20, 88, 245, 0.32);
+  background: rgba(20, 88, 245, 0.1);
+  box-shadow: none;
+}
+
+body[data-page-title="Zapisane mapowania"] .app-card,
+body[data-page-title="Kreator mapowania"] .app-card,
+body[data-page-title="Kreator mapowania"] .admin-card {
+  padding: 14px;
+  border-radius: 8px;
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+body[data-page-title="Zapisane mapowania"] .app-card,
+body[data-page-title="Kreator mapowania"] .admin-shell {
+  display: grid;
+  gap: 12px;
+}
+
+body[data-page-title="Zapisane mapowania"] .mapping-help,
+body[data-page-title="Kreator mapowania"] .creator-test-note,
+body[data-page-title="Kreator mapowania"] .admin-meta {
+  border-radius: 8px;
+  border-color: var(--border);
+  background: var(--card-2);
+}
+
+body[data-page-title="Zapisane mapowania"] .search-row,
+body[data-page-title="Kreator mapowania"] .pattern-apply,
+body[data-page-title="Kreator mapowania"] .pattern-vendor-row {
+  gap: 10px;
+}
+
+body[data-page-title="Zapisane mapowania"] input[type="text"],
+body[data-page-title="Kreator mapowania"] input[type="text"],
+body[data-page-title="Kreator mapowania"] select,
+body[data-page-title="Kreator mapowania"] textarea {
+  min-height: 38px;
+  border-radius: 8px;
+  border-color: var(--border);
+  background: var(--card-2);
+  font-weight: 700;
+}
+
+body[data-page-title="Zapisane mapowania"] textarea,
+body[data-page-title="Kreator mapowania"] textarea {
+  font-weight: 600;
+}
+
+body[data-page-title="Zapisane mapowania"] .search-actions button,
+body[data-page-title="Zapisane mapowania"] .mapping-actions button,
+body[data-page-title="Zapisane mapowania"] .mapping-modal-actions button,
+body[data-page-title="Kreator mapowania"] .admin-actions button,
+body[data-page-title="Kreator mapowania"] .pattern-suggestion button,
+body[data-page-title="Kreator mapowania"] #patternApplyBtn,
+body[data-page-title="Kreator mapowania"] .mapping-modal-actions button {
+  border-radius: 8px;
+}
+
+body[data-page-title="Zapisane mapowania"] #saveMappingBtn,
+body[data-page-title="Kreator mapowania"] #patternGenerateBtn,
+body[data-page-title="Kreator mapowania"] #patternApplyBtn {
+  border-color: rgba(20, 88, 245, 0.36);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+}
+
+body[data-page-title="Zapisane mapowania"] .history-list {
+  display: grid;
+  gap: 8px;
+}
+
+body[data-page-title="Zapisane mapowania"] .history-item,
+body[data-page-title="Kreator mapowania"] .pattern-suggestion,
+body[data-page-title="Kreator mapowania"] .pattern-options {
+  border-radius: 8px;
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: none;
+}
+
+body[data-page-title="Zapisane mapowania"] .mapping-modal-card,
+body[data-page-title="Kreator mapowania"] .mapping-modal-card {
+  border-radius: 8px;
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+body[data-page-title="Kreator mapowania"] .admin-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+body[data-page-title="Kreator mapowania"] .admin-card-wide {
+  grid-column: 1 / -1;
+}
+
+body[data-page-title="Kreator mapowania"] .admin-card h3 {
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+
+body[data-page-title="Kreator mapowania"] .admin-card p {
+  margin-top: 0;
+}
+
+@media (max-width: 680px) {
+  body[data-page-title="Zapisane mapowania"] .page,
+  body[data-page-title="Kreator mapowania"] .page {
+    padding: 12px 10px 96px;
+  }
+
+  body[data-page-title="Zapisane mapowania"] .top-actions,
+  body[data-page-title="Kreator mapowania"] .top-actions {
+    justify-content: stretch;
+  }
+
+  body[data-page-title="Zapisane mapowania"] .top-menu,
+  body[data-page-title="Kreator mapowania"] .top-menu {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  body[data-page-title="Zapisane mapowania"] .search-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page-title="Zapisane mapowania"] .search-row input[type="text"] {
+    min-width: 0;
+  }
+
+  body[data-page-title="Zapisane mapowania"] .search-actions button {
+    width: 100%;
+  }
 }

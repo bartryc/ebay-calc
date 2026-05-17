@@ -208,6 +208,34 @@
     }
   }
 
+  function initAdminShortcut() {
+    if (window.__uiThemeAdminShortcutBound) return;
+    window.__uiThemeAdminShortcutBound = true;
+    const adminKeys = new Set();
+
+    window.addEventListener('keydown', (event) => {
+      const target = event.target;
+      const active = document.activeElement;
+      const isEditableTarget = !!(
+        target?.isContentEditable
+        || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName)
+        || target?.closest?.('[contenteditable="true"]')
+        || active?.isContentEditable
+        || ['INPUT', 'TEXTAREA', 'SELECT'].includes(active?.tagName)
+      );
+      if (isEditableTarget) return;
+      adminKeys.add(event.key.toLowerCase());
+      if (adminKeys.has('a') && adminKeys.has('d') && adminKeys.has('m')) {
+        adminKeys.clear();
+        window.location.href = `admin.html?v=${Date.now()}`;
+      }
+    });
+
+    window.addEventListener('keyup', (event) => {
+      adminKeys.delete(event.key.toLowerCase());
+    });
+  }
+
   function init() {
     const body = document.body;
     if (!body) return;
@@ -234,6 +262,7 @@
 
     initFontScaleControls();
     initResponsiveMenu();
+    initAdminShortcut();
   }
 
   window.UITheme = { init };

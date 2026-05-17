@@ -10,19 +10,21 @@
 <body data-page-title="Admin">
   <div class="page">
     <header class="topbar">
-      <div>
-        <div class="eyebrow">Narzędzie sprzedażowe</div>
-        <h1>Admin mapowań PN</h1>
-        <p class="subtitle">Backup i przywracanie mapowań.</p>
-      </div>
       <div class="top-actions">
         <nav class="top-menu" aria-label="Główne menu">
-          <a class="top-menu-link" href="index.html">
-            <span class="top-menu-icon" aria-hidden="true">
-              <img src="resources/icon-calc.svg" alt="">
+          <span class="top-menu-app">
+            <a class="top-menu-link" href="index.html" aria-describedby="appInfoTooltip" aria-label="Kalkulator. Wersja 1.96.2. Projekt: @bartryc. Wykonanie: Codex 5.3.">
+              <span class="top-menu-icon" aria-hidden="true">
+                <img src="resources/icon-calc.svg" alt="">
+              </span>
+              <span>Kalkulator</span>
+            </a>
+            <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip">
+              <span>Wersja 1.96.2</span>
+              <span>Projekt: <a href="https://github.com/bartryc" target="_blank" rel="noopener noreferrer">@bartryc</a></span>
+              <span>Wykonanie: Codex 5.3</span>
             </span>
-            <span>Kalkulator</span>
-          </a>
+          </span>
           <a class="top-menu-link" href="pn-mappings.html">
             <span class="top-menu-icon" aria-hidden="true">
               <img src="resources/icon-mapping.svg" alt="">
@@ -47,24 +49,10 @@
             </span>
           </button>
         </nav>
-        <div class="top-admin-badge" title="Panel admina" aria-label="Panel admina">
-          <span class="top-menu-icon" aria-hidden="true">
-            <img src="resources/icon-admin.svg" alt="">
-          </span>
-          <span>Admin</span>
-        </div>
       </div>
     </header>
 
     <section class="app-card admin-shell">
-      <div class="admin-header-row">
-        <div>
-          <div class="eyebrow">Panel narzędzi</div>
-          <h2>Kontrola mapowań</h2>
-          <p class="subtitle">Backupy, przywracanie i szybkie testy w jednym miejscu.</p>
-        </div>
-      </div>
-
       <div class="admin-tabs" role="tablist" aria-label="Sekcje panelu admina">
         <button type="button" class="admin-tab-btn is-active" data-admin-tab-btn="logs" role="tab" aria-selected="true">Logi</button>
         <button type="button" class="admin-tab-btn" data-admin-tab-btn="reports" role="tab" aria-selected="false">Zgłoszenia</button>
@@ -158,6 +146,13 @@
               <div class="admin-log-field">
                 <label for="layoutPresetColumnWidth">Lewa kolumna (%)</label>
                 <input type="number" id="layoutPresetColumnWidth" min="35" max="80" step="1" value="62">
+              </div>
+              <div class="admin-log-field">
+                <label for="layoutPresetColumnMode">Kolumny</label>
+                <select id="layoutPresetColumnMode">
+                  <option value="2" selected>2 kolumny</option>
+                  <option value="3">3 kolumny</option>
+                </select>
               </div>
               <div class="admin-log-field layout-preset-action">
                 <label>&nbsp;</label>
@@ -538,6 +533,7 @@
     const layoutPresetName = document.getElementById('layoutPresetName');
     const layoutPresetSelect = document.getElementById('layoutPresetSelect');
     const layoutPresetColumnWidth = document.getElementById('layoutPresetColumnWidth');
+    const layoutPresetColumnMode = document.getElementById('layoutPresetColumnMode');
     const layoutPresetItems = document.getElementById('layoutPresetItems');
     const layoutPresetSaveBtn = document.getElementById('layoutPresetSaveBtn');
     const layoutPresetDeleteBtn = document.getElementById('layoutPresetDeleteBtn');
@@ -609,10 +605,15 @@
       { id: 'calc-min-markup', label: 'Minimalny narzut', column: 'calc' },
       { id: 'calc-markup-from-sale', label: 'Narzut z ceny sprzedaży', column: 'calc' },
       { id: 'calc-advanced', label: 'Opcje zaawansowane', column: 'calc' },
+      { id: 'calc-clear', label: 'Przycisk Wyczyść', column: 'calc' },
       { id: 'search-card', label: 'Wyszukiwanie ofert', column: 'info' },
       { id: 'history-card', label: 'Historia działań', column: 'info' },
       { id: 'base-card', label: 'Mnożnik dla Base', column: 'info' }
     ];
+    const LAYOUT_GROUP_KEYS = ['calc', 'info', 'extra'];
+    const DEFAULT_LAYOUT_COLUMN_PROFILE = { count: 2, widths: { calc: 62, info: 38, extra: 0 } };
+    const DEFAULT_THREE_COLUMN_PROFILE = { count: 3, widths: { calc: 46, info: 30, extra: 24 } };
+    const MIN_THREE_COLUMN_WIDTH = 18;
     let globalLayoutPresets = [];
     let layoutPresetRows = [];
     let patternLiveTimer = null;
@@ -2067,7 +2068,7 @@
         const index = Number(row.getAttribute('data-index'));
         if (!Number.isFinite(index) || !layoutPresetRows[index]) return;
         if (event.target.classList.contains('layout-preset-column')) {
-          layoutPresetRows[index].column = event.target.value === 'info' ? 'info' : 'calc';
+          layoutPresetRows[index].column = LAYOUT_GROUP_KEYS.includes(event.target.value) ? event.target.value : 'calc';
           return;
         }
         if (event.target.classList.contains('layout-preset-visible-check')) {
@@ -2145,6 +2146,30 @@
       return Math.min(LAYOUT_PRESET_MAX_COLUMN_WIDTH, Math.max(LAYOUT_PRESET_MIN_COLUMN_WIDTH, parsed));
     }
 
+    function normalizeLayoutPresetColumnProfile(value) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const count = Number(value.count) === 3 ? 3 : 2;
+        const widths = value.widths || {};
+        if (count === 3) {
+          let calc = Number(widths.calc ?? DEFAULT_THREE_COLUMN_PROFILE.widths.calc);
+          let info = Number(widths.info ?? DEFAULT_THREE_COLUMN_PROFILE.widths.info);
+          let extra = Number(widths.extra ?? DEFAULT_THREE_COLUMN_PROFILE.widths.extra);
+          if (!Number.isFinite(calc)) calc = DEFAULT_THREE_COLUMN_PROFILE.widths.calc;
+          if (!Number.isFinite(info)) info = DEFAULT_THREE_COLUMN_PROFILE.widths.info;
+          if (!Number.isFinite(extra)) extra = DEFAULT_THREE_COLUMN_PROFILE.widths.extra;
+          calc = Math.max(MIN_THREE_COLUMN_WIDTH, calc);
+          info = Math.max(MIN_THREE_COLUMN_WIDTH, info);
+          extra = Math.max(MIN_THREE_COLUMN_WIDTH, extra);
+          const scale = 100 / (calc + info + extra);
+          return { count: 3, widths: { calc: calc * scale, info: info * scale, extra: extra * scale } };
+        }
+        const calc = normalizeLayoutPresetColumnWidth(widths.calc ?? value.calc);
+        return { count: 2, widths: { calc, info: 100 - calc, extra: 0 } };
+      }
+      const calc = normalizeLayoutPresetColumnWidth(value);
+      return { count: 2, widths: { calc, info: 100 - calc, extra: 0 } };
+    }
+
     function normalizeLayoutPresetEntry(entry) {
       if (!entry || typeof entry !== 'object') return null;
       const id = String(entry.id || '').trim() || `gp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -2153,9 +2178,9 @@
       const rawOrder = entry.order || {};
       const rawVisibility = entry.visibility || {};
       const allIds = LAYOUT_SECTION_SCHEMA.map((item) => item.id);
-      const order = { calc: [], info: [] };
+      const order = { calc: [], info: [], extra: [] };
       const seen = new Set();
-      ['calc', 'info'].forEach((group) => {
+      LAYOUT_GROUP_KEYS.forEach((group) => {
         const groupIds = Array.isArray(rawOrder[group]) ? rawOrder[group] : [];
         groupIds.forEach((itemId) => {
           if (!allIds.includes(itemId) || seen.has(itemId)) return;
@@ -2176,7 +2201,7 @@
         name,
         order,
         visibility,
-        columnWidth: normalizeLayoutPresetColumnWidth(entry.columnWidth)
+        columnWidth: normalizeLayoutPresetColumnProfile(entry.columnWidth)
       };
     }
 
@@ -2203,26 +2228,42 @@
     }
 
     function rowsToLayoutPreset(rows, name, id) {
-      const order = { calc: [], info: [] };
+      const order = { calc: [], info: [], extra: [] };
       const visibility = {};
+      const columnCount = layoutPresetColumnMode?.value === '3' ? 3 : 2;
       rows.forEach((row) => {
-        const column = row.column === 'info' ? 'info' : 'calc';
+        const column = columnCount === 3 && row.column === 'extra'
+          ? 'extra'
+          : row.column === 'info' || row.column === 'extra'
+            ? 'info'
+            : 'calc';
         order[column].push(row.id);
         visibility[row.id] = row.visible !== false;
       });
+      const calcWidth = normalizeLayoutPresetColumnWidth(layoutPresetColumnWidth?.value);
+      const columnWidth = columnCount === 3
+        ? normalizeLayoutPresetColumnProfile({
+            count: 3,
+            widths: {
+              calc: Math.min(64, Math.max(MIN_THREE_COLUMN_WIDTH, calcWidth)),
+              info: (100 - Math.min(64, Math.max(MIN_THREE_COLUMN_WIDTH, calcWidth))) * 0.56,
+              extra: (100 - Math.min(64, Math.max(MIN_THREE_COLUMN_WIDTH, calcWidth))) * 0.44
+            }
+          })
+        : normalizeLayoutPresetColumnProfile(calcWidth);
       return {
         id: id || `gp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
         name: String(name || '').trim(),
         order,
         visibility,
-        columnWidth: normalizeLayoutPresetColumnWidth(layoutPresetColumnWidth?.value)
+        columnWidth
       };
     }
 
     function presetToRows(preset) {
       const allMap = new Map(LAYOUT_SECTION_SCHEMA.map((item) => [item.id, item]));
       const rows = [];
-      ['calc', 'info'].forEach((group) => {
+      LAYOUT_GROUP_KEYS.forEach((group) => {
         (preset.order?.[group] || []).forEach((id) => {
           const schema = allMap.get(id);
           if (!schema) return;
@@ -2267,7 +2308,8 @@
           <div class="layout-preset-label">${row.label}</div>
           <select class="layout-preset-column">
             <option value="calc" ${row.column === 'calc' ? 'selected' : ''}>Lewa kolumna</option>
-            <option value="info" ${row.column === 'info' ? 'selected' : ''}>Prawa kolumna</option>
+            <option value="info" ${row.column === 'info' ? 'selected' : ''}>Środkowa/prawa kolumna</option>
+            <option value="extra" ${row.column === 'extra' ? 'selected' : ''}>Trzecia kolumna</option>
           </select>
           <label class="layout-preset-visible">
             <input type="checkbox" class="layout-preset-visible-check" ${row.visible ? 'checked' : ''}>
@@ -2281,7 +2323,8 @@
       if (!presetId) {
         layoutPresetRows = getDefaultLayoutRows();
         if (layoutPresetName) layoutPresetName.value = '';
-        if (layoutPresetColumnWidth) layoutPresetColumnWidth.value = String(LAYOUT_PRESET_DEFAULT_COLUMN_WIDTH);
+        if (layoutPresetColumnWidth) layoutPresetColumnWidth.value = String(DEFAULT_LAYOUT_COLUMN_PROFILE.widths.calc);
+        if (layoutPresetColumnMode) layoutPresetColumnMode.value = '2';
         renderLayoutPresetRows();
         return;
       }
@@ -2289,7 +2332,9 @@
       if (!preset) return;
       layoutPresetRows = presetToRows(preset);
       if (layoutPresetName) layoutPresetName.value = preset.name;
-      if (layoutPresetColumnWidth) layoutPresetColumnWidth.value = String(normalizeLayoutPresetColumnWidth(preset.columnWidth));
+      const columnProfile = normalizeLayoutPresetColumnProfile(preset.columnWidth);
+      if (layoutPresetColumnWidth) layoutPresetColumnWidth.value = String(Math.round(columnProfile.widths.calc));
+      if (layoutPresetColumnMode) layoutPresetColumnMode.value = columnProfile.count === 3 ? '3' : '2';
       renderLayoutPresetRows();
     }
 
