@@ -108,13 +108,12 @@
               <label for="currency" class="field-label">Waluta docelowa
                 <span class="field-help" data-tooltip="Waluta sprzedaży eBay (EUR/USD/GBP). Zmiana waluty przelicza cenę wg kursu PLN→waluta." aria-label="Pomoc">?</span>
               </label>
-              <div class="currency-row">
+              <div class="currency-row currency-select-row">
                 <select id="currency">
                   <option value="EUR" selected>EUR</option>
                   <option value="USD">USD</option>
                   <option value="GBP">GBP</option>
                 </select>
-                <button type="button" id="refreshRateBtn">Odśwież kurs</button>
               </div>
             </div>
 
@@ -136,16 +135,24 @@
             </div>
 
             <div class="layout-item" data-layout-item="calc-min-markup">
-              <label for="purchaseAmount" class="field-label">Kwota zakupu (PLN, tryb: <button type="button" class="mode-inline-toggle" data-toggle="purchaseAmountNetToggle">brutto</button>)
-                <span class="field-help" data-tooltip="Koszt zakupu używany do wyliczenia minimalnej sprzedaży. Gdy tryb = netto, kalkulator najpierw liczy brutto wg VAT klienta, potem narzut." aria-label="Pomoc">?</span>
-              </label>
-              <input type="number" id="purchaseAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1200.00">
-              <input type="checkbox" id="purchaseAmountNetToggle" class="sr-only" aria-hidden="true">
+              <div class="calc-field-pair">
+                <div class="field-label-row">
+                  <label for="purchaseAmount" class="field-label">Kwota zakupu (PLN)</label>
+                  <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="purchaseAmountNetToggle" aria-pressed="false" title="Przełącz tryb kwoty zakupu"><span data-mode-label="purchaseAmountNetToggle">brutto</span></button></span>
+                  <span class="field-help" data-tooltip="Koszt zakupu używany do wyliczenia minimalnej sprzedaży. Gdy tryb = netto, kalkulator najpierw liczy brutto wg VAT klienta, potem narzut." aria-label="Pomoc">?</span>
+                </div>
+                <input type="number" id="purchaseAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1200.00">
+                <input type="checkbox" id="purchaseAmountNetToggle" class="sr-only" aria-hidden="true">
+              </div>
 
-              <label for="minMarkup" class="field-label">Minimalny narzut (%)
-                <span class="field-help" data-tooltip="Wzór narzutu: (sprzedaż - zakup) / zakup × 100%. Wzór minimalnej sprzedaży: zakup × (1 + narzut/100)." aria-label="Pomoc">?</span>
-              </label>
-              <input type="number" id="minMarkup" step="0.1" min="0" value="30" placeholder="Np. 18">
+              <div class="calc-field-pair">
+                <div class="field-label-row">
+                  <label for="minMarkup" class="field-label">Minimalny narzut (%)</label>
+                  <span class="field-mode field-mode-placeholder" aria-hidden="true"></span>
+                  <span class="field-help" data-tooltip="Wzór narzutu: (sprzedaż - zakup) / zakup × 100%. Wzór minimalnej sprzedaży: zakup × (1 + narzut/100)." aria-label="Pomoc">?</span>
+                </div>
+                <input type="number" id="minMarkup" step="0.1" min="0" value="30" placeholder="Np. 18">
+              </div>
 
               <div class="min-price-box" id="minPriceBox">
                 <div><strong>Minimalna cena sprzedaży (PLN brutto):</strong> <span id="minSalePln">—</span>
@@ -158,17 +165,25 @@
             </div>
 
             <div class="layout-item" data-layout-item="calc-markup-from-sale">
-              <label for="markupPurchaseAmount" class="field-label">Kwota zakupu do narzutu (PLN, tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupPurchaseNetToggle">brutto</button>)
-                <span class="field-help" data-tooltip="Kwota zakupu do porównania. Gdy tryb = netto, kalkulator przelicza na brutto wg VAT klienta." aria-label="Pomoc">?</span>
-              </label>
-              <input type="number" id="markupPurchaseAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1200.00">
-              <input type="checkbox" id="markupPurchaseNetToggle" class="sr-only" aria-hidden="true">
+              <div class="calc-field-pair">
+                <div class="field-label-row">
+                  <label for="markupPurchaseAmount" class="field-label">Kwota zakupu do narzutu (PLN)</label>
+                  <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupPurchaseNetToggle" aria-pressed="false" title="Przełącz tryb kwoty zakupu"><span data-mode-label="markupPurchaseNetToggle">brutto</span></button></span>
+                  <span class="field-help" data-tooltip="Kwota zakupu do porównania. Gdy tryb = netto, kalkulator przelicza na brutto wg VAT klienta." aria-label="Pomoc">?</span>
+                </div>
+                <input type="number" id="markupPurchaseAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1200.00">
+                <input type="checkbox" id="markupPurchaseNetToggle" class="sr-only" aria-hidden="true">
+              </div>
 
-              <label for="targetSaleAmount" class="field-label">Docelowa cena sprzedaży (PLN, tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupSaleNetToggle">brutto</button>)
-                <span class="field-help" data-tooltip="Kwota sprzedaży do porównania. Gdy tryb = netto, kalkulator przelicza na brutto wg VAT klienta." aria-label="Pomoc">?</span>
-              </label>
-              <input type="number" id="targetSaleAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1590.00">
-              <input type="checkbox" id="markupSaleNetToggle" class="sr-only" aria-hidden="true">
+              <div class="calc-field-pair">
+                <div class="field-label-row">
+                  <label for="targetSaleAmount" class="field-label">Docelowa cena sprzedaży (PLN)</label>
+                  <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupSaleNetToggle" aria-pressed="false" title="Przełącz tryb ceny sprzedaży"><span data-mode-label="markupSaleNetToggle">brutto</span></button></span>
+                  <span class="field-help" data-tooltip="Kwota sprzedaży do porównania. Gdy tryb = netto, kalkulator przelicza na brutto wg VAT klienta." aria-label="Pomoc">?</span>
+                </div>
+                <input type="number" id="targetSaleAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1590.00">
+                <input type="checkbox" id="markupSaleNetToggle" class="sr-only" aria-hidden="true">
+              </div>
 
               <div class="min-price-box" id="markupFromSaleBox">
                 <div><strong>Wyliczony narzut:</strong> <span id="calculatedMarkup">—</span>
@@ -214,15 +229,13 @@
                   </label>
 
                   <select id="rateSource">
-                    <option value="frankfurter" selected>Frankfurter</option>
+                    <option value="erapi" selected>open.er-api.com</option>
                     <option value="nbp">NBP API</option>
-                    <option value="erapi">open.er-api.com</option>
                   </select>
                 </div>
                 <div class="rate-status-row" id="rateStatusRow">
-                  <span class="rate-status" data-provider="frankfurter"><span class="dot"></span>Frankfurter</span>
-                  <span class="rate-status" data-provider="nbp"><span class="dot"></span>NBP API</span>
                   <span class="rate-status" data-provider="erapi"><span class="dot"></span>open.er-api.com</span>
+                  <span class="rate-status" data-provider="nbp"><span class="dot"></span>NBP API</span>
                 </div>
               </div>
             </div>

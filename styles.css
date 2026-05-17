@@ -74,6 +74,8 @@ body.dark-mode::before {
   gap: 24px;
   align-items: flex-start;
   margin-bottom: 28px;
+  position: relative;
+  z-index: 900;
 }
 
 .topbar > :first-child {
@@ -105,6 +107,8 @@ h1 {
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
+  z-index: 910;
 }
 
 .top-menu {
@@ -119,6 +123,7 @@ h1 {
   backdrop-filter: blur(6px);
   flex-wrap: wrap;
   position: relative;
+  z-index: 920;
 }
 
 .top-menu-hamburger {
@@ -170,6 +175,7 @@ body.dark-mode .top-menu {
 .top-menu-app {
   position: relative;
   display: inline-flex;
+  z-index: 930;
 }
 
 .top-menu-app::before {
@@ -185,7 +191,7 @@ body.dark-mode .top-menu {
   position: absolute;
   top: calc(100% + 12px);
   left: 0;
-  z-index: 5000;
+  z-index: 10000;
   display: grid;
   gap: 4px;
   min-width: 220px;
@@ -3667,6 +3673,26 @@ input[type="number"]:disabled {
   cursor: pointer;
 }
 
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.field-label-row .field-label {
+  margin: 0;
+}
+
+.field-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .mode-inline-toggle:hover,
 .mode-inline-toggle:focus-visible {
   background: rgba(15, 91, 255, 0.2);
@@ -5158,10 +5184,16 @@ body[data-page-title="Kalkulator"] .source-submenu-option {
 }
 
 body[data-page-title="Kalkulator"] .search-header,
-body[data-page-title="Kalkulator"] .history-header,
-body[data-page-title="Kalkulator"] .collapsible-summary {
+body[data-page-title="Kalkulator"] .history-header {
   min-width: 0;
   flex-wrap: wrap;
+}
+
+body[data-page-title="Kalkulator"] .collapsible-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 
 body[data-page-title="Kalkulator"] .search-header h3,
@@ -5176,8 +5208,10 @@ body[data-page-title="Kalkulator"] .highlight-value {
 
 body[data-page-title="Kalkulator"] .collapsible-summary-right {
   min-width: 0;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
   justify-content: flex-end;
 }
 
@@ -5243,7 +5277,10 @@ body[data-page-title="Admin"] {
   --shadow: 0 8px 24px rgba(25, 32, 44, 0.06);
   --radius: 8px;
   --radius-sm: 8px;
-  background: var(--bg);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 246, 252, 0.92) 34%, rgba(234, 241, 249, 0.95) 62%, rgba(228, 238, 247, 0.98) 100%),
+    var(--bg);
+  background-attachment: fixed;
 }
 
 body[data-page-title="Kalkulator"]::before,
@@ -5262,7 +5299,10 @@ body.dark-mode[data-page-title="Admin"] {
   --border: #293342;
   --accent: #6da2ff;
   --accent-2: #38b885;
-  background: var(--bg);
+  background:
+    linear-gradient(145deg, rgba(19, 27, 38, 0.98) 0%, rgba(12, 18, 27, 0.98) 44%, rgba(15, 24, 34, 0.98) 100%),
+    var(--bg);
+  background-attachment: fixed;
 }
 
 body[data-page-title="Kalkulator"] .page,
@@ -5391,6 +5431,11 @@ body[data-page-title="Kalkulator"] #extraLayoutContainer {
   gap: 10px;
 }
 
+body[data-page-title="Kalkulator"] #calcLayoutContainer {
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  align-items: start;
+}
+
 body[data-page-title="Kalkulator"] .layout-item {
   border-radius: 8px;
 }
@@ -5399,6 +5444,14 @@ body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item {
   padding: 12px;
   border: 1px solid var(--border);
   background: var(--card);
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-presets"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-advanced"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-clear"] {
+  grid-column: 1 / -1;
 }
 
 body[data-page-title="Kalkulator"] #calcLayoutContainer > .preset-buttons {
@@ -5427,6 +5480,31 @@ body[data-page-title="Admin"] textarea {
   border-color: var(--border);
   background: var(--card-2);
   font-weight: 700;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="number"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="text"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer select {
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 0;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer .currency-row {
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 180px);
+  align-items: stretch;
+  margin-bottom: 0;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer .currency-select-row {
+  grid-template-columns: 1fr;
+}
+
+body[data-page-title="Kalkulator"] #refreshRateBtn,
+body[data-page-title="Kalkulator"] #stockUrlBtn {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
 }
 
 body[data-page-title="Kalkulator"] .min-price-box,
@@ -5510,6 +5588,10 @@ body[data-page-title="Admin"] .layout-preset-row {
   body[data-page-title="Admin"] .admin-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 680px) {
@@ -5551,7 +5633,10 @@ body[data-page-title="Kreator mapowania"] {
   --shadow: 0 8px 24px rgba(25, 32, 44, 0.06);
   --radius: 8px;
   --radius-sm: 8px;
-  background: var(--bg);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 246, 252, 0.92) 34%, rgba(234, 241, 249, 0.95) 62%, rgba(228, 238, 247, 0.98) 100%),
+    var(--bg);
+  background-attachment: fixed;
 }
 
 body[data-page-title="Zapisane mapowania"]::before,
@@ -5570,7 +5655,10 @@ body.dark-mode[data-page-title="Kreator mapowania"] {
   --border: #293342;
   --accent: #6da2ff;
   --accent-2: #38b885;
-  background: var(--bg);
+  background:
+    linear-gradient(145deg, rgba(19, 27, 38, 0.98) 0%, rgba(12, 18, 27, 0.98) 44%, rgba(15, 24, 34, 0.98) 100%),
+    var(--bg);
+  background-attachment: fixed;
 }
 
 body[data-page-title="Zapisane mapowania"] .page,
@@ -5757,5 +5845,275 @@ body[data-page-title="Kreator mapowania"] .admin-card p {
 
   body[data-page-title="Zapisane mapowania"] .search-actions button {
     width: 100%;
+  }
+}
+
+body[data-page-title="Kalkulator"],
+body[data-page-title="Admin"],
+body[data-page-title="Zapisane mapowania"],
+body[data-page-title="Kreator mapowania"] {
+  position: relative;
+  background-color: #eef4fb;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(243, 248, 255, 0.98) 28%, rgba(226, 238, 251, 0.98) 58%, rgba(238, 246, 241, 0.98) 100%),
+    linear-gradient(90deg, rgba(20, 88, 245, 0.12), rgba(15, 138, 95, 0.1));
+  background-attachment: fixed;
+}
+
+body[data-page-title="Kalkulator"]::before,
+body[data-page-title="Admin"]::before,
+body[data-page-title="Zapisane mapowania"]::before,
+body[data-page-title="Kreator mapowania"]::before {
+  display: block;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1100px 760px at 8% -8%, rgba(20, 88, 245, 0.24), transparent 62%),
+    radial-gradient(960px 720px at 96% 10%, rgba(15, 138, 95, 0.18), transparent 58%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.45), rgba(226, 238, 251, 0.28));
+}
+
+body[data-page-title="Kalkulator"] .page,
+body[data-page-title="Admin"] .page,
+body[data-page-title="Zapisane mapowania"] .page,
+body[data-page-title="Kreator mapowania"] .page {
+  position: relative;
+  z-index: 1;
+}
+
+body.dark-mode[data-page-title="Kalkulator"],
+body.dark-mode[data-page-title="Admin"],
+body.dark-mode[data-page-title="Zapisane mapowania"],
+body.dark-mode[data-page-title="Kreator mapowania"] {
+  background-color: #0c121a;
+  background-image:
+    linear-gradient(135deg, rgba(18, 27, 40, 0.98) 0%, rgba(9, 14, 22, 0.98) 42%, rgba(12, 23, 31, 0.98) 100%),
+    linear-gradient(90deg, rgba(109, 162, 255, 0.12), rgba(56, 184, 133, 0.08));
+  background-attachment: fixed;
+}
+
+body.dark-mode[data-page-title="Kalkulator"]::before,
+body.dark-mode[data-page-title="Admin"]::before,
+body.dark-mode[data-page-title="Zapisane mapowania"]::before,
+body.dark-mode[data-page-title="Kreator mapowania"]::before {
+  background:
+    radial-gradient(1100px 760px at 8% -8%, rgba(109, 162, 255, 0.2), transparent 62%),
+    radial-gradient(960px 720px at 96% 10%, rgba(56, 184, 133, 0.14), transparent 58%),
+    linear-gradient(145deg, rgba(18, 27, 40, 0.18), rgba(9, 14, 22, 0.46));
+}
+
+body[data-page-title="Kalkulator"] .app-card,
+body[data-page-title="Kalkulator"] .info-card,
+body[data-page-title="Admin"] .app-card,
+body[data-page-title="Admin"] .admin-card,
+body[data-page-title="Zapisane mapowania"] .app-card,
+body[data-page-title="Kreator mapowania"] .app-card,
+body[data-page-title="Kreator mapowania"] .admin-card {
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(16px);
+}
+
+body.dark-mode[data-page-title="Kalkulator"] .app-card,
+body.dark-mode[data-page-title="Kalkulator"] .info-card,
+body.dark-mode[data-page-title="Admin"] .app-card,
+body.dark-mode[data-page-title="Admin"] .admin-card,
+body.dark-mode[data-page-title="Zapisane mapowania"] .app-card,
+body.dark-mode[data-page-title="Kreator mapowania"] .app-card,
+body.dark-mode[data-page-title="Kreator mapowania"] .admin-card {
+  background: rgba(21, 28, 37, 0.82);
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item,
+body[data-page-title="Kalkulator"] .search-card,
+body[data-page-title="Kalkulator"] .collapsible-card,
+body[data-page-title="Kalkulator"] .history-item,
+body[data-page-title="Kalkulator"] .min-price-box,
+body[data-page-title="Kalkulator"] .base-commission-tools,
+body[data-page-title="Zapisane mapowania"] .history-item,
+body[data-page-title="Kreator mapowania"] .pattern-suggestion,
+body[data-page-title="Kreator mapowania"] .pattern-options {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+body.dark-mode[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item,
+body.dark-mode[data-page-title="Kalkulator"] .search-card,
+body.dark-mode[data-page-title="Kalkulator"] .collapsible-card,
+body.dark-mode[data-page-title="Kalkulator"] .history-item,
+body.dark-mode[data-page-title="Kalkulator"] .min-price-box,
+body.dark-mode[data-page-title="Kalkulator"] .base-commission-tools,
+body.dark-mode[data-page-title="Zapisane mapowania"] .history-item,
+body.dark-mode[data-page-title="Kreator mapowania"] .pattern-suggestion,
+body.dark-mode[data-page-title="Kreator mapowania"] .pattern-options {
+  background: rgba(16, 23, 32, 0.72);
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer label,
+body[data-page-title="Kalkulator"] #calcLayoutContainer .field-label {
+  color: color-mix(in srgb, var(--ink) 62%, var(--muted));
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer .field-label-row {
+  gap: 5px;
+  align-items: center;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer .field-mode {
+  gap: 4px;
+  color: color-mix(in srgb, var(--muted) 86%, var(--ink));
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer .field-mode-placeholder {
+  width: 0;
+  min-width: 0;
+  height: 20px;
+  visibility: hidden;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer .mode-inline-toggle {
+  min-height: 20px;
+  padding: 1px 7px 2px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: color-mix(in srgb, var(--accent) 82%, var(--ink));
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer .field-help {
+  width: 20px;
+  height: 20px;
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--card-2) 72%, transparent);
+  color: color-mix(in srgb, var(--muted) 78%, var(--ink));
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="number"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="text"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer select {
+  min-height: 40px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--card-2) 86%, transparent);
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="number"]::placeholder,
+body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="text"]::placeholder {
+  color: color-mix(in srgb, var(--muted) 62%, transparent);
+  font-weight: 600;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="number"]:focus,
+body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="text"]:focus,
+body[data-page-title="Kalkulator"] #calcLayoutContainer select:focus {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+  background: color-mix(in srgb, var(--card-2) 94%, var(--accent) 6%);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+body[data-page-title="Kalkulator"] .min-price-box {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+body[data-page-title="Kalkulator"] .min-price-box strong {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+/* Calculator markup sections */
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"] {
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(340px, 1.25fr);
+  min-height: 0;
+  padding: 12px;
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: start;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair,
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"] > .calc-field-pair {
+  grid-template-rows: 46px 40px;
+  gap: 6px;
+  min-width: 0;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair > .field-label-row,
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"] > .calc-field-pair > .field-label-row {
+  height: 46px;
+  min-height: 46px;
+  display: flex;
+  align-content: flex-start;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 4px 7px;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair > .field-label-row .field-label,
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"] > .calc-field-pair > .field-label-row .field-label {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair > input[type="number"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"] > .calc-field-pair > input[type="number"] {
+  height: 40px;
+  min-height: 40px;
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .min-price-box,
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"] > .min-price-box {
+  min-height: 0;
+  padding: 10px 12px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+body[data-page-title="Kalkulator"] #minPriceBox > div,
+body[data-page-title="Kalkulator"] #markupFromSaleBox > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+body[data-page-title="Kalkulator"] #markupFromSaleBox {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 1040px) {
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"],
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"] {
+    grid-template-columns: 1fr;
+    row-gap: 10px;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"] > .calc-field-pair {
+    grid-template-rows: auto 40px;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair > .field-label-row,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-markup-from-sale"] > .calc-field-pair > .field-label-row {
+    height: auto;
+    min-height: 0;
   }
 }
