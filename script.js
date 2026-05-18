@@ -38,7 +38,7 @@ const lastLoggedValues = {};
 const mainToastStack = document.getElementById('mainToastStack');
 const activityLogCache = {};
 const appVersionEl = document.getElementById('appVersion');
-const appVersion = appVersionEl ? appVersionEl.textContent.trim() : '';
+const appVersion = appVersionEl?.textContent?.trim() || window.AppVersionInfo?.version || '';
 if (appVersion) {
   localStorage.setItem('appVersion', appVersion);
 }
@@ -58,6 +58,8 @@ const INDEX_LAYOUT_COLORS_STORAGE_KEY = 'indexLayoutColorsV1';
 const INDEX_LAYOUT_COLORS_COOKIE_KEY = 'indexLayoutColorsV1';
 const INDEX_LAYOUT_COLUMN_WIDTH_STORAGE_KEY = 'indexLayoutColumnWidthV1';
 const INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY = 'indexLayoutColumnWidthV1';
+const INDEX_LAYOUT_SPANS_STORAGE_KEY = 'indexLayoutSpansV1';
+const INDEX_LAYOUT_SPANS_COOKIE_KEY = 'indexLayoutSpansV1';
 const INDEX_LAYOUT_GLOBAL_PRESETS_NOTE_ID = 'layout-presets-v1';
 const INDEX_LAYOUT_ACTIVE_PRESET_KEY = 'indexLayoutActivePresetV1';
 const DEFAULT_LAYOUT_COLUMN_WIDTH = 62;
@@ -67,6 +69,9 @@ const DEFAULT_LAYOUT_COLUMN_PROFILE = { count: 2, widths: { calc: 62, info: 38, 
 const DEFAULT_THREE_COLUMN_PROFILE = { count: 3, widths: { calc: 46, info: 30, extra: 24 } };
 const MIN_THREE_COLUMN_WIDTH = 18;
 const LAYOUT_GROUP_KEYS = ['calc', 'info', 'extra'];
+const LAYOUT_SPAN_ITEMS = new Set(['calc-clear']);
+const LAYOUT_SPAN_VALUES = ['1', '2'];
+const DEFAULT_LAYOUT_SPANS = { 'calc-clear': '1' };
 const LAYOUT_TINTS = ['', 'mint', 'blue', 'amber', 'violet', 'rose'];
 const LAYOUT_TINT_LABELS = {
   '': 'Brak',
@@ -105,6 +110,8 @@ let defaultLayoutVisibility = null;
 let preEditLayoutVisibility = null;
 let defaultLayoutColors = null;
 let preEditLayoutColors = null;
+let defaultLayoutSpans = null;
+let preEditLayoutSpans = null;
 let defaultLayoutColumnWidth = DEFAULT_LAYOUT_COLUMN_PROFILE;
 let preEditLayoutColumnWidth = null;
 let currentDraggedItem = null;
@@ -194,6 +201,17 @@ function getCurrentLayoutColors() {
   return colors;
 }
 
+function getCurrentLayoutSpans() {
+  const spans = {};
+  getAllLayoutItems().forEach((item) => {
+    const id = item.getAttribute('data-layout-item');
+    if (!id || !LAYOUT_SPAN_ITEMS.has(id)) return;
+    const value = String(item.dataset.layoutSpan || DEFAULT_LAYOUT_SPANS[id] || '1');
+    spans[id] = LAYOUT_SPAN_VALUES.includes(value) ? value : '1';
+  });
+  return spans;
+}
+
 function normalizeLayoutVisibility(rawVisibility) {
   const normalized = {};
   getAllLayoutItems().forEach((item) => {
@@ -212,6 +230,17 @@ function normalizeLayoutColors(rawColors) {
     if (!id) return;
     const rawValue = String(rawColors?.[id] || '');
     normalized[id] = LAYOUT_TINTS.includes(rawValue) ? rawValue : '';
+  });
+  return normalized;
+}
+
+function normalizeLayoutSpans(rawSpans) {
+  const normalized = {};
+  getAllLayoutItems().forEach((item) => {
+    const id = item.getAttribute('data-layout-item');
+    if (!id || !LAYOUT_SPAN_ITEMS.has(id)) return;
+    const rawValue = String(rawSpans?.[id] || DEFAULT_LAYOUT_SPANS[id] || '1');
+    normalized[id] = LAYOUT_SPAN_VALUES.includes(rawValue) ? rawValue : '1';
   });
   return normalized;
 }
@@ -304,6 +333,18 @@ function applyLayoutColors(colorMap) {
     const tint = normalized[id] || '';
     item.dataset.layoutTint = tint;
     item.classList.toggle('has-layout-tint', !!tint);
+  });
+}
+
+function applyLayoutSpans(spanMap) {
+  const normalized = normalizeLayoutSpans(spanMap);
+  getAllLayoutItems().forEach((item) => {
+    const id = item.getAttribute('data-layout-item');
+    if (!id || !LAYOUT_SPAN_ITEMS.has(id)) {
+      item.removeAttribute('data-layout-span');
+      return;
+    }
+    item.dataset.layoutSpan = normalized[id] || '1';
   });
 }
 
@@ -512,6 +553,16 @@ function loadSavedLayoutColors() {
   }
 }
 
+function loadSavedLayoutSpans() {
+  const raw = localStorage.getItem(INDEX_LAYOUT_SPANS_STORAGE_KEY) || layoutGetCookieValue(INDEX_LAYOUT_SPANS_COOKIE_KEY);
+  if (!raw) return null;
+  try {
+    return normalizeLayoutSpans(JSON.parse(raw));
+  } catch (_error) {
+    return null;
+  }
+}
+
 function loadSavedLayoutColumnWidth() {
   const raw = localStorage.getItem(INDEX_LAYOUT_COLUMN_WIDTH_STORAGE_KEY) || layoutGetCookieValue(INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY);
   if (!raw) return null;
@@ -526,12 +577,14 @@ function loadSavedLayoutFromLocal() {
   const order = loadSavedLayoutOrder();
   const visibility = loadSavedLayoutVisibility();
   const colors = loadSavedLayoutColors();
+  const spans = loadSavedLayoutSpans();
   const columnWidth = loadSavedLayoutColumnWidth();
-  if (!order && !visibility && !colors && columnWidth === null) return null;
+  if (!order && !visibility && !colors && !spans && columnWidth === null) return null;
   return {
     order: order || getCurrentLayoutOrder(),
     visibility: visibility || getCurrentLayoutVisibility(),
     colors: colors || getCurrentLayoutColors(),
+    spans: spans || getCurrentLayoutSpans(),
     columnWidth: columnWidth ?? getCurrentLayoutColumnWidth()
   };
 }
@@ -540,7 +593,7 @@ function flattenLayoutOrder(order) {
   return LAYOUT_GROUP_KEYS.flatMap((groupKey) => order?.[groupKey] || []);
 }
 
-function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisibility, beforeColumnWidth, afterColumnWidth) {
+function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisibility, beforeColumnWidth, afterColumnWidth, beforeSpans, afterSpans) {
   const allIds = Array.from(new Set([
     ...flattenLayoutOrder(beforeOrder),
     ...flattenLayoutOrder(afterOrder),
@@ -560,6 +613,7 @@ function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisib
   const columnChanged = [];
   const shown = [];
   const hidden = [];
+  const spanChanged = [];
 
   allIds.forEach((id) => {
     const beforeIdx = beforeFlat.indexOf(id);
@@ -573,6 +627,12 @@ function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisib
     const afterVisible = afterVisibility?.[id] !== false;
     if (!beforeVisible && afterVisible) shown.push(id);
     if (beforeVisible && !afterVisible) hidden.push(id);
+
+    if (LAYOUT_SPAN_ITEMS.has(id)) {
+      const beforeSpan = normalizeLayoutSpans(beforeSpans)[id] || '1';
+      const afterSpan = normalizeLayoutSpans(afterSpans)[id] || '1';
+      if (beforeSpan !== afterSpan) spanChanged.push({ id, from: beforeSpan, to: afterSpan });
+    }
   });
 
   const normalizedBeforeWidth = normalizeLayoutColumnProfile(beforeColumnWidth);
@@ -583,14 +643,15 @@ function diffLayoutChanges(beforeOrder, beforeVisibility, afterOrder, afterVisib
     ? { from: normalizedBeforeWidth, to: normalizedAfterWidth }
     : null;
 
-  return { moved, columnChanged, shown, hidden, columnWidth };
+  return { moved, columnChanged, shown, hidden, spanChanged, columnWidth };
 }
 
-function saveLayoutToLocal(orderMap, visibilityMap, colorMap, columnWidth) {
+function saveLayoutToLocal(orderMap, visibilityMap, colorMap, columnWidth, spanMap) {
   saveLayoutOrder(orderMap);
   saveLayoutVisibility(visibilityMap);
   saveLayoutColors(colorMap || getCurrentLayoutColors());
   saveLayoutColumnWidth(columnWidth ?? getCurrentLayoutColumnWidth());
+  saveLayoutSpans(spanMap || getCurrentLayoutSpans());
 }
 
 function clearSavedLayoutLocal() {
@@ -607,6 +668,7 @@ function normalizeGlobalLayoutPreset(rawPreset) {
     name,
     order: normalizeLayoutOrder(rawPreset.order || {}),
     visibility: normalizeLayoutVisibility(rawPreset.visibility || {}),
+    spans: normalizeLayoutSpans(rawPreset.spans || {}),
     columnWidth: normalizeLayoutColumnProfile(rawPreset.columnWidth)
   };
 }
@@ -679,6 +741,7 @@ function applyGlobalPresetById(presetId) {
   selectedLayoutPresetKey = `global:${preset.id}`;
   applyLayoutOrder(preset.order);
   applyLayoutVisibility(preset.visibility, { forceShowAll: isLayoutEditMode });
+  applyLayoutSpans(preset.spans || {});
   applyLayoutColumnWidth(preset.columnWidth);
   if (isLayoutEditMode) {
     renderLayoutItemControls();
@@ -718,15 +781,24 @@ function saveLayoutColumnWidth(columnWidth) {
   layoutSetCookieValue(INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY, payload);
 }
 
+function saveLayoutSpans(spanMap) {
+  const normalized = normalizeLayoutSpans(spanMap);
+  const payload = JSON.stringify(normalized);
+  localStorage.setItem(INDEX_LAYOUT_SPANS_STORAGE_KEY, payload);
+  layoutSetCookieValue(INDEX_LAYOUT_SPANS_COOKIE_KEY, payload);
+}
+
 function clearSavedLayoutOrder() {
   localStorage.removeItem(INDEX_LAYOUT_STORAGE_KEY);
   localStorage.removeItem(INDEX_LAYOUT_VISIBILITY_STORAGE_KEY);
   localStorage.removeItem(INDEX_LAYOUT_COLORS_STORAGE_KEY);
   localStorage.removeItem(INDEX_LAYOUT_COLUMN_WIDTH_STORAGE_KEY);
+  localStorage.removeItem(INDEX_LAYOUT_SPANS_STORAGE_KEY);
   document.cookie = `${INDEX_LAYOUT_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   document.cookie = `${INDEX_LAYOUT_VISIBILITY_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   document.cookie = `${INDEX_LAYOUT_COLORS_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   document.cookie = `${INDEX_LAYOUT_COLUMN_WIDTH_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  document.cookie = `${INDEX_LAYOUT_SPANS_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
 }
 
 function markLayoutAsCustomAfterWidthChange() {
@@ -838,6 +910,8 @@ function bindColumnResizer() {
 
 function updateLayoutDiffHighlight() {
   const baseline = normalizeLayoutOrder(preEditLayoutOrder || {});
+  const baselineSpans = normalizeLayoutSpans(preEditLayoutSpans || {});
+  const currentSpans = getCurrentLayoutSpans();
   const current = getCurrentLayoutOrder();
   const baselinePos = new Map();
   Object.entries(baseline).forEach(([groupKey, ids]) => {
@@ -853,7 +927,8 @@ function updateLayoutDiffHighlight() {
       if (!id) return;
       const nowIndex = currOrder.indexOf(id);
       const prev = baselinePos.get(id);
-      const changed = !prev || prev.groupKey !== groupKey || prev.index !== nowIndex;
+      const spanChanged = LAYOUT_SPAN_ITEMS.has(id) && (baselineSpans[id] || '1') !== (currentSpans[id] || '1');
+      const changed = !prev || prev.groupKey !== groupKey || prev.index !== nowIndex || spanChanged;
       item.classList.toggle('is-layout-modified', changed);
     });
   });
@@ -1043,6 +1118,28 @@ function renderLayoutItemControls() {
         event.stopPropagation();
         moveLayoutItemToGroup(itemId, targetGroupKey);
       });
+      const spanBtn = document.createElement('button');
+      spanBtn.type = 'button';
+      spanBtn.className = 'layout-item-move layout-item-span';
+      const currentSpan = String(item.dataset.layoutSpan || DEFAULT_LAYOUT_SPANS[itemId] || '1');
+      const safeSpan = LAYOUT_SPAN_VALUES.includes(currentSpan) ? currentSpan : '1';
+      spanBtn.textContent = safeSpan === '2' ? '2x' : '1x';
+      spanBtn.setAttribute('aria-label', safeSpan === '2' ? 'Zwiń do jednej kolumny' : 'Rozciągnij na dwie kolumny');
+      spanBtn.setAttribute('title', safeSpan === '2' ? 'Zwiń do jednej kolumny' : 'Rozciągnij na dwie kolumny');
+      spanBtn.hidden = !LAYOUT_SPAN_ITEMS.has(itemId);
+      spanBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const spans = getCurrentLayoutSpans();
+        spans[itemId] = spans[itemId] === '2' ? '1' : '2';
+        preserveLayoutEditScroll(() => {
+          selectedLayoutPresetKey = 'custom';
+          applyPresetSelectionVisual();
+          applyLayoutSpans(spans);
+          renderLayoutItemControls();
+          updateLayoutDiffHighlight();
+        });
+      });
       const toggleBtn = document.createElement('button');
       toggleBtn.type = 'button';
       toggleBtn.className = 'layout-item-move layout-item-toggle-visibility';
@@ -1081,7 +1178,7 @@ function renderLayoutItemControls() {
         renderLayoutItemControls();
         updateLayoutDiffHighlight();
       });
-      controls.append(handle, upBtn, downBtn, transferBtn, toggleBtn, colorBtn);
+      controls.append(handle, upBtn, downBtn, transferBtn, spanBtn, toggleBtn, colorBtn);
       const detailsSummary = item.tagName === 'DETAILS'
         ? item.querySelector('.collapsible-summary')
         : null;
@@ -1123,6 +1220,7 @@ function setLayoutEditMode(enabled) {
     preEditLayoutOrder = getCurrentLayoutOrder();
     preEditLayoutVisibility = getCurrentLayoutVisibility();
     preEditLayoutColors = getCurrentLayoutColors();
+    preEditLayoutSpans = getCurrentLayoutSpans();
     preEditLayoutColumnWidth = getCurrentLayoutColumnWidth();
     preEditLayoutPresetKey = selectedLayoutPresetKey;
     applyLayoutVisibility(preEditLayoutVisibility, { forceShowAll: true });
@@ -1136,6 +1234,7 @@ function setLayoutEditMode(enabled) {
         preset: selectedLayoutPresetKey || 'custom',
         order: preEditLayoutOrder,
         visibility: preEditLayoutVisibility,
+        spans: preEditLayoutSpans,
         columnWidth: preEditLayoutColumnWidth
       });
     }
@@ -1180,7 +1279,6 @@ function getFieldElement(source) {
     purchaseAmount: 'purchaseAmount',
     currentBaseMultiplier: 'currentBaseMultiplier',
     minMarkup: 'minMarkup',
-    markupPurchaseAmount: 'markupPurchaseAmount',
     targetSaleAmount: 'targetSaleAmount'
   };
   const id = map[source] || source;
@@ -1206,9 +1304,10 @@ function formatCurrency(value) {
 
 const autoLinkedFieldValues = {
   purchaseAmount: '',
-  markupPurchaseAmount: '',
   targetSaleAmount: ''
 };
+let markupPriceSource = null;
+let saleCalcSource = 'minMarkup';
 
 function canAutoUpdateField(inputId) {
   const inputEl = document.getElementById(inputId);
@@ -1227,24 +1326,142 @@ function setAutoLinkedFieldValue(inputId, value) {
   return true;
 }
 
-function syncLinkedPurchaseAmount(sourceId) {
-  const targetId = sourceId === 'purchaseAmount' ? 'markupPurchaseAmount' : 'purchaseAmount';
-  const sourceEl = document.getElementById(sourceId);
-  if (!sourceEl) return;
-  setAutoLinkedFieldValue(targetId, sourceEl.value || '');
+function getVatMultiplier() {
+  const vatRate = getClientVatRateFraction();
+  return 1 + (Number.isFinite(vatRate) ? vatRate : 0);
 }
 
-function syncTargetSaleFromMinSale(minSalePlnBrutto) {
-  const formatted = Number.isFinite(minSalePlnBrutto) && minSalePlnBrutto > 0
-    ? minSalePlnBrutto.toFixed(2)
-    : '';
-  const updated = setAutoLinkedFieldValue('targetSaleAmount', formatted);
-  if (!updated) return;
-  const saleModeToggle = document.getElementById('markupSaleNetToggle');
-  if (saleModeToggle?.checked) {
-    saleModeToggle.checked = false;
-    updateMarkupAmountModeUI();
+function getPurchaseBruttoForMarkup() {
+  const purchase = parseNumber(document.getElementById('purchaseAmount')?.value);
+  if (!Number.isFinite(purchase) || purchase <= 0) return NaN;
+  return isPurchaseNetMode() ? purchase * getVatMultiplier() : purchase;
+}
+
+function formatSaleInputFromBrutto(saleBrutto) {
+  if (!Number.isFinite(saleBrutto) || saleBrutto <= 0) return '';
+  const saleValue = isMarkupSaleNetMode() ? saleBrutto / getVatMultiplier() : saleBrutto;
+  return saleValue.toFixed(2);
+}
+
+function syncTargetSaleFromMinSale(minSalePlnBrutto, options = {}) {
+  const formatted = formatSaleInputFromBrutto(minSalePlnBrutto);
+  const updated = options.force
+    ? (() => {
+      const inputEl = document.getElementById('targetSaleAmount');
+      if (!inputEl) return false;
+      inputEl.value = formatted;
+      autoLinkedFieldValues.targetSaleAmount = formatted;
+      return true;
+    })()
+    : setAutoLinkedFieldValue('targetSaleAmount', formatted);
+  return updated;
+}
+
+function getTargetSaleBrutto() {
+  const sale = parseNumber(document.getElementById('targetSaleAmount')?.value);
+  if (!Number.isFinite(sale) || sale < 0) return NaN;
+  return isMarkupSaleNetMode() ? sale * getVatMultiplier() : sale;
+}
+
+function setMarkupPercentFromSaleBrutto(saleBrutto) {
+  const markupEl = document.getElementById('minMarkup');
+  const purchaseBrutto = getPurchaseBruttoForMarkup();
+  if (!markupEl || !Number.isFinite(purchaseBrutto) || purchaseBrutto <= 0 || !Number.isFinite(saleBrutto)) return false;
+  const markupPercent = ((saleBrutto - purchaseBrutto) / purchaseBrutto) * 100;
+  markupEl.value = markupPercent.toFixed(2);
+  return true;
+}
+
+function getSaleBruttoFromEbay() {
+  const ebaySale = parseNumber(document.getElementById('ebayPrice')?.value);
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
+  const commissionRaw = getActiveCommissionRate();
+  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+  if (!Number.isFinite(ebaySale) || ebaySale < 0 || !Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
+    return NaN;
   }
+  return ebaySale / (exchangeRate * (1 + commission));
+}
+
+function syncTargetSaleFromEbay(options = {}) {
+  const saleBrutto = getSaleBruttoFromEbay();
+  if (!Number.isFinite(saleBrutto)) return false;
+  const formatted = formatSaleInputFromBrutto(saleBrutto);
+  const inputEl = document.getElementById('targetSaleAmount');
+  if (!inputEl) return false;
+  if (options.force !== true && !canAutoUpdateField('targetSaleAmount')) return false;
+  inputEl.value = formatted;
+  autoLinkedFieldValues.targetSaleAmount = formatted;
+  setMarkupPercentFromSaleBrutto(saleBrutto);
+  return true;
+}
+
+function getSaleBruttoFromMarkup() {
+  const markupPercent = parseNumber(document.getElementById('minMarkup')?.value);
+  const purchaseBrutto = getPurchaseBruttoForMarkup();
+  if (!Number.isFinite(purchaseBrutto) || purchaseBrutto <= 0 || !Number.isFinite(markupPercent)) return NaN;
+  return purchaseBrutto * (1 + (markupPercent / 100));
+}
+
+function getSaleBruttoForCurrentSource() {
+  if (saleCalcSource === 'ebayPrice') {
+    const ebaySaleBrutto = getSaleBruttoFromEbay();
+    if (Number.isFinite(ebaySaleBrutto)) return ebaySaleBrutto;
+  }
+  if (saleCalcSource === 'targetSaleAmount') {
+    const targetSaleBrutto = getTargetSaleBrutto();
+    if (Number.isFinite(targetSaleBrutto)) return targetSaleBrutto;
+  }
+  return getSaleBruttoFromMarkup();
+}
+
+function syncMarkupSourceFields() {
+  const saleBrutto = getSaleBruttoForCurrentSource();
+  if (!Number.isFinite(saleBrutto)) return;
+  if (saleCalcSource === 'minMarkup') {
+    syncTargetSaleFromMinSale(saleBrutto, { force: true });
+    syncEbayPriceFromTargetSale({ force: true });
+  } else if (saleCalcSource === 'targetSaleAmount') {
+    setMarkupPercentFromSaleBrutto(saleBrutto);
+    syncEbayPriceFromTargetSale({ force: true });
+  } else if (saleCalcSource === 'ebayPrice') {
+    syncTargetSaleFromEbay({ force: true });
+  }
+}
+
+function getSaleBruttoFromTargetSale() {
+  const saleBrutto = getTargetSaleBrutto();
+  if (Number.isFinite(saleBrutto)) return saleBrutto;
+  return NaN;
+}
+
+function getSaleBruttoDisplayText(saleBrutto) {
+  return Number.isFinite(saleBrutto) && saleBrutto >= 0
+    ? `${saleBrutto.toFixed(2)} PLN`
+    : '';
+}
+
+function syncEbayPriceFromTargetSale(options = {}) {
+  if (markupPriceSource !== 'targetSaleAmount' && options.force !== true) return false;
+  const ebayPriceInput = document.getElementById('ebayPrice');
+  const currencyEl = document.getElementById('currency');
+  if (!ebayPriceInput || !currencyEl) return false;
+
+  const saleBrutto = getSaleBruttoFromTargetSale();
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
+  const commissionRaw = getActiveCommissionRate();
+  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+  if (!Number.isFinite(saleBrutto) || !Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
+    return false;
+  }
+
+  const ebayPrice = saleBrutto * exchangeRate * (1 + commission);
+  ebayPriceInput.value = ebayPrice.toFixed(2);
+  originalEbayPrice = ebayPrice;
+  originalCurrency = currencyEl.value;
+  originalExchangeRate = exchangeRate;
+  markupPriceSource = 'targetSaleAmount';
+  return true;
 }
 
 function clearPrimaryPricingFields(source) {
@@ -1262,7 +1479,7 @@ function clearPrimaryPricingFields(source) {
   });
   originalEbayPrice = null;
   originalExchangeRate = null;
-  updateMarkupFromSale();
+  updateMarkupCalculations();
   updateSummaryMetrics();
   return true;
 }
@@ -1278,11 +1495,9 @@ function applyPresetAmountModes(vat) {
   const useNetMode = Number.isFinite(vatValue) && vatValue <= 0;
   const changed = [
     setInlineModeFromPreset('purchaseAmountNetToggle', useNetMode),
-    setInlineModeFromPreset('markupPurchaseNetToggle', useNetMode),
     setInlineModeFromPreset('markupSaleNetToggle', useNetMode)
   ].some(Boolean);
   if (!changed) return;
-  syncLinkedPurchaseAmount('purchaseAmount');
   updatePurchaseAmountModeUI();
   updateMarkupAmountModeUI();
 }
@@ -1320,7 +1535,7 @@ function getClientVatRateFraction() {
 }
 
 function isMarkupPurchaseNetMode() {
-  return isInlineModeNet('markupPurchaseNetToggle');
+  return isPurchaseNetMode();
 }
 
 function isMarkupSaleNetMode() {
@@ -1341,7 +1556,6 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
   toggleEl.checked = !!toNetMode;
 
   if (toggleId === 'purchaseAmountNetToggle') {
-    syncLinkedPurchaseAmount('purchaseAmount');
     updatePurchaseAmountModeUI();
     updateMarkupAmountModeUI();
     updateMarkupCalculations();
@@ -1349,18 +1563,10 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
     return true;
   }
 
-  if (toggleId === 'markupPurchaseNetToggle') {
-    syncLinkedPurchaseAmount('markupPurchaseAmount');
-    updatePurchaseAmountModeUI();
-    updateMarkupAmountModeUI();
-    updateSaleMarkupOnly();
-    if (options.history !== false) addHistoryEntry('markupAmountMode');
-    return true;
-  }
-
   if (toggleId === 'markupSaleNetToggle') {
-    autoLinkedFieldValues.targetSaleAmount = '';
     updateMarkupAmountModeUI();
+    syncMarkupSourceFields();
+    syncEbayPriceFromTargetSale();
     updateSaleMarkupOnly();
     if (options.history !== false) addHistoryEntry('markupAmountMode');
     return true;
@@ -1371,12 +1577,11 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
 
 function updateMarkupAmountModeUI() {
   const modeLabelEl = document.getElementById('markupAmountModeLabel');
-  const purchaseIsNet = !!document.getElementById('markupPurchaseNetToggle')?.checked;
+  const purchaseIsNet = !!document.getElementById('purchaseAmountNetToggle')?.checked;
   const saleIsNet = !!document.getElementById('markupSaleNetToggle')?.checked;
   if (modeLabelEl) {
     modeLabelEl.textContent = `Tryb narzutu: zakup ${purchaseIsNet ? 'netto' : 'brutto'} / sprzedaż ${saleIsNet ? 'netto' : 'brutto'}`;
   }
-  updateModeButton('markupPurchaseNetToggle', purchaseIsNet);
   updateModeButton('markupSaleNetToggle', saleIsNet);
 }
 
@@ -1421,35 +1626,36 @@ function updateMinSaleByMarkup() {
   const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
   const commissionRaw = getActiveCommissionRate();
   const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
-  const vatRate = getClientVatRateFraction();
   const currency = currencyEl.value || 'EUR';
 
   if (minSaleCurrencyLabelEl) minSaleCurrencyLabelEl.textContent = currency;
 
-  if (!Number.isFinite(purchase) || purchase <= 0 || !Number.isFinite(markupPercent) || markupPercent < 0) {
+  if (!Number.isFinite(purchase) || purchase <= 0 || !Number.isFinite(markupPercent) || markupPercent <= -100) {
     minSalePlnEl.textContent = '—';
     minSaleEbayEl.textContent = '—';
-    syncTargetSaleFromMinSale(NaN);
     return;
   }
 
-  const vatMultiplier = 1 + (Number.isFinite(vatRate) ? vatRate : 0);
-  const purchaseBrutto = isPurchaseNetMode() ? purchase * vatMultiplier : purchase;
-  const minSalePlnBrutto = purchaseBrutto * (1 + (markupPercent / 100));
-  minSalePlnEl.textContent = `${minSalePlnBrutto.toFixed(2)} PLN`;
-  syncTargetSaleFromMinSale(minSalePlnBrutto);
+  const saleBrutto = getSaleBruttoForCurrentSource();
+  if (!Number.isFinite(saleBrutto)) {
+    minSalePlnEl.textContent = '—';
+    minSaleEbayEl.textContent = '—';
+    return;
+  }
+
+  minSalePlnEl.textContent = `${saleBrutto.toFixed(2)} PLN`;
 
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
     minSaleEbayEl.textContent = '—';
     return;
   }
 
-  const minSaleEbay = minSalePlnBrutto * exchangeRate * (1 + commission);
+  const minSaleEbay = saleBrutto * exchangeRate * (1 + commission);
   minSaleEbayEl.textContent = `${minSaleEbay.toFixed(2)} ${currency}`;
 }
 
 function updateMarkupFromSale() {
-  const purchaseEl = document.getElementById('markupPurchaseAmount');
+  const purchaseEl = document.getElementById('purchaseAmount');
   const saleEl = document.getElementById('targetSaleAmount');
   const ebaySaleEl = document.getElementById('ebayPrice');
   const resultEl = document.getElementById('calculatedMarkup');
@@ -1469,18 +1675,14 @@ function updateMarkupFromSale() {
     return;
   }
 
-  const vatRate = getClientVatRateFraction();
-  const vatMultiplier = 1 + (Number.isFinite(vatRate) ? vatRate : 0);
-  const purchaseBrutto = isMarkupPurchaseNetMode() ? purchase * vatMultiplier : purchase;
-  const purchaseNetto = isMarkupPurchaseNetMode() ? purchase : purchase / vatMultiplier;
+  const purchaseBrutto = getPurchaseBruttoForMarkup();
 
   if (Number.isFinite(sale) && sale >= 0) {
-    const saleBrutto = isMarkupSaleNetMode() ? sale * vatMultiplier : sale;
-    const saleNetto = isMarkupSaleNetMode() ? sale : sale / vatMultiplier;
+    const saleBrutto = getTargetSaleBrutto();
     const markupPercent = ((saleBrutto - purchaseBrutto) / purchaseBrutto) * 100;
-    const netProfit = saleNetto - purchaseNetto;
+    const profit = saleBrutto - purchaseBrutto;
     resultEl.textContent = `${markupPercent.toFixed(2)}%`;
-    if (netProfitEl) netProfitEl.textContent = `${netProfit.toFixed(2)} PLN`;
+    if (netProfitEl) netProfitEl.textContent = `${profit.toFixed(2)} PLN`;
   } else {
     resultEl.textContent = '—';
     if (netProfitEl) netProfitEl.textContent = '—';
@@ -1494,23 +1696,25 @@ function updateMarkupFromSale() {
       resultFromEbayEl.textContent = '—';
       if (netProfitFromEbayEl) netProfitFromEbayEl.textContent = '—';
     } else {
-      const saleBruttoFromEbay = ebaySale / (exchangeRate * (1 + commission));
-      const saleNettoFromEbay = saleBruttoFromEbay / vatMultiplier;
-      const markupPercentFromEbay = ((saleBruttoFromEbay - purchaseBrutto) / purchaseBrutto) * 100;
-      const netProfitFromEbay = saleNettoFromEbay - purchaseNetto;
+      const saleWithCommissionPln = ebaySale / exchangeRate;
+      const markupPercentFromEbay = ((saleWithCommissionPln - purchaseBrutto) / purchaseBrutto) * 100;
+      const profitFromEbay = saleWithCommissionPln - purchaseBrutto;
       resultFromEbayEl.textContent = `${markupPercentFromEbay.toFixed(2)}%`;
-      if (netProfitFromEbayEl) netProfitFromEbayEl.textContent = `${netProfitFromEbay.toFixed(2)} PLN`;
+      if (netProfitFromEbayEl) netProfitFromEbayEl.textContent = `${profitFromEbay.toFixed(2)} PLN`;
     }
   }
 }
 
 function updateMarkupCalculations() {
+  syncMarkupSourceFields();
   updateMinSaleByMarkup();
   updateMarkupFromSale();
   updateSummaryMetrics();
 }
 
 function updateSaleMarkupOnly() {
+  syncMarkupSourceFields();
+  updateMinSaleByMarkup();
   updateMarkupFromSale();
   updateSummaryMetrics();
 }
@@ -1611,7 +1815,7 @@ function updateSummaryMetrics() {
   if (summaryBruttoPrice) summaryBruttoPrice.textContent = Number.isFinite(brutto) ? `${brutto.toFixed(2)} PLN` : '—';
   if (summaryNettoPrice) summaryNettoPrice.textContent = Number.isFinite(netto) ? `Netto ${netto.toFixed(2)} PLN` : 'Netto —';
   if (summaryMinSale) summaryMinSale.textContent = minSaleEbayText && minSaleEbayText !== '—' ? minSaleEbayText : '—';
-  if (summaryMarkup) summaryMarkup.textContent = markupText && markupText !== '—' ? `Narzut ${markupText}` : 'Narzut —';
+  if (summaryMarkup) summaryMarkup.textContent = markupText && markupText !== '—' ? `Narzut eBay ${markupText}` : 'Narzut eBay —';
 }
 
 function openSearch(urlBase, query) {
@@ -1850,6 +2054,8 @@ function renderHistory() {
 defaultLayoutOrder = getCurrentLayoutOrder();
 defaultLayoutVisibility = getCurrentLayoutVisibility();
 defaultLayoutColors = getCurrentLayoutColors();
+defaultLayoutSpans = normalizeLayoutSpans(DEFAULT_LAYOUT_SPANS);
+applyLayoutSpans(defaultLayoutSpans);
 defaultLayoutColumnWidth = applyLayoutColumnWidth(DEFAULT_LAYOUT_COLUMN_PROFILE);
 bindColumnResizer();
 const savedLocalLayout = loadSavedLayoutFromLocal();
@@ -1857,6 +2063,7 @@ if (savedLocalLayout) {
   applyLayoutOrder(savedLocalLayout.order);
   applyLayoutVisibility(savedLocalLayout.visibility);
   applyLayoutColors(savedLocalLayout.colors);
+  applyLayoutSpans(savedLocalLayout.spans);
   applyLayoutColumnWidth(savedLocalLayout.columnWidth);
 }
 loadGlobalLayoutPresets()
@@ -1867,7 +2074,7 @@ loadGlobalLayoutPresets()
     if (activeGlobalId) {
       const applied = applyGlobalPresetById(activeGlobalId);
       if (applied) {
-        saveLayoutToLocal(getCurrentLayoutOrder(), getCurrentLayoutVisibility(), getCurrentLayoutColors(), getCurrentLayoutColumnWidth());
+        saveLayoutToLocal(getCurrentLayoutOrder(), getCurrentLayoutVisibility(), getCurrentLayoutColors(), getCurrentLayoutColumnWidth(), getCurrentLayoutSpans());
       }
     }
     applyPresetSelectionVisual();
@@ -1891,6 +2098,9 @@ if (layoutCustomizeBtn) {
       }
       if (preEditLayoutColors) {
         applyLayoutColors(preEditLayoutColors);
+      }
+      if (preEditLayoutSpans) {
+        applyLayoutSpans(preEditLayoutSpans);
       }
       if (preEditLayoutColumnWidth !== null) {
         applyLayoutColumnWidth(preEditLayoutColumnWidth);
@@ -1930,13 +2140,15 @@ if (layoutSaveBtn) {
     event.stopPropagation();
     const beforeOrder = preEditLayoutOrder || getCurrentLayoutOrder();
     const beforeVisibility = preEditLayoutVisibility || getCurrentLayoutVisibility();
+    const beforeSpans = preEditLayoutSpans || getCurrentLayoutSpans();
     const beforeColumnWidth = preEditLayoutColumnWidth ?? getCurrentLayoutColumnWidth();
     const order = getCurrentLayoutOrder();
     const visibility = getCurrentLayoutVisibility();
     const colors = getCurrentLayoutColors();
+    const spans = getCurrentLayoutSpans();
     const columnWidth = getCurrentLayoutColumnWidth();
-    const changes = diffLayoutChanges(beforeOrder, beforeVisibility, order, visibility, beforeColumnWidth, columnWidth);
-    saveLayoutToLocal(order, visibility, colors, columnWidth);
+    const changes = diffLayoutChanges(beforeOrder, beforeVisibility, order, visibility, beforeColumnWidth, columnWidth, beforeSpans, spans);
+    saveLayoutToLocal(order, visibility, colors, columnWidth, spans);
     if (!selectedLayoutPresetKey) {
       selectedLayoutPresetKey = 'custom';
     }
@@ -1944,13 +2156,14 @@ if (layoutSaveBtn) {
     logActivity('layout-edit', {
       action: 'save',
       preset: selectedLayoutPresetKey || 'custom',
-      before: { order: beforeOrder, visibility: beforeVisibility, columnWidth: beforeColumnWidth },
-      after: { order, visibility, columnWidth },
+      before: { order: beforeOrder, visibility: beforeVisibility, spans: beforeSpans, columnWidth: beforeColumnWidth },
+      after: { order, visibility, spans, columnWidth },
       changes
     });
     preEditLayoutOrder = order;
     preEditLayoutVisibility = visibility;
     preEditLayoutColors = colors;
+    preEditLayoutSpans = spans;
     preEditLayoutColumnWidth = columnWidth;
     setLayoutEditMode(false);
     showMainToast('Układ zapisany lokalnie dla tego użytkownika.', 'ok');
@@ -1967,6 +2180,7 @@ if (layoutResetBtn) {
     applyLayoutOrder(defaultLayoutOrder);
     applyLayoutVisibility(defaultLayoutVisibility || {});
     applyLayoutColors(defaultLayoutColors || {});
+    applyLayoutSpans(defaultLayoutSpans || {});
     applyLayoutColumnWidth(defaultLayoutColumnWidth);
     clearSavedLayoutLocal();
     selectedLayoutPresetKey = 'custom';
@@ -1974,6 +2188,7 @@ if (layoutResetBtn) {
     preEditLayoutOrder = getCurrentLayoutOrder();
     preEditLayoutVisibility = getCurrentLayoutVisibility();
     preEditLayoutColors = getCurrentLayoutColors();
+    preEditLayoutSpans = getCurrentLayoutSpans();
     preEditLayoutColumnWidth = getCurrentLayoutColumnWidth();
     setLayoutEditMode(false);
     showMainToast('Przywrócono domyślny układ.', 'ok');
@@ -2043,6 +2258,9 @@ if (layoutExitBtn) {
     if (preEditLayoutColors) {
       applyLayoutColors(preEditLayoutColors);
     }
+    if (preEditLayoutSpans) {
+      applyLayoutSpans(preEditLayoutSpans);
+    }
     if (preEditLayoutColumnWidth !== null) {
       applyLayoutColumnWidth(preEditLayoutColumnWidth);
     }
@@ -2093,15 +2311,12 @@ function addHistoryEntry(source) {
     ? (purchaseAmountMode === 'netto' ? purchaseAmount * vatMultiplier : purchaseAmount)
     : NaN;
   const minMarkupPercent = parseNumber(document.getElementById('minMarkup')?.value);
-  const markupPurchaseAmount = parseNumber(document.getElementById('markupPurchaseAmount')?.value);
   const targetSaleAmount = parseNumber(document.getElementById('targetSaleAmount')?.value);
   const targetSaleEbayAmount = parseNumber(document.getElementById('ebayPrice')?.value);
   const markupPurchaseMode = getMarkupPurchaseMode();
   const markupSaleMode = getMarkupSaleMode();
   const markupAmountMode = `zakup: ${markupPurchaseMode}, sprzedaż: ${markupSaleMode}`;
-  const markupPurchaseBrutto = Number.isFinite(markupPurchaseAmount)
-    ? (markupPurchaseMode === 'netto' ? markupPurchaseAmount * vatMultiplier : markupPurchaseAmount)
-    : NaN;
+  const markupPurchaseBrutto = purchaseAmountBrutto;
   const markupSaleBrutto = Number.isFinite(targetSaleAmount)
     ? (markupSaleMode === 'netto' ? targetSaleAmount * vatMultiplier : targetSaleAmount)
     : NaN;
@@ -2116,12 +2331,11 @@ function addHistoryEntry(source) {
     currency: 'Waluta',
     exchangeRate: 'Kurs',
     commission: 'Prowizja',
-    purchaseAmount: 'Koszt zakupu (min cena)',
+    purchaseAmount: 'Kwota zakupu',
     currentBaseMultiplier: 'Mnożnik Base → Prowizja',
-    purchaseAmountMode: 'Tryb zakupu (min cena)',
-    minMarkup: 'Minimalny narzut',
-    markupPurchaseAmount: 'Koszt zakupu (narzut)',
-    targetSaleAmount: 'Cena sprzedaży (narzut)',
+    purchaseAmountMode: 'Tryb zakupu',
+    minMarkup: 'Narzut',
+    targetSaleAmount: 'Cena sprzedaży',
     ebayPrice: 'eBay',
     markupAmountMode: 'Tryb narzutu',
     preset: 'Preset'
@@ -2144,7 +2358,7 @@ function addHistoryEntry(source) {
 
   const isMinMarkupSource = source === 'purchaseAmount' || source === 'minMarkup' || source === 'purchaseAmountMode';
   const isBaseCommissionSource = source === 'currentBaseMultiplier';
-  const isSaleMarkupSource = source === 'markupPurchaseAmount' || source === 'targetSaleAmount' || source === 'ebayPrice' || source === 'markupAmountMode';
+  const isSaleMarkupSource = source === 'targetSaleAmount' || source === 'ebayPrice' || source === 'markupAmountMode';
   if (isSaleMarkupSource) {
     sourceLabel = `${sourceLabel} (tryb: ${markupAmountMode})`;
   }
@@ -2155,24 +2369,24 @@ function addHistoryEntry(source) {
     details = [
       `Zakup (tryb: ${purchaseAmountMode}) <span class="history-value">${formatCurrency(purchaseAmount)}</span> PLN`,
       `Baza brutto <span class="history-value">${formatCurrency(purchaseAmountBrutto)}</span> PLN`,
-      `Min. narzut <span class="history-value">${Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : '-'}</span>%`,
-      `Min. sprzedaż <span class="history-value">${minSalePlnText}</span>`
+      `Narzut <span class="history-value">${Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : '-'}</span>%`,
+      `Sprzedaż <span class="history-value">${minSalePlnText}</span>`
     ].join(' <span class="history-dot">•</span> ');
-    meta = `Min. eBay ${minSaleEbayText} <span class="history-dot">•</span> Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}% <span class="history-dot">•</span> Tryb netto → brutto liczony wg VAT klienta`;
+    meta = `eBay ${minSaleEbayText} <span class="history-dot">•</span> Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}% <span class="history-dot">•</span> Tryb netto → brutto liczony wg VAT klienta`;
   } else if (isSaleMarkupSource) {
     const calculatedMarkupText = document.getElementById('calculatedMarkup')?.textContent?.trim() || '—';
     const calculatedNetProfitText = document.getElementById('calculatedNetProfit')?.textContent?.trim() || '—';
     const calculatedMarkupFromEbayText = document.getElementById('calculatedMarkupFromEbay')?.textContent?.trim() || '—';
     const calculatedNetProfitFromEbayText = document.getElementById('calculatedNetProfitFromEbay')?.textContent?.trim() || '—';
     details = [
-      `Zakup (tryb: ${markupPurchaseMode}) <span class="history-value">${formatCurrency(markupPurchaseAmount)}</span> PLN`,
+      `Zakup (tryb: ${markupPurchaseMode}) <span class="history-value">${formatCurrency(purchaseAmount)}</span> PLN`,
       `Sprzedaż (tryb: ${markupSaleMode}) <span class="history-value">${formatCurrency(targetSaleAmount)}</span> PLN`,
       `Sprzedaż eBay <span class="history-value">${formatCurrency(targetSaleEbayAmount)}</span> ${currency}`,
       `Baza brutto <span class="history-value">${formatCurrency(markupPurchaseBrutto)}</span> / <span class="history-value">${formatCurrency(markupSaleBrutto)}</span> PLN`,
       `Narzut <span class="history-value">${calculatedMarkupText}</span>`,
-      `Zysk netto <span class="history-value">${calculatedNetProfitText}</span>`,
+      `Zysk <span class="history-value">${calculatedNetProfitText}</span>`,
       `Narzut z eBay <span class="history-value">${calculatedMarkupFromEbayText}</span>`,
-      `Zysk netto z eBay <span class="history-value">${calculatedNetProfitFromEbayText}</span>`
+      `Różnica z eBay <span class="history-value">${calculatedNetProfitFromEbayText}</span>`
     ].join(' <span class="history-dot">•</span> ');
     meta = `Wzór: (sprzedaż - zakup) / zakup × 100% <span class="history-dot">•</span> Konwersja netto/brutto wg VAT klienta`;
   } else if (isBaseCommissionSource) {
@@ -2185,7 +2399,7 @@ function addHistoryEntry(source) {
 
   const hasMainValues = Number.isFinite(netto) || Number.isFinite(brutto) || Number.isFinite(ebayPrice);
   const hasMinMarkupValues = Number.isFinite(purchaseAmount) || Number.isFinite(minMarkupPercent);
-  const hasSaleMarkupValues = Number.isFinite(markupPurchaseAmount) || Number.isFinite(targetSaleAmount) || Number.isFinite(targetSaleEbayAmount);
+  const hasSaleMarkupValues = Number.isFinite(targetSaleAmount) || Number.isFinite(targetSaleEbayAmount);
   const hasBaseCommissionValues = Number.isFinite(currentBaseMultiplier);
   if (!hasMainValues && !hasMinMarkupValues && !hasSaleMarkupValues && !hasBaseCommissionValues) {
     return;
@@ -2226,7 +2440,6 @@ function addHistoryEntry(source) {
     purchaseAmountMode,
     purchaseAmountBrutto: Number.isFinite(purchaseAmountBrutto) ? purchaseAmountBrutto.toFixed(2) : null,
     minMarkup: Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : null,
-    markupPurchaseAmount: Number.isFinite(markupPurchaseAmount) ? markupPurchaseAmount.toFixed(2) : null,
     targetSaleAmount: Number.isFinite(targetSaleAmount) ? targetSaleAmount.toFixed(2) : null,
     targetSaleEbayAmount: Number.isFinite(targetSaleEbayAmount) ? targetSaleEbayAmount.toFixed(2) : null,
     markupAmountMode,
@@ -2337,21 +2550,15 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   }
   updatePurchaseAmountModeUI();
   document.getElementById('minMarkup').value = '';
-  updateMinSaleByMarkup();
-  document.getElementById('markupPurchaseAmount').value = '';
   document.getElementById('targetSaleAmount').value = '';
-  autoLinkedFieldValues.markupPurchaseAmount = '';
   autoLinkedFieldValues.targetSaleAmount = '';
-  const markupPurchaseNetToggle = document.getElementById('markupPurchaseNetToggle');
-  if (markupPurchaseNetToggle) {
-    markupPurchaseNetToggle.checked = false;
-  }
   const markupSaleNetToggle = document.getElementById('markupSaleNetToggle');
   if (markupSaleNetToggle) {
     markupSaleNetToggle.checked = false;
   }
   updateMarkupAmountModeUI();
-  updateMarkupFromSale();
+  saleCalcSource = 'minMarkup';
+  updateMarkupCalculations();
   document.getElementById('productId').value = '';
   document.getElementById('currency').value = 'EUR';
   document.getElementById('currencyLabel').innerText = 'EUR';
@@ -2361,6 +2568,7 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   advancedOptions.style.display = 'none';
   exchangeRateInput.disabled = true;
   lastChanged = null;
+  markupPriceSource = null;
   originalEbayPrice = null;
   originalCurrency = 'EUR';
   lastCurrency = 'EUR';
@@ -2632,8 +2840,7 @@ function fetchExchangeRate(currency, options = {}) {
       rateSourceSelect.value = providerKeyUsed;
     }
     updateBaseMultiplier();
-    updateMinSaleByMarkup();
-    updateMarkupFromSale();
+    updateMarkupCalculations();
 
     if (convertEbayPriceNeeded) {
       const newEbayPrice = convertEbayPrice(rate);
@@ -2702,8 +2909,7 @@ function fetchExchangeRate(currency, options = {}) {
               showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
             }
             updateBaseMultiplier();
-            updateMinSaleByMarkup();
-            updateMarkupFromSale();
+            updateMarkupCalculations();
             calculatePrice();
             isPresetApplied = false;
           });
@@ -2722,8 +2928,7 @@ function fetchExchangeRate(currency, options = {}) {
         showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
       }
       updateBaseMultiplier();
-      updateMinSaleByMarkup();
-      updateMarkupFromSale();
+      updateMarkupCalculations();
       calculatePrice();
       isPresetApplied = false;
     });
@@ -2779,8 +2984,7 @@ async function loadDefaultCommissionRate() {
       setFieldBaseline('commission');
     }
     updateBaseMultiplier();
-    updateMinSaleByMarkup();
-    updateMarkupFromSale();
+    updateMarkupCalculations();
     calculatePrice();
   } catch (_error) {
     // fallback to default 15%
@@ -2865,6 +3069,7 @@ const vatRateInputEl = document.getElementById('vatRate');
 const currencySelectEl = document.getElementById('currency');
 plnNettoInput.addEventListener('input', () => {
   lastChanged = 'netto';
+  markupPriceSource = null;
   hideSelfTestDetails();
   enforceTwoDecimals(plnNettoInput);
   syncFields('netto');
@@ -2879,6 +3084,7 @@ plnNettoInput.addEventListener('blur', () => {
 
 plnBruttoInput.addEventListener('input', () => {
   lastChanged = 'brutto';
+  markupPriceSource = null;
   hideSelfTestDetails();
   enforceTwoDecimals(plnBruttoInput);
   syncFields('brutto');
@@ -2893,10 +3099,12 @@ plnBruttoInput.addEventListener('blur', () => {
 
 ebayPriceInputEl.addEventListener('input', () => {
   lastChanged = 'ebayPrice';
+  markupPriceSource = 'ebayPrice';
+  saleCalcSource = 'ebayPrice';
   hideSelfTestDetails();
   enforceTwoDecimals(ebayPriceInputEl);
   syncFields('ebayPrice');
-  updateMarkupFromSale();
+  updateMarkupCalculations();
   scheduleHistoryLog('ebayPrice');
 });
 ebayPriceInputEl.addEventListener('focus', () => {
@@ -2911,8 +3119,7 @@ vatRateInputEl.addEventListener('input', () => {
   hideSelfTestDetails();
   syncFields('vatRate');
   updateBaseMultiplier();
-  updateMinSaleByMarkup();
-  updateMarkupFromSale();
+  updateMarkupCalculations();
   scheduleHistoryLog('vatRate');
 });
 vatRateInputEl.addEventListener('focus', () => {
@@ -2969,8 +3176,7 @@ function resyncPricingFromCurrentSource(preferredSource = null) {
     calculatePrice();
   }
   updateBaseMultiplier();
-  updateMinSaleByMarkup();
-  updateMarkupFromSale();
+  updateMarkupCalculations();
   updateCommissionFromBaseMultiplier();
 }
 
@@ -2995,8 +3201,7 @@ currencySelectEl.addEventListener('change', () => {
   hideSelfTestDetails();
   fetchExchangeRate(selectedCurrency, { notify: false });
   checkRateProvidersStatus(selectedCurrency);
-  updateMinSaleByMarkup();
-  updateMarkupFromSale();
+  updateMarkupCalculations();
   addHistoryEntry('currency');
 });
 
@@ -3006,24 +3211,24 @@ currencySelectEl.addEventListener('change', () => {
   el.addEventListener('input', () => {
     enforceTwoDecimals(el);
     enforceFieldMax(el);
-    if (id === 'purchaseAmount') {
-      syncLinkedPurchaseAmount('purchaseAmount');
+    if (id === 'minMarkup') {
+      saleCalcSource = 'minMarkup';
     }
     updateMarkupCalculations();
     scheduleHistoryLog(id, { force: true });
   });
   el.addEventListener('change', () => {
     enforceFieldMax(el);
-    if (id === 'purchaseAmount') {
-      syncLinkedPurchaseAmount('purchaseAmount');
+    if (id === 'minMarkup') {
+      saleCalcSource = 'minMarkup';
     }
     updateMarkupCalculations();
     flushHistoryLog(id, { force: true });
   });
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
-    if (id === 'purchaseAmount') {
-      syncLinkedPurchaseAmount('purchaseAmount');
+    if (id === 'minMarkup') {
+      saleCalcSource = 'minMarkup';
     }
     updateMarkupCalculations();
     flushHistoryLog(id, { force: true });
@@ -3066,13 +3271,6 @@ if (purchaseAmountNetToggle) {
   });
 }
 
-const markupPurchaseNetToggle = document.getElementById('markupPurchaseNetToggle');
-if (markupPurchaseNetToggle) {
-  markupPurchaseNetToggle.addEventListener('change', () => {
-    applyAmountModeChange('markupPurchaseNetToggle', markupPurchaseNetToggle.checked);
-  });
-}
-
 const markupSaleNetToggle = document.getElementById('markupSaleNetToggle');
 if (markupSaleNetToggle) {
   markupSaleNetToggle.addEventListener('change', () => {
@@ -3088,7 +3286,6 @@ document.addEventListener('click', (event) => {
   const toggleId = btn.getAttribute('data-toggle');
   if (
     toggleId !== 'purchaseAmountNetToggle' &&
-    toggleId !== 'markupPurchaseNetToggle' &&
     toggleId !== 'markupSaleNetToggle'
   ) return;
   const toggleEl = document.getElementById(toggleId);
@@ -3096,44 +3293,32 @@ document.addEventListener('click', (event) => {
   applyAmountModeChange(toggleId, !toggleEl.checked);
 });
 
-['markupPurchaseAmount', 'targetSaleAmount'].forEach((id) => {
+['targetSaleAmount'].forEach((id) => {
   const el = document.getElementById(id);
   if (!el) return;
   el.addEventListener('input', () => {
     enforceTwoDecimals(el);
     enforceFieldMax(el);
-    if (id === 'markupPurchaseAmount') {
-      syncLinkedPurchaseAmount('markupPurchaseAmount');
-      updateMarkupCalculations();
-    } else {
-      autoLinkedFieldValues.targetSaleAmount = '';
-      updateMarkupFromSale();
-      updateSummaryMetrics();
-    }
+    saleCalcSource = 'targetSaleAmount';
+    autoLinkedFieldValues.targetSaleAmount = '';
+    markupPriceSource = 'targetSaleAmount';
+    updateMarkupCalculations();
     scheduleHistoryLog(id, { force: true });
   });
   el.addEventListener('change', () => {
     enforceFieldMax(el);
-    if (id === 'markupPurchaseAmount') {
-      syncLinkedPurchaseAmount('markupPurchaseAmount');
-      updateMarkupCalculations();
-    } else {
-      autoLinkedFieldValues.targetSaleAmount = '';
-      updateMarkupFromSale();
-      updateSummaryMetrics();
-    }
+    saleCalcSource = 'targetSaleAmount';
+    autoLinkedFieldValues.targetSaleAmount = '';
+    markupPriceSource = 'targetSaleAmount';
+    updateMarkupCalculations();
     flushHistoryLog(id, { force: true });
   });
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
-    if (id === 'markupPurchaseAmount') {
-      syncLinkedPurchaseAmount('markupPurchaseAmount');
-      updateMarkupCalculations();
-    } else {
-      autoLinkedFieldValues.targetSaleAmount = '';
-      updateMarkupFromSale();
-      updateSummaryMetrics();
-    }
+    saleCalcSource = 'targetSaleAmount';
+    autoLinkedFieldValues.targetSaleAmount = '';
+    markupPriceSource = 'targetSaleAmount';
+    updateMarkupCalculations();
     flushHistoryLog(id, { force: true });
   });
   el.addEventListener('focus', () => {
@@ -3144,7 +3329,7 @@ document.addEventListener('click', (event) => {
   });
 });
 
-['purchaseAmount', 'minMarkup', 'currentBaseMultiplier', 'markupPurchaseAmount', 'targetSaleAmount'].forEach(setupAutoReplaceInput);
+['purchaseAmount', 'minMarkup', 'currentBaseMultiplier', 'targetSaleAmount'].forEach(setupAutoReplaceInput);
 
 const refreshRateBtn = document.getElementById('refreshRateBtn');
 if (refreshRateBtn) {
@@ -3167,8 +3352,7 @@ updateEbayCurrencyLabel();
 updatePurchaseAmountModeUI();
 updateMarkupAmountModeUI();
 renderHistory();
-updateMinSaleByMarkup();
-updateMarkupFromSale();
+updateMarkupCalculations();
 updateCommissionFromBaseMultiplier();
 updateSummaryMetrics();
 

@@ -13,18 +13,13 @@
       <div class="top-actions">
         <nav class="top-menu" aria-label="Główne menu">
           <span class="top-menu-app">
-            <a class="top-menu-link is-active" href="index.html" aria-current="page" aria-describedby="appInfoTooltip" aria-label="Kalkulator. Wersja 1.97.0. Projekt: @bartryc. Wykonanie: Codex 5.5.">
+            <a class="top-menu-link is-active" href="index.html" aria-current="page" aria-describedby="appInfoTooltip" aria-label="Kalkulator">
               <span class="top-menu-icon" aria-hidden="true">
                 <img src="resources/icon-calc.svg" alt="">
               </span>
               <span>Kalkulator</span>
-              <span id="appVersion" class="sr-only">1.97.0</span>
             </a>
-            <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip">
-              <span>Wersja 1.97.0</span>
-              <span>Projekt: <a href="https://github.com/bartryc" target="_blank" rel="noopener noreferrer">@bartryc</a></span>
-              <span>Wykonanie: Codex 5.5</span>
-            </span>
+            <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip"></span>
           </span>
           <button type="button" id="layoutCustomizeBtn" class="top-menu-toggle">Układ</button>
           <a class="top-menu-link" href="pn-mappings.html">
@@ -65,9 +60,9 @@
         <small id="summaryNettoPrice">Netto —</small>
       </article>
       <article class="result-metric result-metric-ok">
-        <span>Minimalna cena</span>
+        <span>Cena eBay z narzutu</span>
         <strong id="summaryMinSale">—</strong>
-        <small id="summaryMarkup">Narzut —</small>
+        <small id="summaryMarkup">Narzut eBay —</small>
       </article>
     </section>
     <div id="result" class="alert-banner info-alert" aria-live="polite"></div>
@@ -99,7 +94,7 @@
 
             <div class="layout-item" data-layout-item="calc-ebay">
               <label for="ebayPrice" class="field-label"><span class="field-label-main">Docelowa cena na eBay w <span id="ebayCurrencyLabel">EUR (z VAT 23%)</span></span>
-                <span class="field-help" data-tooltip="Cena końcowa dla klienta w wybranej walucie. Gdy wpiszesz tę wartość ręcznie, kalkulator liczy wstecz ERP brutto/netto." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Cena końcowa eBay w wybranej walucie, z doliczoną prowizją. Gdy wpiszesz ją ręcznie, kalkulator liczy wstecz ERP brutto/netto oraz narzut." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="ebayPrice" step="0.01" min="0" placeholder="Wprowadź docelową cenę na eBay">
             </div>
@@ -129,7 +124,7 @@
 
             <div class="layout-item" data-layout-item="calc-vat">
               <label for="vatRate" class="field-label">Stawka VAT dla klienta (%)
-                <span class="field-help" data-tooltip="VAT klienta jest używany w konwersji netto↔brutto (np. w sekcji narzutu i min. ceny). Wzór: brutto = netto × (1 + VAT/100)." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="VAT klienta jest używany przy wycenie eBay oraz w sekcji narzutu. Wzór konwersji: brutto = netto × (1 + VAT/100)." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="vatRate" value="23" min="0" max="100" required>
             </div>
@@ -139,7 +134,7 @@
                 <div class="field-label-row">
                   <label for="purchaseAmount" class="field-label">Kwota zakupu (PLN)</label>
                   <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="purchaseAmountNetToggle" aria-pressed="false" title="Przełącz tryb kwoty zakupu"><span data-mode-label="purchaseAmountNetToggle">brutto</span></button></span>
-                  <span class="field-help" data-tooltip="Koszt zakupu używany do wyliczenia minimalnej sprzedaży. Gdy tryb = netto, kalkulator najpierw liczy brutto wg VAT klienta, potem narzut." aria-label="Pomoc">?</span>
+                  <span class="field-help" data-tooltip="Jedna wspólna kwota zakupu dla narzutu, ceny sprzedaży i ceny eBay. Gdy tryb = netto, zakup jest przeliczany do brutto wg VAT klienta." aria-label="Pomoc">?</span>
                 </div>
                 <input type="number" id="purchaseAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1200.00">
                 <input type="checkbox" id="purchaseAmountNetToggle" class="sr-only" aria-hidden="true">
@@ -147,56 +142,41 @@
 
               <div class="calc-field-pair">
                 <div class="field-label-row">
-                  <label for="minMarkup" class="field-label">Minimalny narzut (%)</label>
+                  <label for="minMarkup" class="field-label">Narzut (%)</label>
                   <span class="field-mode field-mode-placeholder" aria-hidden="true"></span>
-                  <span class="field-help" data-tooltip="Wzór narzutu: (sprzedaż - zakup) / zakup × 100%. Wzór minimalnej sprzedaży: zakup × (1 + narzut/100)." aria-label="Pomoc">?</span>
+                  <span class="field-help" data-tooltip="Narzut liczony od zakupu brutto do ceny sprzedaży brutto: (sprzedaż - zakup) / zakup × 100%. Edycja narzutu przelicza sprzedaż PLN i eBay." aria-label="Pomoc">?</span>
                 </div>
-                <input type="number" id="minMarkup" step="0.1" min="0" value="30" placeholder="Np. 18">
-              </div>
-
-              <div class="min-price-box" id="minPriceBox">
-                <div><strong>Minimalna cena sprzedaży (PLN brutto):</strong> <span id="minSalePln">—</span>
-                  <span class="field-help inline-help" data-tooltip="Najniższa cena sprzedaży w PLN brutto zgodna z zadanym narzutem." aria-label="Pomoc">?</span>
-                </div>
-                <div><strong>Minimalna cena na eBay (<span id="minSaleCurrencyLabel">EUR</span>):</strong> <span id="minSaleEbay">—</span>
-                  <span class="field-help inline-help" data-tooltip="Wzór: min_eBay = min_PLN_brutto × kurs × (1 + prowizja)." aria-label="Pomoc">?</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="layout-item" data-layout-item="calc-markup-from-sale">
-              <div class="calc-field-pair">
-                <div class="field-label-row">
-                  <label for="markupPurchaseAmount" class="field-label">Kwota zakupu do narzutu (PLN)</label>
-                  <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupPurchaseNetToggle" aria-pressed="false" title="Przełącz tryb kwoty zakupu"><span data-mode-label="markupPurchaseNetToggle">brutto</span></button></span>
-                  <span class="field-help" data-tooltip="Kwota zakupu do porównania. Gdy tryb = netto, kalkulator przelicza na brutto wg VAT klienta." aria-label="Pomoc">?</span>
-                </div>
-                <input type="number" id="markupPurchaseAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1200.00">
-                <input type="checkbox" id="markupPurchaseNetToggle" class="sr-only" aria-hidden="true">
+                <input type="number" id="minMarkup" step="0.1" min="-100" value="30" placeholder="Np. 18">
               </div>
 
               <div class="calc-field-pair">
                 <div class="field-label-row">
-                  <label for="targetSaleAmount" class="field-label">Docelowa cena sprzedaży (PLN)</label>
+                  <label for="targetSaleAmount" class="field-label">Cena sprzedaży PLN</label>
                   <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupSaleNetToggle" aria-pressed="false" title="Przełącz tryb ceny sprzedaży"><span data-mode-label="markupSaleNetToggle">brutto</span></button></span>
-                  <span class="field-help" data-tooltip="Kwota sprzedaży do porównania. Gdy tryb = netto, kalkulator przelicza na brutto wg VAT klienta." aria-label="Pomoc">?</span>
+                  <span class="field-help" data-tooltip="Cena sprzedaży w PLN przed doliczeniem prowizji eBay. Edycja tego pola przelicza narzut, zysk i docelową cenę eBay." aria-label="Pomoc">?</span>
                 </div>
                 <input type="number" id="targetSaleAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1590.00">
                 <input type="checkbox" id="markupSaleNetToggle" class="sr-only" aria-hidden="true">
               </div>
 
               <div class="min-price-box" id="markupFromSaleBox">
-                <div><strong>Wyliczony narzut:</strong> <span id="calculatedMarkup">—</span>
-                  <span class="field-help inline-help" data-tooltip="Wzór: (sprzedaż_brutto - zakup_brutto) / zakup_brutto × 100%. Dodatni wynik = zysk, ujemny = strata." aria-label="Pomoc">?</span>
+                <div><strong>Cena sprzedaży brutto:</strong> <span id="minSalePln">—</span>
+                  <span class="field-help inline-help" data-tooltip="Sprzedaż w PLN brutto przed prowizją eBay. To ta kwota jest porównywana z zakupem w zwykłym narzucie i zysku." aria-label="Pomoc">?</span>
                 </div>
-                <div><strong>Zysk netto:</strong> <span id="calculatedNetProfit">—</span>
-                  <span class="field-help inline-help" data-tooltip="Realny zysk netto w PLN: sprzedaż netto - zakup netto. Wpisy brutto są najpierw dzielone przez VAT klienta." aria-label="Pomoc">?</span>
+                <div><strong>Cena eBay (<span id="minSaleCurrencyLabel">EUR</span>):</strong> <span id="minSaleEbay">—</span>
+                  <span class="field-help inline-help" data-tooltip="Docelowa cena eBay z prowizją: sprzedaż_PLN_brutto × kurs × (1 + prowizja/100)." aria-label="Pomoc">?</span>
                 </div>
-                <div><strong>Wyliczony narzut (z eBay):</strong> <span id="calculatedMarkupFromEbay">—</span>
-                  <span class="field-help inline-help" data-tooltip="Wzór: ((eBay / (kurs × (1+prowizja))) - zakup_brutto) / zakup_brutto × 100%." aria-label="Pomoc">?</span>
+                <div><strong>Narzut:</strong> <span id="calculatedMarkup">—</span>
+                  <span class="field-help inline-help" data-tooltip="Wzór: (sprzedaż_brutto - zakup_brutto) / zakup_brutto × 100%." aria-label="Pomoc">?</span>
                 </div>
-                <div><strong>Zysk netto (z eBay):</strong> <span id="calculatedNetProfitFromEbay">—</span>
-                  <span class="field-help inline-help" data-tooltip="Realny zysk netto z ceny eBay: po odjęciu prowizji i przewalutowaniu sprzedaż jest sprowadzana do PLN netto, a potem odejmowany jest zakup netto." aria-label="Pomoc">?</span>
+                <div><strong>Zysk:</strong> <span id="calculatedNetProfit">—</span>
+                  <span class="field-help inline-help" data-tooltip="Zysk w PLN: cena sprzedaży brutto - kwota zakupu brutto. Wpisy netto są najpierw przeliczane do brutto wg VAT klienta." aria-label="Pomoc">?</span>
+                </div>
+                <div><strong>Narzut z eBay (z prowizją):</strong> <span id="calculatedMarkupFromEbay">—</span>
+                  <span class="field-help inline-help" data-tooltip="Wzór: ((eBay / kurs) - zakup_brutto) / zakup_brutto × 100%. Cena eBay zawiera prowizję z opcji zaawansowanych." aria-label="Pomoc">?</span>
+                </div>
+                <div><strong>Różnica z eBay (z prowizją):</strong> <span id="calculatedNetProfitFromEbay">—</span>
+                  <span class="field-help inline-help" data-tooltip="Kwotowa różnica poziomu ceny eBay: (eBay / kurs) - zakup_brutto. To nie jest zysk po odjęciu prowizji." aria-label="Pomoc">?</span>
                 </div>
               </div>
             </div>
@@ -212,7 +192,7 @@
 
               <div id="advancedOptions" class="advanced-options" style="display: none;">
                 <label for="commission" class="field-label">Prowizja (%)
-                  <span class="field-help" data-tooltip="Marża platformy doliczana do ceny eBay. eBay = ERP_brutto × kurs × (1 + prowizja/100). Gdy opcje zaawansowane są wyłączone, używane jest domyślne 15%." aria-label="Pomoc">?</span>
+                  <span class="field-help" data-tooltip="Prowizja eBay doliczana do ceny końcowej. Dla wyceny ERP: eBay = ERP_netto × (1 + VAT klienta) × kurs × (1 + prowizja/100). Dla narzutu: eBay = sprzedaż_PLN_brutto × kurs × (1 + prowizja/100)." aria-label="Pomoc">?</span>
                 </label>
                 <input type="number" id="commission" value="15" step="0.1" min="0" max="100" required>
 
@@ -419,6 +399,7 @@
     </div>
   </div>
 
+  <script src="version.js"></script>
   <script src="ui-theme.js"></script>
   <script src="pn-mappings.js"></script>
   <script src="script.js"></script>

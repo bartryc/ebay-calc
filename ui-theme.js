@@ -27,6 +27,67 @@
     document.title = `${pageTitle}${TITLE_SUFFIX}`;
   }
 
+  function initAppInfoTooltip() {
+    const info = window.AppVersionInfo || {};
+    const version = String(info.version || '').trim();
+    const projectLabel = String(info.projectLabel || '').trim();
+    const projectUrl = String(info.projectUrl || '').trim();
+    const author = String(info.author || '').trim();
+    const appLink = document.querySelector('.top-menu-app .top-menu-link[href="index.html"]');
+    const tooltip = document.getElementById('appInfoTooltip');
+    if (!version && !projectLabel && !author) return;
+
+    if (appLink) {
+      const ariaParts = ['Kalkulator'];
+      if (version) ariaParts.push(`Wersja ${version}`);
+      if (projectLabel) ariaParts.push(`Projekt: ${projectLabel}`);
+      if (author) ariaParts.push(`Wykonanie: ${author}`);
+      appLink.setAttribute('aria-label', `${ariaParts.join('. ')}.`);
+    }
+
+    let versionEl = document.getElementById('appVersion');
+    if (!versionEl && appLink) {
+      versionEl = document.createElement('span');
+      versionEl.id = 'appVersion';
+      versionEl.className = 'sr-only';
+      appLink.appendChild(versionEl);
+    }
+    if (versionEl) {
+      versionEl.textContent = version;
+    }
+    if (version) {
+      localStorage.setItem('appVersion', version);
+    }
+
+    if (!tooltip) return;
+    tooltip.textContent = '';
+    if (version) {
+      const row = document.createElement('span');
+      row.textContent = `Wersja ${version}`;
+      tooltip.appendChild(row);
+    }
+    if (projectLabel) {
+      const row = document.createElement('span');
+      row.append('Projekt: ');
+      if (projectUrl) {
+        const link = document.createElement('a');
+        link.href = projectUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = projectLabel;
+        row.appendChild(link);
+      } else {
+        row.append(projectLabel);
+      }
+      tooltip.appendChild(row);
+    }
+    if (author) {
+      const row = document.createElement('span');
+      row.textContent = `Wykonanie: ${author}`;
+      tooltip.appendChild(row);
+    }
+  }
+
   function clampFontScale(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return 1;
@@ -227,6 +288,7 @@
       adminKeys.add(event.key.toLowerCase());
       if (adminKeys.has('a') && adminKeys.has('d') && adminKeys.has('m')) {
         adminKeys.clear();
+        sessionStorage.setItem('adminSessionUnlockedV1', '1');
         window.location.href = `admin.html?v=${Date.now()}`;
       }
     });
@@ -240,6 +302,7 @@
     const body = document.body;
     if (!body) return;
     applyPageTitle();
+    initAppInfoTooltip();
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const storedTheme = localStorage.getItem('theme') || getCookieValue(THEME_COOKIE_KEY);
     const isDark = storedTheme === 'dark';

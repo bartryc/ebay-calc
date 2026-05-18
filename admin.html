@@ -13,17 +13,13 @@
       <div class="top-actions">
         <nav class="top-menu" aria-label="Główne menu">
           <span class="top-menu-app">
-            <a class="top-menu-link" href="index.html" aria-describedby="appInfoTooltip" aria-label="Kalkulator. Wersja 1.96.2. Projekt: @bartryc. Wykonanie: Codex 5.3.">
+            <a class="top-menu-link" href="index.html" aria-describedby="appInfoTooltip" aria-label="Kalkulator">
               <span class="top-menu-icon" aria-hidden="true">
                 <img src="resources/icon-calc.svg" alt="">
               </span>
               <span>Kalkulator</span>
             </a>
-            <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip">
-              <span>Wersja 1.96.2</span>
-              <span>Projekt: <a href="https://github.com/bartryc" target="_blank" rel="noopener noreferrer">@bartryc</a></span>
-              <span>Wykonanie: Codex 5.3</span>
-            </span>
+            <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip"></span>
           </span>
           <a class="top-menu-link" href="pn-mappings.html">
             <span class="top-menu-icon" aria-hidden="true">
@@ -465,10 +461,17 @@
     </div>
   </div>
 
+  <script src="version.js"></script>
   <script src="ui-theme.js"></script>
   <script src="pn-mappings.js"></script>
   <script>
     if (window.UITheme?.init) window.UITheme.init();
+    sessionStorage.setItem('adminSessionUnlockedV1', '1');
+    document.querySelectorAll('a[href^="pn-mappings.html"]').forEach((link) => {
+      link.addEventListener('click', () => {
+        sessionStorage.setItem('adminMappingEntryV1', '1');
+      });
+    });
 
     const toastStack = document.getElementById('mappingToastStack');
     const downloadBackupBtn = document.getElementById('downloadBackupBtn');
@@ -602,8 +605,7 @@
       { id: 'calc-currency', label: 'Waluta docelowa', column: 'calc' },
       { id: 'calc-rate', label: 'Kurs waluty', column: 'calc' },
       { id: 'calc-vat', label: 'Stawka VAT', column: 'calc' },
-      { id: 'calc-min-markup', label: 'Minimalny narzut', column: 'calc' },
-      { id: 'calc-markup-from-sale', label: 'Narzut z ceny sprzedaży', column: 'calc' },
+      { id: 'calc-min-markup', label: 'Narzut i cena sprzedaży', column: 'calc' },
       { id: 'calc-advanced', label: 'Opcje zaawansowane', column: 'calc' },
       { id: 'calc-clear', label: 'Przycisk Wyczyść', column: 'calc' },
       { id: 'search-card', label: 'Wyszukiwanie ofert', column: 'info' },
@@ -611,6 +613,9 @@
       { id: 'base-card', label: 'Mnożnik dla Base', column: 'info' }
     ];
     const LAYOUT_GROUP_KEYS = ['calc', 'info', 'extra'];
+    const LAYOUT_SPAN_ITEMS = new Set(['calc-clear']);
+    const LAYOUT_SPAN_VALUES = ['1', '2'];
+    const DEFAULT_LAYOUT_SPANS = { 'calc-clear': '1' };
     const DEFAULT_LAYOUT_COLUMN_PROFILE = { count: 2, widths: { calc: 62, info: 38, extra: 0 } };
     const DEFAULT_THREE_COLUMN_PROFILE = { count: 3, widths: { calc: 46, info: 30, extra: 24 } };
     const MIN_THREE_COLUMN_WIDTH = 18;
@@ -2071,6 +2076,10 @@
           layoutPresetRows[index].column = LAYOUT_GROUP_KEYS.includes(event.target.value) ? event.target.value : 'calc';
           return;
         }
+        if (event.target.classList.contains('layout-preset-span')) {
+          layoutPresetRows[index].span = LAYOUT_SPAN_VALUES.includes(event.target.value) ? event.target.value : '1';
+          return;
+        }
         if (event.target.classList.contains('layout-preset-visible-check')) {
           layoutPresetRows[index].visible = !!event.target.checked;
         }
@@ -2170,6 +2179,16 @@
       return { count: 2, widths: { calc, info: 100 - calc, extra: 0 } };
     }
 
+    function normalizeLayoutPresetSpans(rawSpans) {
+      const spans = {};
+      LAYOUT_SECTION_SCHEMA.forEach((item) => {
+        if (!LAYOUT_SPAN_ITEMS.has(item.id)) return;
+        const rawValue = String(rawSpans?.[item.id] || DEFAULT_LAYOUT_SPANS[item.id] || '1');
+        spans[item.id] = LAYOUT_SPAN_VALUES.includes(rawValue) ? rawValue : '1';
+      });
+      return spans;
+    }
+
     function normalizeLayoutPresetEntry(entry) {
       if (!entry || typeof entry !== 'object') return null;
       const id = String(entry.id || '').trim() || `gp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -2201,6 +2220,7 @@
         name,
         order,
         visibility,
+        spans: normalizeLayoutPresetSpans(entry.spans || {}),
         columnWidth: normalizeLayoutPresetColumnProfile(entry.columnWidth)
       };
     }
@@ -2223,13 +2243,15 @@
         id: item.id,
         label: item.label,
         column: item.column,
-        visible: true
+        visible: true,
+        span: DEFAULT_LAYOUT_SPANS[item.id] || '1'
       }));
     }
 
     function rowsToLayoutPreset(rows, name, id) {
       const order = { calc: [], info: [], extra: [] };
       const visibility = {};
+      const spans = {};
       const columnCount = layoutPresetColumnMode?.value === '3' ? 3 : 2;
       rows.forEach((row) => {
         const column = columnCount === 3 && row.column === 'extra'
@@ -2239,6 +2261,9 @@
             : 'calc';
         order[column].push(row.id);
         visibility[row.id] = row.visible !== false;
+        if (LAYOUT_SPAN_ITEMS.has(row.id)) {
+          spans[row.id] = LAYOUT_SPAN_VALUES.includes(String(row.span)) ? String(row.span) : '1';
+        }
       });
       const calcWidth = normalizeLayoutPresetColumnWidth(layoutPresetColumnWidth?.value);
       const columnWidth = columnCount === 3
@@ -2256,6 +2281,7 @@
         name: String(name || '').trim(),
         order,
         visibility,
+        spans: normalizeLayoutPresetSpans(spans),
         columnWidth
       };
     }
@@ -2271,7 +2297,8 @@
             id,
             label: schema.label,
             column: group,
-            visible: preset.visibility?.[id] !== false
+            visible: preset.visibility?.[id] !== false,
+            span: normalizeLayoutPresetSpans(preset.spans || {})[id] || DEFAULT_LAYOUT_SPANS[id] || '1'
           });
         });
       });
@@ -2281,7 +2308,8 @@
           id: schema.id,
           label: schema.label,
           column: schema.column,
-          visible: preset.visibility?.[schema.id] !== false
+          visible: preset.visibility?.[schema.id] !== false,
+          span: normalizeLayoutPresetSpans(preset.spans || {})[schema.id] || DEFAULT_LAYOUT_SPANS[schema.id] || '1'
         });
       });
       return rows;
@@ -2311,6 +2339,12 @@
             <option value="info" ${row.column === 'info' ? 'selected' : ''}>Środkowa/prawa kolumna</option>
             <option value="extra" ${row.column === 'extra' ? 'selected' : ''}>Trzecia kolumna</option>
           </select>
+          ${LAYOUT_SPAN_ITEMS.has(row.id) ? `
+            <select class="layout-preset-span" aria-label="Szerokość sekcji">
+              <option value="1" ${String(row.span || '1') === '1' ? 'selected' : ''}>1 kolumna</option>
+              <option value="2" ${String(row.span || '1') === '2' ? 'selected' : ''}>2 kolumny</option>
+            </select>
+          ` : '<span class="layout-preset-span-placeholder">-</span>'}
           <label class="layout-preset-visible">
             <input type="checkbox" class="layout-preset-visible-check" ${row.visible ? 'checked' : ''}>
             <span>Widoczne</span>

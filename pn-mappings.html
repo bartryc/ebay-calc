@@ -13,17 +13,13 @@
       <div class="top-actions">
         <nav class="top-menu" aria-label="Główne menu">
           <span class="top-menu-app">
-            <a class="top-menu-link" href="index.html" aria-describedby="appInfoTooltip" aria-label="Kalkulator. Wersja 1.96.2. Projekt: @bartryc. Wykonanie: Codex 5.3.">
+            <a class="top-menu-link" href="index.html" aria-describedby="appInfoTooltip" aria-label="Kalkulator">
               <span class="top-menu-icon" aria-hidden="true">
                 <img src="resources/icon-calc.svg" alt="">
               </span>
               <span>Kalkulator</span>
             </a>
-            <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip">
-              <span>Wersja 1.96.2</span>
-              <span>Projekt: <a href="https://github.com/bartryc" target="_blank" rel="noopener noreferrer">@bartryc</a></span>
-              <span>Wykonanie: Codex 5.3</span>
-            </span>
+            <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip"></span>
           </span>
           <a class="top-menu-link is-active" href="pn-mappings.html" aria-current="page">
             <span class="top-menu-icon" aria-hidden="true">
@@ -109,6 +105,7 @@
     </div>
   </div>
 
+  <script src="version.js"></script>
   <script src="ui-theme.js"></script>
   <script src="pn-mappings.js"></script>
   <script>
@@ -138,6 +135,19 @@
     const confirmModalCancel = document.getElementById('confirmModalCancel');
     const confirmModalOk = document.getElementById('confirmModalOk');
     let confirmResolve = null;
+    const ADMIN_MAPPING_ENTRY_KEY = 'adminMappingEntryV1';
+    const hasAdminMappingEntry = sessionStorage.getItem(ADMIN_MAPPING_ENTRY_KEY) === '1';
+    sessionStorage.removeItem(ADMIN_MAPPING_ENTRY_KEY);
+
+    function hasAdminSessionAccess() {
+      return hasAdminMappingEntry;
+    }
+
+    function requireAdminForSavedMapping(actionLabel) {
+      if (hasAdminSessionAccess()) return true;
+      showToast(`Brak uprawnień admina do ${actionLabel}.`, 'warn');
+      return false;
+    }
 
     function openModal(mode, payload) {
       modal.dataset.mode = mode;
@@ -261,6 +271,7 @@
     }
 
     function restoreBackupFile(file) {
+      if (!requireAdminForSavedMapping('przywracania backupu mapowań')) return;
       const reader = new FileReader();
       reader.onload = () => {
         try {
@@ -417,6 +428,7 @@
       const target = event.target;
       if (!target) return;
       if (target.classList.contains('history-remove')) {
+        if (!requireAdminForSavedMapping('usuwania zapisanych mapowań')) return;
         const key = target.getAttribute('data-key');
         const confirmed = await openConfirm({
           title: 'Usuń mapowanie',
@@ -437,6 +449,7 @@
         return;
       }
       if (target.classList.contains('history-copy')) {
+        if (!requireAdminForSavedMapping('edycji zapisanych mapowań')) return;
         const key = target.getAttribute('data-key');
         const data = window.PN_MAPPINGS_API.get();
         const vendor = window.PN_MAPPINGS_API.getExactVendor(data, key);
@@ -455,6 +468,7 @@
       const target = event.target;
       if (!target) return;
       if (target.classList.contains('history-remove')) {
+        if (!requireAdminForSavedMapping('usuwania zapisanych wzorców')) return;
         const index = parseInt(target.getAttribute('data-pattern-index'), 10);
         if (Number.isNaN(index)) return;
         const data = window.PN_MAPPINGS_API.get();
@@ -481,6 +495,7 @@
         return;
       }
       if (target.classList.contains('history-copy')) {
+        if (!requireAdminForSavedMapping('edycji zapisanych wzorców')) return;
         const index = parseInt(target.getAttribute('data-pattern-index'), 10);
         if (Number.isNaN(index)) return;
         const data = window.PN_MAPPINGS_API.get();
@@ -510,6 +525,7 @@
       if (event.target === modal) closeModal();
     });
     modalSave.addEventListener('click', () => {
+      if (!requireAdminForSavedMapping('modyfikacji zapisanych mapowań')) return;
       const mode = modal.dataset.mode;
       const rawKey = modalKey.value.trim();
       const vendor = modalVendor.value.trim();
