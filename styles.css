@@ -995,6 +995,17 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
 
 .base-collapsible .collapsible-summary h3 {
   margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.base-collapsible .collapsible-summary h3 a {
+  white-space: nowrap;
 }
 
 .base-collapsible {
@@ -1426,6 +1437,8 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
+  position: relative;
+  z-index: 2;
 }
 
 .source-option {
@@ -1442,13 +1455,14 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
 .source-option-wrap {
   position: relative;
   display: inline-flex;
+  z-index: 1;
 }
 
 .source-submenu {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 30;
+  z-index: 10020;
   display: none;
   min-width: 150px;
   padding: 8px 10px;
@@ -1463,6 +1477,13 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
 .source-option-wrap-ebay:hover .source-submenu,
 .source-option-wrap-ebay:focus-within .source-submenu {
   display: block;
+}
+
+.source-option-wrap-has-submenu:hover,
+.source-option-wrap-has-submenu:focus-within,
+.source-option-wrap-ebay:hover,
+.source-option-wrap-ebay:focus-within {
+  z-index: 10010;
 }
 
 .source-submenu-option {
@@ -1691,6 +1712,29 @@ footer a:hover {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.admin-page-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid rgba(15, 91, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(15, 91, 255, 0.1);
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.admin-page-badge .top-menu-icon img {
+  filter: none;
+}
+
+body.dark-mode .admin-page-badge .top-menu-icon img {
+  filter: brightness(0) invert(1);
 }
 
 .admin-header-row {
@@ -5043,7 +5087,7 @@ body[data-page-title="Kalkulator"] .layout {
   display: grid;
   grid-template-columns: minmax(0, var(--layout-left-fr)) 12px minmax(0, var(--layout-right-fr));
   gap: 12px 8px;
-  align-items: start;
+  align-items: stretch;
 }
 
 body[data-page-title="Kalkulator"].layout-three-columns .layout {
@@ -5176,6 +5220,18 @@ body[data-page-title="Kalkulator"] .min-price-box,
 body[data-page-title="Kalkulator"] .base-commission-tools {
   min-width: 0;
   max-width: 100%;
+}
+
+body[data-page-title="Kalkulator"] .layout > .app-card,
+body[data-page-title="Kalkulator"] .layout > .info-card {
+  height: 100%;
+  align-self: stretch;
+}
+
+body[data-page-title="Kalkulator"] .layout > .app-card,
+body[data-page-title="Kalkulator"] .layout > .info-card,
+body[data-page-title="Kalkulator"] .layout-item {
+  position: relative;
 }
 
 body[data-page-title="Kalkulator"] .layout-item > *,
@@ -5544,6 +5600,20 @@ body[data-page-title="Kalkulator"] .collapsible-card {
   border-radius: 8px;
   background: var(--card);
   box-shadow: var(--shadow);
+}
+
+body[data-page-title="Kalkulator"] .search-card {
+  overflow: visible;
+  z-index: 20;
+}
+
+body[data-page-title="Kalkulator"] .layout > .app-card:has(.source-option-wrap:hover),
+body[data-page-title="Kalkulator"] .layout > .app-card:has(.source-option-wrap:focus-within),
+body[data-page-title="Kalkulator"] .layout > .info-card:has(.source-option-wrap:hover),
+body[data-page-title="Kalkulator"] .layout > .info-card:has(.source-option-wrap:focus-within),
+body[data-page-title="Kalkulator"] .layout-item:has(.source-option-wrap:hover),
+body[data-page-title="Kalkulator"] .layout-item:has(.source-option-wrap:focus-within) {
+  z-index: 10000;
 }
 
 body[data-page-title="Kalkulator"] .highlight-card {
