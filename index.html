@@ -48,23 +48,6 @@
         </nav>
       </div>
     </header>
-    <section class="result-strip" aria-label="Najważniejsze wyniki">
-      <article class="result-metric result-metric-primary">
-        <span>Cena eBay</span>
-        <strong id="summaryEbayPrice">—</strong>
-        <small id="summaryCurrency">Waluta EUR</small>
-      </article>
-      <article class="result-metric">
-        <span>ERP brutto</span>
-        <strong id="summaryBruttoPrice">—</strong>
-        <small id="summaryNettoPrice">Netto —</small>
-      </article>
-      <article class="result-metric result-metric-ok">
-        <span>Cena eBay z narzutu</span>
-        <strong id="summaryMinSale">—</strong>
-        <small id="summaryMarkup">Narzut eBay —</small>
-      </article>
-    </section>
     <div id="result" class="alert-banner info-alert" aria-live="polite"></div>
 
     <div class="layout">
@@ -136,7 +119,7 @@
                   <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="purchaseAmountNetToggle" aria-pressed="false" title="Przełącz tryb kwoty zakupu"><span data-mode-label="purchaseAmountNetToggle">brutto</span></button></span>
                   <span class="field-help" data-tooltip="Jedna wspólna kwota zakupu dla narzutu, ceny sprzedaży i ceny eBay. Gdy tryb = netto, zakup jest przeliczany do brutto wg VAT klienta." aria-label="Pomoc">?</span>
                 </div>
-                <input type="number" id="purchaseAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1200.00">
+                <input type="number" id="purchaseAmount" step="0.01" min="0" placeholder="Np. 1200.00">
                 <input type="checkbox" id="purchaseAmountNetToggle" class="sr-only" aria-hidden="true">
               </div>
 
@@ -155,7 +138,7 @@
                   <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupSaleNetToggle" aria-pressed="false" title="Przełącz tryb ceny sprzedaży"><span data-mode-label="markupSaleNetToggle">brutto</span></button></span>
                   <span class="field-help" data-tooltip="Cena sprzedaży w PLN przed doliczeniem prowizji eBay. Edycja tego pola przelicza narzut, zysk i docelową cenę eBay." aria-label="Pomoc">?</span>
                 </div>
-                <input type="number" id="targetSaleAmount" step="0.01" min="0" max="99999999.99" placeholder="Np. 1590.00">
+                <input type="number" id="targetSaleAmount" step="0.01" min="0" placeholder="Np. 1590.00">
                 <input type="checkbox" id="markupSaleNetToggle" class="sr-only" aria-hidden="true">
               </div>
 

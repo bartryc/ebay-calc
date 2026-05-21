@@ -821,6 +821,7 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
 #calcLayoutContainer {
   display: grid;
   gap: 10px;
+  container-type: inline-size;
 }
 
 #calcLayoutContainer > .layout-item,
@@ -3011,9 +3012,38 @@ body.dark-mode .admin-kpi {
 }
 
 .report-item.is-on-hold {
-  background: rgba(120, 120, 120, 0.08);
-  border-color: rgba(120, 120, 120, 0.22);
-  filter: saturate(0.85);
+  background:
+    linear-gradient(90deg, rgba(255, 176, 32, 0.2), rgba(255, 176, 32, 0.08)),
+    var(--card-2);
+  border-color: rgba(255, 176, 32, 0.75);
+  box-shadow: 0 0 0 2px rgba(255, 176, 32, 0.16), 0 14px 34px rgba(121, 78, 0, 0.14);
+}
+
+.report-item.is-on-hold .report-kind {
+  background: rgba(255, 176, 32, 0.2);
+  border-color: rgba(255, 176, 32, 0.65);
+  color: #8a5200;
+}
+
+.report-item.is-on-hold .report-hold {
+  background: #ffb020;
+  color: #221600;
+  border-color: #ffcc66;
+  box-shadow: 0 0 0 2px rgba(255, 176, 32, 0.18);
+}
+
+body.dark-mode .report-item.is-on-hold {
+  background:
+    linear-gradient(90deg, rgba(255, 176, 32, 0.24), rgba(255, 176, 32, 0.1)),
+    var(--card-2);
+  border-color: rgba(255, 199, 92, 0.9);
+  box-shadow: 0 0 0 2px rgba(255, 176, 32, 0.22), 0 16px 38px rgba(0, 0, 0, 0.34);
+}
+
+body.dark-mode .report-item.is-on-hold .report-kind {
+  background: rgba(255, 176, 32, 0.22);
+  border-color: rgba(255, 199, 92, 0.72);
+  color: #ffd27a;
 }
 
 .report-section {
@@ -3659,6 +3689,62 @@ input[type="number"]:disabled {
 
 .input-tooltip input {
   width: 100%;
+}
+
+@media (max-width: 760px) {
+  .field-help::after,
+  .has-tooltip::after,
+  .input-tooltip::after {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 14px;
+    width: auto;
+    max-width: none;
+    max-height: min(42vh, 260px);
+    overflow-y: auto;
+    transform: translateY(8px);
+    z-index: 5000;
+  }
+
+  .field-help::before,
+  .has-tooltip::before,
+  .input-tooltip::before {
+    display: none;
+  }
+
+  .field-help:hover::after,
+  .field-help:focus-visible::after,
+  .has-tooltip:hover::after,
+  .has-tooltip:focus-visible::after,
+  .input-tooltip:hover::after,
+  .input-tooltip:focus-within::after {
+    transform: translateY(0);
+  }
+
+  .app-info-tooltip {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 14px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: min(42vh, 260px);
+    overflow-y: auto;
+    transform: translateY(8px);
+    z-index: 5000;
+  }
+
+  .app-info-tooltip::before {
+    display: none;
+  }
+
+  .top-menu-app:hover .app-info-tooltip,
+  .top-menu-app:focus-within .app-info-tooltip {
+    transform: translateY(0);
+  }
 }
 
 #result.info-alert {
@@ -5430,7 +5516,7 @@ body[data-page-title="Admin"] .top-menu-toggle.is-active {
 }
 
 body[data-page-title="Kalkulator"] .result-strip {
-  display: grid;
+  display: none;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
@@ -5505,7 +5591,7 @@ body[data-page-title="Kalkulator"] #extraLayoutContainer {
 }
 
 body[data-page-title="Kalkulator"] #calcLayoutContainer {
-  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   align-items: start;
 }
 
@@ -5517,6 +5603,25 @@ body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item {
   padding: 12px;
   border: 1px solid var(--border);
   background: var(--card);
+}
+
+@container (max-width: 380px) {
+  body[data-page-title="Kalkulator"] #calcLayoutContainer {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > .layout-item {
+    padding: 10px;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer .field-label-row,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer label,
+  body[data-page-title="Kalkulator"] #calcLayoutContainer .field-label {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
 }
 
 body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-presets"],
@@ -5710,6 +5815,8 @@ body[data-page-title="Admin"] .layout-preset-row {
 
   body[data-page-title="Kalkulator"] .top-menu,
   body[data-page-title="Admin"] .top-menu {
+    left: 0;
+    right: auto;
     width: 100%;
     justify-content: flex-start;
   }
@@ -5928,6 +6035,8 @@ body[data-page-title="Kreator mapowania"] .admin-card p {
 
   body[data-page-title="Zapisane mapowania"] .top-menu,
   body[data-page-title="Kreator mapowania"] .top-menu {
+    left: 0;
+    right: auto;
     width: 100%;
     justify-content: flex-start;
   }
@@ -6117,11 +6226,21 @@ body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="text"]::plac
 body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="number"]:focus,
 body[data-page-title="Kalkulator"] #calcLayoutContainer input[type="text"]:focus,
 body[data-page-title="Kalkulator"] #calcLayoutContainer select:focus {
-  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
-  background: color-mix(in srgb, var(--card-2) 94%, var(--accent) 6%);
+  border-color: rgba(105, 190, 142, 0.62);
+  background: color-mix(in srgb, var(--card-2) 92%, #dff7e8 8%);
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent),
+    0 0 0 3px rgba(105, 190, 142, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+body[data-page-title="Kalkulator"] #calcLayoutContainer input.is-recalculated,
+body[data-page-title="Kalkulator"] #calcLayoutContainer select.is-recalculated {
+  border-color: rgba(105, 190, 142, 0.58);
+  background: color-mix(in srgb, var(--card-2) 88%, #dff7e8 12%);
+  box-shadow:
+    0 0 0 3px rgba(105, 190, 142, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
 
 body[data-page-title="Kalkulator"] .min-price-box {
@@ -6136,7 +6255,8 @@ body[data-page-title="Kalkulator"] .min-price-box strong {
 
 /* Calculator markup sections */
 body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] {
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(340px, 1.25fr);
+  container-type: inline-size;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-height: 0;
   padding: 12px;
   column-gap: 12px;
@@ -6185,11 +6305,41 @@ body[data-page-title="Kalkulator"] #markupFromSaleBox > div {
   gap: 6px;
   min-width: 0;
   flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+
+body[data-page-title="Kalkulator"] #minPriceBox > div > strong,
+body[data-page-title="Kalkulator"] #markupFromSaleBox > div > strong,
+body[data-page-title="Kalkulator"] #minPriceBox > div > span,
+body[data-page-title="Kalkulator"] #markupFromSaleBox > div > span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 body[data-page-title="Kalkulator"] #markupFromSaleBox {
   grid-column: 1 / -1;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+
+@container (max-width: 620px) {
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] {
+    grid-template-columns: 1fr;
+    row-gap: 10px;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair {
+    grid-template-rows: auto 40px;
+  }
+
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair > .field-label-row {
+    height: auto;
+    min-height: 0;
+  }
+
+  body[data-page-title="Kalkulator"] #markupFromSaleBox {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 1040px) {

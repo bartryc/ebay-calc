@@ -1331,13 +1331,15 @@ function formatSaleInputFromBrutto(saleBrutto) {
 }
 
 function syncTargetSaleFromMinSale(minSalePlnBrutto, options = {}) {
+  const inputEl = document.getElementById('targetSaleAmount');
+  if (!inputEl) return false;
+  if (document.activeElement === inputEl && options.allowActiveOverwrite !== true) return false;
   const formatted = formatSaleInputFromBrutto(minSalePlnBrutto);
   const updated = options.force
     ? (() => {
-      const inputEl = document.getElementById('targetSaleAmount');
-      if (!inputEl) return false;
       inputEl.value = formatted;
       autoLinkedFieldValues.targetSaleAmount = formatted;
+      window.CalculatorUI.flashRecalculatedField(inputEl);
       return true;
     })()
     : setAutoLinkedFieldValue('targetSaleAmount', formatted);
@@ -1356,6 +1358,7 @@ function setMarkupPercentFromSaleBrutto(saleBrutto) {
   if (!markupEl || !Number.isFinite(purchaseBrutto) || purchaseBrutto <= 0 || !Number.isFinite(saleBrutto)) return false;
   const markupPercent = window.CalculatorCore.markupPercent(purchaseBrutto, saleBrutto);
   markupEl.value = markupPercent.toFixed(2);
+  window.CalculatorUI.flashRecalculatedField(markupEl);
   return true;
 }
 
@@ -1373,9 +1376,11 @@ function syncTargetSaleFromEbay(options = {}) {
   const formatted = formatSaleInputFromBrutto(saleBrutto);
   const inputEl = document.getElementById('targetSaleAmount');
   if (!inputEl) return false;
+  if (document.activeElement === inputEl && options.allowActiveOverwrite !== true) return false;
   if (options.force !== true && !canAutoUpdateField('targetSaleAmount')) return false;
   inputEl.value = formatted;
   autoLinkedFieldValues.targetSaleAmount = formatted;
+  window.CalculatorUI.flashRecalculatedField(inputEl);
   setMarkupPercentFromSaleBrutto(saleBrutto);
   return true;
 }
@@ -1432,6 +1437,7 @@ function syncEbayPriceFromTargetSale(options = {}) {
 
   const ebayPrice = window.CalculatorCore.ebayFromSaleBrutto(saleBrutto, exchangeRate, commission);
   ebayPriceInput.value = ebayPrice.toFixed(2);
+  window.CalculatorUI.flashRecalculatedField(ebayPriceInput);
   originalEbayPrice = ebayPrice;
   originalCurrency = currencyEl.value;
   originalExchangeRate = exchangeRate;
@@ -1482,8 +1488,7 @@ function applyPresetAmountModes(vat) {
   const vatValue = parseNumber(vat);
   const useNetMode = Number.isFinite(vatValue) && vatValue <= 0;
   const changed = [
-    setInlineModeFromPreset('purchaseAmountNetToggle', useNetMode),
-    setInlineModeFromPreset('markupSaleNetToggle', useNetMode)
+    setInlineModeFromPreset('purchaseAmountNetToggle', useNetMode)
   ].some(Boolean);
   if (!changed) return;
   updatePurchaseAmountModeUI();
@@ -1539,8 +1544,15 @@ function getMarkupSaleMode() {
 }
 
 function applyAmountModeChange(toggleId, toNetMode, options = {}) {
+  window.CalculatorUI.clearRecalculatedFields();
   const toggleEl = document.getElementById(toggleId);
   if (!toggleEl) return false;
+  const previousSaleIsNet = toggleId === 'markupSaleNetToggle' ? !!toggleEl.checked : null;
+  const targetSaleEl = document.getElementById('targetSaleAmount');
+  const targetSaleValue = parseNumber(targetSaleEl?.value);
+  const targetSaleBruttoBefore = toggleId === 'markupSaleNetToggle' && Number.isFinite(targetSaleValue)
+    ? window.CalculatorCore.amountToBrutto(targetSaleValue, previousSaleIsNet, getClientVatRateFraction())
+    : NaN;
   toggleEl.checked = !!toNetMode;
 
   if (toggleId === 'purchaseAmountNetToggle') {
@@ -1553,8 +1565,19 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
 
   if (toggleId === 'markupSaleNetToggle') {
     updateMarkupAmountModeUI();
-    syncMarkupSourceFields();
-    syncEbayPriceFromTargetSale();
+    if (
+      saleCalcSource === 'targetSaleAmount'
+      && targetSaleEl
+      && Number.isFinite(targetSaleBruttoBefore)
+    ) {
+      const convertedSaleValue = window.CalculatorCore.bruttoToInputAmount(targetSaleBruttoBefore, !!toNetMode, getClientVatRateFraction());
+      if (Number.isFinite(convertedSaleValue)) {
+        const formatted = convertedSaleValue.toFixed(2);
+        targetSaleEl.value = formatted;
+        autoLinkedFieldValues.targetSaleAmount = formatted;
+        window.CalculatorUI.flashRecalculatedField(targetSaleEl);
+      }
+    }
     updateSaleMarkupOnly();
     if (options.history !== false) addHistoryEntry('markupAmountMode');
     return true;
@@ -2516,6 +2539,7 @@ function updateEbayCurrencyLabel() {
 
 // Clear button handler
 document.getElementById('clearBtn').addEventListener('click', () => {
+  window.CalculatorUI.clearRecalculatedFields();
   document.getElementById('plnNetto').value = '';
   document.getElementById('plnBrutto').value = '';
   document.getElementById('ebayPrice').value = '';
@@ -2561,6 +2585,7 @@ document.getElementById('clearBtn').addEventListener('click', () => {
 });
 
 function syncFields(source) {
+  window.CalculatorUI.clearRecalculatedFields();
   const vatRateInput = document.getElementById('vatRate');
   const resultDiv = document.getElementById('result');
   if (clearPrimaryPricingFields(source)) {
@@ -2793,6 +2818,7 @@ function fetchExchangeRate(currency, options = {}) {
         if (originalCurrency === currency) {
           ebayPriceInput.value = originalEbayPrice.toFixed(2);
         }
+        window.CalculatorUI.flashRecalculatedField(ebayPriceInput);
         lastChanged = 'ebayPrice';
         syncFields('ebayPrice');
       }
@@ -3127,6 +3153,7 @@ currencySelectEl.addEventListener('change', () => {
   const el = document.getElementById(id);
   if (!el) return;
   el.addEventListener('input', () => {
+    window.CalculatorUI.clearRecalculatedFields();
     enforceTwoDecimals(el);
     enforceFieldMax(el);
     if (id === 'minMarkup') {
@@ -3136,6 +3163,7 @@ currencySelectEl.addEventListener('change', () => {
     scheduleHistoryLog(id, { force: true });
   });
   el.addEventListener('change', () => {
+    window.CalculatorUI.clearRecalculatedFields();
     enforceFieldMax(el);
     if (id === 'minMarkup') {
       rememberMarkupSource('minMarkup');
@@ -3145,6 +3173,7 @@ currencySelectEl.addEventListener('change', () => {
   });
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
+    window.CalculatorUI.clearRecalculatedFields();
     if (id === 'minMarkup') {
       rememberMarkupSource('minMarkup');
     }
@@ -3162,15 +3191,18 @@ currencySelectEl.addEventListener('change', () => {
 const currentBaseMultiplierEl = document.getElementById('currentBaseMultiplier');
 if (currentBaseMultiplierEl) {
   currentBaseMultiplierEl.addEventListener('input', () => {
+    window.CalculatorUI.clearRecalculatedFields();
     updateCommissionFromBaseMultiplier();
     scheduleHistoryLog('currentBaseMultiplier');
   });
   currentBaseMultiplierEl.addEventListener('change', () => {
+    window.CalculatorUI.clearRecalculatedFields();
     updateCommissionFromBaseMultiplier();
     flushHistoryLog('currentBaseMultiplier');
   });
   currentBaseMultiplierEl.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
+    window.CalculatorUI.clearRecalculatedFields();
     updateCommissionFromBaseMultiplier();
     flushHistoryLog('currentBaseMultiplier');
   });
@@ -3215,8 +3247,7 @@ document.addEventListener('click', (event) => {
   const el = document.getElementById(id);
   if (!el) return;
   el.addEventListener('input', () => {
-    enforceTwoDecimals(el);
-    enforceFieldMax(el);
+    window.CalculatorUI.clearRecalculatedFields();
     rememberMarkupSource('targetSaleAmount');
     autoLinkedFieldValues.targetSaleAmount = '';
     markupPriceSource = 'targetSaleAmount';
@@ -3224,6 +3255,8 @@ document.addEventListener('click', (event) => {
     scheduleHistoryLog(id, { force: true });
   });
   el.addEventListener('change', () => {
+    window.CalculatorUI.clearRecalculatedFields();
+    enforceTwoDecimals(el);
     enforceFieldMax(el);
     rememberMarkupSource('targetSaleAmount');
     autoLinkedFieldValues.targetSaleAmount = '';
@@ -3233,6 +3266,9 @@ document.addEventListener('click', (event) => {
   });
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
+    window.CalculatorUI.clearRecalculatedFields();
+    enforceTwoDecimals(el);
+    enforceFieldMax(el);
     rememberMarkupSource('targetSaleAmount');
     autoLinkedFieldValues.targetSaleAmount = '';
     markupPriceSource = 'targetSaleAmount';
@@ -3243,6 +3279,8 @@ document.addEventListener('click', (event) => {
     setFieldBaseline(id);
   });
   el.addEventListener('blur', () => {
+    enforceTwoDecimals(el);
+    enforceFieldMax(el);
     flushHistoryLog(id, { force: true });
   });
 });
