@@ -2569,6 +2569,7 @@
 
         reportsCache = allLogs.map(normalizeLogEntry).filter((entry) => isReportLike(entry));
         await fetchReportKindsForReports(reportsCache);
+        await fetchReportStatusesForReports(reportsCache);
         renderReports();
         scheduleRenderReports();
       } catch (error) {
@@ -2859,31 +2860,90 @@
       localStorage.setItem(DISMISSED_REPORTS_KEY, JSON.stringify(Array.from(dismissedReports)));
     }
 
-    const REPORT_STATUS_KEY = 'adminReportStatus';
+    const REPORT_STATUS_NOTE_PREFIX = 'report-status:';
+    const REPORT_STATUS_LEGACY_KEY = 'adminReportStatus';
+    const VALID_REPORT_STATUSES = new Set(['on-hold', 'resolved', 'dismissed']);
+    const reportStatusCache = new Map();
+    const reportStatusLoading = new Set();
 
-    function loadReportStatus() {
-      try {
-        return JSON.parse(localStorage.getItem(REPORT_STATUS_KEY) || '{}');
-      } catch (error) {
-        return {};
-      }
+    try {
+      localStorage.removeItem(REPORT_STATUS_LEGACY_KEY);
+    } catch (error) {
+      // Old local-only statuses could point at the wrong reports after publish.
     }
 
-    function setReportStatus(reportId, status) {
-      if (!reportId) return;
-      const map = loadReportStatus();
-      if (status) {
-        map[reportId] = status;
-      } else {
-        delete map[reportId];
-      }
-      localStorage.setItem(REPORT_STATUS_KEY, JSON.stringify(map));
+    function normalizeReportStatus(status) {
+      const value = String(status || '').trim();
+      return VALID_REPORT_STATUSES.has(value) ? value : '';
+    }
+
+    function getReportStatusNoteId(reportId) {
+      return `${REPORT_STATUS_NOTE_PREFIX}${reportId}`;
     }
 
     function getReportStatus(reportId) {
       if (!reportId) return '';
-      const map = loadReportStatus();
-      return map[reportId] || '';
+      return reportStatusCache.get(reportId) || '';
+    }
+
+    async function fetchReportStatus(reportId, force = false) {
+      if (!reportId || (!force && reportStatusCache.has(reportId)) || reportStatusLoading.has(reportId)) return;
+      if (!window.PN_MAPPINGS_API?.request) {
+        reportStatusCache.set(reportId, '');
+        return;
+      }
+      reportStatusLoading.add(reportId);
+      try {
+        const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(getReportStatusNoteId(reportId))}`, { method: 'GET' });
+        if (!resp.ok) {
+          reportStatusCache.set(reportId, '');
+          return;
+        }
+        const data = await resp.json().catch(() => ({}));
+        reportStatusCache.set(reportId, normalizeReportStatus(data?.note));
+      } catch (error) {
+        reportStatusCache.set(reportId, '');
+      } finally {
+        reportStatusLoading.delete(reportId);
+      }
+    }
+
+    async function fetchReportStatusesForReports(entries) {
+      const ids = Array.from(new Set(entries
+        .map((entry) => buildReportId(entry))
+        .filter(Boolean)));
+      if (!ids.length) return;
+      await Promise.all(ids.map((id) => fetchReportStatus(id, true)));
+    }
+
+    async function setReportStatus(reportId, status) {
+      if (!reportId) return;
+      const normalized = normalizeReportStatus(status);
+      if (normalized) {
+        reportStatusCache.set(reportId, normalized);
+      } else {
+        reportStatusCache.delete(reportId);
+      }
+      if (!window.PN_MAPPINGS_API?.request) {
+        showToast('Worker niedostępny. Status nie został zapisany na serwerze.', 'warn');
+        return;
+      }
+      try {
+        const noteId = getReportStatusNoteId(reportId);
+        if (normalized) {
+          const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(noteId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: normalized })
+          });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        } else {
+          const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(noteId)}`, { method: 'DELETE' });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        }
+      } catch (error) {
+        showToast('Nie udało się zapisać statusu zgłoszenia na serwerze.', 'warn');
+      }
     }
 
     let renderReportsScheduled = false;
