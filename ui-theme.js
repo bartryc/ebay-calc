@@ -298,6 +298,119 @@
     });
   }
 
+  function initFloatingTooltips() {
+    if (window.__uiThemeFloatingTooltipsBound) return;
+    window.__uiThemeFloatingTooltipsBound = true;
+
+    const narrowQuery = window.matchMedia('(max-width: 760px)');
+    const tooltip = document.createElement('div');
+    tooltip.className = 'floating-tooltip';
+    tooltip.setAttribute('role', 'tooltip');
+    tooltip.hidden = true;
+    document.body.appendChild(tooltip);
+
+    let activeTarget = null;
+    let lastPointer = { x: 0, y: 0 };
+
+    const isEnabled = () => narrowQuery.matches;
+    const getTooltipTarget = (target) => {
+      const node = target?.closest?.('[data-tooltip]');
+      if (!node) return null;
+      const text = String(node.getAttribute('data-tooltip') || '').trim();
+      return text ? node : null;
+    };
+
+    const hideTooltip = () => {
+      activeTarget = null;
+      tooltip.classList.remove('is-visible');
+      tooltip.hidden = true;
+      document.body.classList.remove('uses-floating-tooltips');
+    };
+
+    const positionTooltip = (x, y) => {
+      if (tooltip.hidden) return;
+      const margin = 12;
+      const gap = 14;
+      const rect = tooltip.getBoundingClientRect();
+      let left = x + gap;
+      let top = y + gap;
+
+      if (left + rect.width + margin > window.innerWidth) {
+        left = x - rect.width - gap;
+      }
+      if (top + rect.height + margin > window.innerHeight) {
+        top = y - rect.height - gap;
+      }
+
+      left = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
+      top = Math.max(margin, Math.min(top, window.innerHeight - rect.height - margin));
+      tooltip.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+    };
+
+    const showTooltip = (target, x, y) => {
+      if (!isEnabled() || !target) {
+        hideTooltip();
+        return;
+      }
+      const text = String(target.getAttribute('data-tooltip') || '').trim();
+      if (!text) {
+        hideTooltip();
+        return;
+      }
+      activeTarget = target;
+      tooltip.textContent = text;
+      tooltip.hidden = false;
+      document.body.classList.add('uses-floating-tooltips');
+      tooltip.classList.add('is-visible');
+      requestAnimationFrame(() => positionTooltip(x, y));
+    };
+
+    document.addEventListener('pointerover', (event) => {
+      if (!isEnabled()) return;
+      const target = getTooltipTarget(event.target);
+      if (!target || target === activeTarget) return;
+      lastPointer = { x: event.clientX, y: event.clientY };
+      showTooltip(target, event.clientX, event.clientY);
+    }, true);
+
+    document.addEventListener('pointermove', (event) => {
+      if (!activeTarget || !isEnabled()) return;
+      lastPointer = { x: event.clientX, y: event.clientY };
+      positionTooltip(event.clientX, event.clientY);
+    }, true);
+
+    document.addEventListener('pointerout', (event) => {
+      if (!activeTarget) return;
+      const next = event.relatedTarget;
+      if (next && activeTarget.contains(next)) return;
+      hideTooltip();
+    }, true);
+
+    document.addEventListener('focusin', (event) => {
+      if (!isEnabled()) return;
+      const target = getTooltipTarget(event.target);
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      showTooltip(target, rect.left + rect.width / 2, rect.top + rect.height / 2);
+    }, true);
+
+    document.addEventListener('focusout', (event) => {
+      if (!activeTarget) return;
+      if (event.target === activeTarget || activeTarget.contains(event.target)) hideTooltip();
+    }, true);
+
+    const syncMode = () => {
+      document.body.classList.toggle('uses-floating-tooltips', isEnabled() && !!activeTarget);
+      if (!isEnabled()) hideTooltip();
+      else if (activeTarget) positionTooltip(lastPointer.x, lastPointer.y);
+    };
+    narrowQuery.addEventListener?.('change', syncMode);
+    window.addEventListener('resize', syncMode);
+    window.addEventListener('scroll', () => {
+      if (activeTarget) positionTooltip(lastPointer.x, lastPointer.y);
+    }, true);
+  }
+
   function init() {
     const body = document.body;
     if (!body) return;
@@ -325,6 +438,7 @@
 
     initFontScaleControls();
     initResponsiveMenu();
+    initFloatingTooltips();
     initAdminShortcut();
   }
 

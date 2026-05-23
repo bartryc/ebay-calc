@@ -3412,6 +3412,7 @@ if (partNumberInput) {
   const reportModalClose = document.getElementById('reportModalClose');
   const reportModalCancel = document.getElementById('reportModalCancel');
   const reportModalSubmit = document.getElementById('reportModalSubmit');
+  const reportPendingFlushBtn = document.getElementById('reportPendingFlushBtn');
   const reportModalInfo = document.getElementById('reportModalInfo');
   const reportReason = document.getElementById('reportReason');
   const reportNonMapping = document.getElementById('reportNonMapping');
@@ -4008,6 +4009,92 @@ if (partNumberInput) {
     }).catch(() => {});
   }
 
+  const PENDING_REPORTS_KEY = 'pendingMappingReports';
+  const PENDING_REPORTS_MAX = 50;
+  let reportQueueFlushInProgress = false;
+
+  function loadPendingReports() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(PENDING_REPORTS_KEY) || '[]');
+      return Array.isArray(stored) ? stored : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function savePendingReports(items) {
+    try {
+      localStorage.setItem(PENDING_REPORTS_KEY, JSON.stringify(items.slice(-PENDING_REPORTS_MAX)));
+      return true;
+    } catch (error) {
+      // localStorage can fail in private mode; the submit flow still reports failure.
+      return false;
+    }
+  }
+
+  function queueReportPayload(payload) {
+    const pending = loadPendingReports();
+    const reportId = payload?.reportId || '';
+    const exists = reportId && pending.some((item) => item?.payload?.reportId === reportId);
+    if (!exists) {
+      pending.push({ payload, queuedAt: new Date().toISOString() });
+      return savePendingReports(pending);
+    }
+    return true;
+  }
+
+  async function sendReportPayload(payload) {
+    if (!window.PN_MAPPINGS_API?.request) {
+      throw new Error('Worker niedostępny');
+    }
+    const response = await window.PN_MAPPINGS_API.request('/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'mapping-report', meta: payload })
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ''}`);
+    }
+  }
+
+  async function flushPendingReports({ silent = false } = {}) {
+    if (reportQueueFlushInProgress) return;
+    const pending = loadPendingReports();
+    if (!pending.length) return;
+    reportQueueFlushInProgress = true;
+    const remaining = [];
+    let sent = 0;
+    try {
+      for (const item of pending) {
+        const payload = item?.payload;
+        if (!payload) continue;
+        try {
+          await sendReportPayload(payload);
+          sent += 1;
+        } catch (error) {
+          remaining.push(item);
+        }
+      }
+      savePendingReports(remaining);
+      if (!silent && sent) {
+        showMainToast(`Wysłano zaległe zgłoszenia: ${sent}.`, 'ok');
+      }
+      if (!silent && remaining.length) {
+        showMainToast(`Nie wysłano ${remaining.length} zaległych zgłoszeń. Zostają lokalnie.`, 'warn');
+      }
+    } finally {
+      reportQueueFlushInProgress = false;
+    }
+  }
+
+  function updatePendingReportButton() {
+    if (!reportPendingFlushBtn) return;
+    const pendingCount = loadPendingReports().length;
+    reportPendingFlushBtn.hidden = pendingCount === 0;
+    reportPendingFlushBtn.textContent = pendingCount > 0 ? `Wyślij zaległe (${pendingCount})` : 'Wyślij zaległe';
+  }
+
   const closeReportModal = () => {
     if (!reportModal) return;
     reportModal.style.display = 'none';
@@ -4022,12 +4109,15 @@ if (partNumberInput) {
     const source = partNumberInput.dataset.suggestionSource || '';
     const detail = partNumberInput.dataset.suggestionDetail || '';
     if (reportModalInfo) {
+      const pendingCount = loadPendingReports().length;
       reportModalInfo.innerHTML = `
         <div><strong>PN:</strong> ${query || '—'}</div>
         <div><strong>Sugestia:</strong> ${vendor || '—'} ${detail ? `(${detail})` : ''}</div>
         <div><strong>Źródło:</strong> ${source || '—'}</div>
+        ${pendingCount ? `<div><strong>Zaległe lokalnie:</strong> ${pendingCount}</div>` : ''}
       `;
     }
+    updatePendingReportButton();
     reportModal.style.display = 'flex';
     if (reportReason) reportReason.focus();
   };
@@ -4043,8 +4133,19 @@ if (partNumberInput) {
   if (reportModalCancel) {
     reportModalCancel.addEventListener('click', closeReportModal);
   }
+  if (reportPendingFlushBtn) {
+    reportPendingFlushBtn.addEventListener('click', async () => {
+      reportPendingFlushBtn.disabled = true;
+      try {
+        await flushPendingReports({ silent: false });
+        updatePendingReportButton();
+      } finally {
+        reportPendingFlushBtn.disabled = false;
+      }
+    });
+  }
   if (reportModalSubmit) {
-    reportModalSubmit.addEventListener('click', () => {
+    reportModalSubmit.addEventListener('click', async () => {
       const query = partNumberInput.value.trim();
       const vendor = partNumberInput.dataset.suggestionVendor || '';
       const source = partNumberInput.dataset.suggestionSource || '';
@@ -4071,26 +4172,24 @@ if (partNumberInput) {
         reportId,
         appVersion
       };
-      const fallbackLog = () => {
-        if (window.PN_MAPPINGS_API?.log) {
-          window.PN_MAPPINGS_API.log('mapping-report', payload);
+      reportModalSubmit.disabled = true;
+      try {
+        await sendReportPayload(payload);
+        showMainToast('Zgłoszenie wysłane do admina.', 'ok');
+        closeReportModal();
+      } catch (error) {
+        const queued = queueReportPayload(payload);
+        const pendingCount = loadPendingReports().length;
+        if (queued) {
+          showMainToast(`Nie udało się wysłać teraz. Zapisano lokalnie do ponowienia (${pendingCount}).`, 'warn');
+          updatePendingReportButton();
+        } else {
+          showMainToast('Nie udało się wysłać zgłoszenia ani zapisać go lokalnie.', 'warn');
         }
-      };
-      if (window.PN_MAPPINGS_API?.request) {
-        window.PN_MAPPINGS_API.request('/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'mapping-report', meta: payload })
-        }).then((resp) => {
-          if (!resp.ok) fallbackLog();
-        }).catch(() => {
-          fallbackLog();
-        });
-      } else {
-        fallbackLog();
+        closeReportModal();
+      } finally {
+        reportModalSubmit.disabled = false;
       }
-      showMainToast('Zgłoszenie wysłane do admina.', 'ok');
-      closeReportModal();
     });
   }
 }
