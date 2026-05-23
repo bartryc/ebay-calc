@@ -2526,15 +2526,6 @@
       }
     }
 
-    async function fetchReportKindsForReports(entries) {
-      const ids = entries
-        .map((entry) => buildReportId(entry))
-        .filter(Boolean)
-        .filter((id) => !reportKindCache.has(id));
-      if (!ids.length) return;
-      await Promise.all(ids.map((id) => fetchReportKind(id)));
-    }
-
     async function fetchReports() {
       try {
         const pageSize = 200;
@@ -2568,8 +2559,7 @@
         }
 
         reportsCache = allLogs.map(normalizeLogEntry).filter((entry) => isReportLike(entry));
-        await fetchReportKindsForReports(reportsCache);
-        await fetchReportStatusesForReports(reportsCache);
+        syncReportStateFromLogs(reportsCache);
         renderReports();
         scheduleRenderReports();
       } catch (error) {
@@ -2788,46 +2778,15 @@
     }
 
     const reportKindCache = new Map();
-    const reportKindLoading = new Set();
 
     function getReportKindOverride(reportId) {
       if (!reportId) return '';
       return reportKindCache.get(reportId) || '';
     }
 
-    async function fetchReportKind(reportId) {
-      if (!reportId || reportKindCache.has(reportId) || reportKindLoading.has(reportId)) return;
-      if (!window.PN_MAPPINGS_API?.request) return;
-      reportKindLoading.add(reportId);
-      try {
-        const resp = await window.PN_MAPPINGS_API.request(`/report-kind?id=${encodeURIComponent(reportId)}`, { method: 'GET' });
-        const data = await resp.json().catch(() => ({}));
-        const kind = typeof data.kind === 'string' ? data.kind : '';
-        reportKindCache.set(reportId, kind);
-      } catch (error) {
-        reportKindCache.set(reportId, '');
-      } finally {
-        reportKindLoading.delete(reportId);
-      }
-    }
-
-    async function setReportKindOverride(reportId, kind) {
+    function setReportKindOverride(reportId, kind) {
       if (!reportId) return;
       reportKindCache.set(reportId, kind || '');
-      if (!window.PN_MAPPINGS_API?.request) return;
-      try {
-        if (kind) {
-          await window.PN_MAPPINGS_API.request(`/report-kind?id=${encodeURIComponent(reportId)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ kind })
-          });
-        } else {
-          await window.PN_MAPPINGS_API.request(`/report-kind?id=${encodeURIComponent(reportId)}`, { method: 'DELETE' });
-        }
-      } catch (error) {
-        // keep cache
-      }
     }
 
     function getReportMeta(entry) {
@@ -2860,11 +2819,9 @@
       localStorage.setItem(DISMISSED_REPORTS_KEY, JSON.stringify(Array.from(dismissedReports)));
     }
 
-    const REPORT_STATUS_NOTE_PREFIX = 'report-status:';
     const REPORT_STATUS_LEGACY_KEY = 'adminReportStatus';
     const VALID_REPORT_STATUSES = new Set(['on-hold', 'resolved', 'dismissed']);
     const reportStatusCache = new Map();
-    const reportStatusLoading = new Set();
 
     try {
       localStorage.removeItem(REPORT_STATUS_LEGACY_KEY);
@@ -2877,46 +2834,12 @@
       return VALID_REPORT_STATUSES.has(value) ? value : '';
     }
 
-    function getReportStatusNoteId(reportId) {
-      return `${REPORT_STATUS_NOTE_PREFIX}${reportId}`;
-    }
-
     function getReportStatus(reportId) {
       if (!reportId) return '';
       return reportStatusCache.get(reportId) || '';
     }
 
-    async function fetchReportStatus(reportId, force = false) {
-      if (!reportId || (!force && reportStatusCache.has(reportId)) || reportStatusLoading.has(reportId)) return;
-      if (!window.PN_MAPPINGS_API?.request) {
-        reportStatusCache.set(reportId, '');
-        return;
-      }
-      reportStatusLoading.add(reportId);
-      try {
-        const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(getReportStatusNoteId(reportId))}`, { method: 'GET' });
-        if (!resp.ok) {
-          reportStatusCache.set(reportId, '');
-          return;
-        }
-        const data = await resp.json().catch(() => ({}));
-        reportStatusCache.set(reportId, normalizeReportStatus(data?.note));
-      } catch (error) {
-        reportStatusCache.set(reportId, '');
-      } finally {
-        reportStatusLoading.delete(reportId);
-      }
-    }
-
-    async function fetchReportStatusesForReports(entries) {
-      const ids = Array.from(new Set(entries
-        .map((entry) => buildReportId(entry))
-        .filter(Boolean)));
-      if (!ids.length) return;
-      await Promise.all(ids.map((id) => fetchReportStatus(id, true)));
-    }
-
-    async function setReportStatus(reportId, status) {
+    function setReportStatus(reportId, status) {
       if (!reportId) return;
       const normalized = normalizeReportStatus(status);
       if (normalized) {
@@ -2924,26 +2847,33 @@
       } else {
         reportStatusCache.delete(reportId);
       }
-      if (!window.PN_MAPPINGS_API?.request) {
-        showToast('Worker niedostępny. Status nie został zapisany na serwerze.', 'warn');
-        return;
-      }
-      try {
-        const noteId = getReportStatusNoteId(reportId);
-        if (normalized) {
-          const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(noteId)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note: normalized })
-          });
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        } else {
-          const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(noteId)}`, { method: 'DELETE' });
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        }
-      } catch (error) {
-        showToast('Nie udało się zapisać statusu zgłoszenia na serwerze.', 'warn');
-      }
+    }
+
+    function syncReportStateFromLogs(entries) {
+      reportKindCache.clear();
+      reportStatusCache.clear();
+      entries
+        .filter((entry) => entry?.type === 'mapping-report' && entry?.meta?.action)
+        .slice()
+        .sort((a, b) => {
+          const left = a?.ts ? Date.parse(a.ts) : 0;
+          const right = b?.ts ? Date.parse(b.ts) : 0;
+          return left - right;
+        })
+        .forEach((entry) => {
+          const reportId = buildReportId(entry);
+          if (!reportId) return;
+          const action = entry?.meta?.action || '';
+          const status = normalizeReportStatus(action);
+          if (status) reportStatusCache.set(reportId, status);
+          if (action === 'retype') {
+            reportStatusCache.delete(reportId);
+            const nextKind = entry?.meta?.newKind;
+            if (nextKind === 'ui' || nextKind === 'mapping') {
+              reportKindCache.set(reportId, nextKind);
+            }
+          }
+        });
     }
 
     let renderReportsScheduled = false;
@@ -3034,8 +2964,7 @@
       }
 
       reportList.innerHTML = sections.join('');
-      hydrateAdminNotes();
-      // overrides są ładowane w batchu przy fetchReports
+      // Statusy i zmiany typu są odtwarzane z logów akcji, bez requestu per zgłoszenie.
 
       if (!reportList.innerHTML.trim()) {
         reportList.textContent = 'Brak zgłoszeń.';
@@ -3806,10 +3735,12 @@
       });
     }
 
+    const ADMIN_AUTO_REFRESH_MS = 5 * 60 * 1000;
     setInterval(() => {
+      if (document.hidden) return;
       fetchLogs();
       fetchReports();
-    }, 30000);
+    }, ADMIN_AUTO_REFRESH_MS);
 
   </script>
 </body>
