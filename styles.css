@@ -4266,9 +4266,9 @@ footer {
     left: auto;
     z-index: 360;
     display: none;
-    min-width: min(86vw, 280px);
-    max-width: min(86vw, 280px);
-    width: max-content;
+    width: min(78vw, 232px);
+    min-width: 190px;
+    max-width: 232px;
     border-radius: 14px;
     padding: 10px;
     gap: 6px;
@@ -4867,8 +4867,8 @@ footer {
 
   .top-menu {
     width: max-content;
-    min-width: min(88vw, 260px);
-    max-width: min(88vw, 260px);
+    min-width: 176px;
+    max-width: min(82vw, 220px);
     padding: 4px;
     gap: 4px;
     border-radius: 12px;
@@ -5817,7 +5817,7 @@ body[data-page-title="Admin"] .layout-preset-row {
   body[data-page-title="Admin"] .top-menu {
     left: 0;
     right: auto;
-    width: 100%;
+    width: min(78vw, 232px);
     justify-content: flex-start;
   }
 }
@@ -6037,7 +6037,7 @@ body[data-page-title="Kreator mapowania"] .admin-card p {
   body[data-page-title="Kreator mapowania"] .top-menu {
     left: 0;
     right: auto;
-    width: 100%;
+    width: min(78vw, 232px);
     justify-content: flex-start;
   }
 
