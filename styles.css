@@ -5631,7 +5631,7 @@ body[data-page-title="Kalkulator"] #extraLayoutContainer {
 
 body[data-page-title="Kalkulator"] #calcLayoutContainer {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-  align-items: start;
+  align-items: stretch;
 }
 
 body[data-page-title="Kalkulator"] .layout-item {
