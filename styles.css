@@ -6207,6 +6207,14 @@ body[data-page-title="Kalkulator"] #calcLayoutContainer .field-label-row {
   align-items: center;
 }
 
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-netto"] > .field-label,
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-brutto"] > .field-label,
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-ebay"] > .field-label,
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-vat"] > .field-label {
+  min-height: 3.75em;
+  align-items: flex-start;
+}
+
 body[data-page-title="Kalkulator"] #calcLayoutContainer .field-mode {
   gap: 4px;
   color: color-mix(in srgb, var(--muted) 86%, var(--ink));
