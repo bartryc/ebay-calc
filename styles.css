@@ -1918,6 +1918,109 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
   font-size: 0.86em;
 }
 
+.rate-provider-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+
+.rate-provider-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-2);
+}
+
+.rate-provider-card-head,
+.rate-provider-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rate-provider-card-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rate-provider-card-head span {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(15, 91, 255, 0.12);
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.rate-provider-card.is-custom .rate-provider-card-head span {
+  background: rgba(22, 163, 74, 0.14);
+  color: var(--success);
+}
+
+.rate-provider-card-meta {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.rate-provider-card-url {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.rate-provider-card code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.rate-provider-editor {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.rate-provider-editor-header {
+  display: grid;
+  gap: 4px;
+}
+
+.rate-provider-editor-header h4 {
+  margin: 0;
+}
+
+.rate-provider-config-controls {
+  grid-template-columns: minmax(180px, 0.8fr) minmax(160px, 0.7fr) minmax(220px, 1fr);
+  grid-template-areas:
+    "select id label"
+    "url url url"
+    "path transform enabled";
+  align-items: end;
+}
+
+.rate-provider-field-select { grid-area: select; }
+.rate-provider-field-id { grid-area: id; }
+.rate-provider-field-label { grid-area: label; }
+.rate-provider-field-url { grid-area: url; }
+.rate-provider-field-path { grid-area: path; }
+.rate-provider-field-transform { grid-area: transform; }
+.rate-provider-field-enabled { grid-area: enabled; }
+
+.rate-provider-config-controls .admin-log-field input:not([type="checkbox"]):not([type="radio"]),
+.rate-provider-config-controls .admin-log-field select {
+  width: 100%;
+}
+
 .source-config-controls .admin-log-field input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
 }
@@ -4700,6 +4803,18 @@ footer {
 
   .source-variant-row {
     grid-template-columns: 1fr;
+  }
+
+  .rate-provider-config-controls {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "select"
+      "id"
+      "label"
+      "url"
+      "path"
+      "transform"
+      "enabled";
   }
 
   .source-config-controls {

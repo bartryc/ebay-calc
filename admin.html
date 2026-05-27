@@ -59,6 +59,7 @@
         <button type="button" class="admin-tab-btn is-active" data-admin-tab-btn="logs" role="tab" aria-selected="true">Logi</button>
         <button type="button" class="admin-tab-btn" data-admin-tab-btn="reports" role="tab" aria-selected="false">Zgłoszenia</button>
         <button type="button" class="admin-tab-btn" data-admin-tab-btn="mappings" role="tab" aria-selected="false">Mapowania</button>
+        <button type="button" class="admin-tab-btn" data-admin-tab-btn="apis" role="tab" aria-selected="false">API kursów</button>
         <button type="button" class="admin-tab-btn" data-admin-tab-btn="sources" role="tab" aria-selected="false">Źródła</button>
         <button type="button" class="admin-tab-btn" data-admin-tab-btn="presets" role="tab" aria-selected="false">Presety</button>
       </div>
@@ -98,51 +99,6 @@
               </div>
             </div>
             <div class="admin-meta">Aktualnie zapisane: <span id="defaultRateProviderValue">—</span></div>
-            <div class="default-rate-api-editor">
-              <h4>Custom API kursów</h4>
-              <div class="admin-log-controls rate-provider-config-controls">
-                <div class="admin-log-field">
-                  <label for="rateProviderConfigSelect">Provider</label>
-                  <select id="rateProviderConfigSelect"></select>
-                </div>
-                <div class="admin-log-field">
-                  <label for="rateProviderConfigId">ID</label>
-                  <input type="text" id="rateProviderConfigId" maxlength="40" placeholder="np. moje-api">
-                </div>
-                <div class="admin-log-field">
-                  <label for="rateProviderConfigLabel">Nazwa</label>
-                  <input type="text" id="rateProviderConfigLabel" maxlength="64" placeholder="np. Moje API">
-                </div>
-                <div class="admin-log-field admin-log-field-wide">
-                  <label for="rateProviderConfigUrl">URL</label>
-                  <input type="text" id="rateProviderConfigUrl" maxlength="500" placeholder="https://api.example.com/latest?base=PLN&symbols={CURRENCY}">
-                </div>
-                <div class="admin-log-field">
-                  <label for="rateProviderConfigPath">Ścieżka JSON</label>
-                  <input type="text" id="rateProviderConfigPath" maxlength="160" placeholder="rates.{CURRENCY}">
-                </div>
-                <div class="admin-log-field">
-                  <label for="rateProviderConfigTransform">Transformacja</label>
-                  <select id="rateProviderConfigTransform">
-                    <option value="direct">Direct: PLN → waluta</option>
-                    <option value="inverse">Inverse: waluta → PLN</option>
-                  </select>
-                </div>
-                <div class="admin-log-field">
-                  <label class="source-dual-icon-toggle">
-                    <input type="checkbox" id="rateProviderConfigEnabled" checked>
-                    <span>Włączony</span>
-                  </label>
-                </div>
-              </div>
-              <div class="admin-actions source-actions">
-                <button type="button" id="rateProviderConfigNewBtn">Nowe API</button>
-                <button type="button" id="rateProviderConfigSaveBtn">Zapisz API</button>
-                <button type="button" id="rateProviderConfigDeleteBtn">Usuń API</button>
-                <button type="button" id="rateProviderConfigTestBtn">Test EUR</button>
-              </div>
-              <div id="rateProviderConfigHint" class="admin-meta">Brak custom API.</div>
-            </div>
             <div class="default-setting-row">
               <label class="default-setting-label" for="defaultCommissionInput">Domyślna prowizja (%)</label>
               <div class="default-setting-control-row">
@@ -171,6 +127,61 @@
             <button type="button" id="dedupLogsBtn">Scal duplikaty</button>
           </div>
           <div class="admin-meta">Pokaże listę zmian przed zapisaniem.</div>
+        </div>
+
+        <div class="admin-card admin-card-wide" data-admin-tab="apis">
+          <h3>API kursów walut</h3>
+          <p>Przeglądaj obecne providery kursów i dodawaj własne API. Custom API nie powinno wymagać sekretnego klucza w przeglądarce.</p>
+          <div id="rateProviderOverview" class="rate-provider-overview"></div>
+
+          <div class="rate-provider-editor">
+            <div class="rate-provider-editor-header">
+              <h4>Edytor custom API</h4>
+              <div class="admin-meta">Znacznik <code>{CURRENCY}</code> zostanie zastąpiony walutą, np. EUR.</div>
+            </div>
+            <div class="admin-log-controls rate-provider-config-controls">
+              <div class="admin-log-field rate-provider-field-select">
+                <label for="rateProviderConfigSelect">Custom API</label>
+                <select id="rateProviderConfigSelect"></select>
+              </div>
+              <div class="admin-log-field rate-provider-field-id">
+                <label for="rateProviderConfigId">ID</label>
+                <input type="text" id="rateProviderConfigId" maxlength="40" placeholder="np. moje-api">
+              </div>
+              <div class="admin-log-field rate-provider-field-label">
+                <label for="rateProviderConfigLabel">Nazwa</label>
+                <input type="text" id="rateProviderConfigLabel" maxlength="64" placeholder="np. Moje API">
+              </div>
+              <div class="admin-log-field rate-provider-field-url">
+                <label for="rateProviderConfigUrl">URL</label>
+                <input type="text" id="rateProviderConfigUrl" maxlength="500" placeholder="https://api.example.com/latest?base=PLN&symbols={CURRENCY}">
+              </div>
+              <div class="admin-log-field rate-provider-field-path">
+                <label for="rateProviderConfigPath">Ścieżka JSON</label>
+                <input type="text" id="rateProviderConfigPath" maxlength="160" placeholder="rates.{CURRENCY}">
+              </div>
+              <div class="admin-log-field rate-provider-field-transform">
+                <label for="rateProviderConfigTransform">Transformacja</label>
+                <select id="rateProviderConfigTransform">
+                  <option value="direct">Direct: PLN → waluta</option>
+                  <option value="inverse">Inverse: waluta → PLN</option>
+                </select>
+              </div>
+              <div class="admin-log-field rate-provider-field-enabled">
+                <label class="source-dual-icon-toggle">
+                  <input type="checkbox" id="rateProviderConfigEnabled" checked>
+                  <span>Włączony</span>
+                </label>
+              </div>
+            </div>
+            <div class="admin-actions source-actions">
+              <button type="button" id="rateProviderConfigNewBtn">Nowe API</button>
+              <button type="button" id="rateProviderConfigSaveBtn">Zapisz API</button>
+              <button type="button" id="rateProviderConfigDeleteBtn">Usuń API</button>
+              <button type="button" id="rateProviderConfigTestBtn">Test EUR</button>
+            </div>
+            <div id="rateProviderConfigHint" class="admin-meta">Brak custom API.</div>
+          </div>
         </div>
 
         <div class="admin-card admin-card-wide" data-admin-tab="presets">
@@ -626,6 +637,7 @@
     const defaultRateProviderSelect = document.getElementById('defaultRateProviderSelect');
     const defaultRateProviderSaveBtn = document.getElementById('defaultRateProviderSaveBtn');
     const defaultRateProviderValue = document.getElementById('defaultRateProviderValue');
+    const rateProviderOverview = document.getElementById('rateProviderOverview');
     const rateProviderConfigSelect = document.getElementById('rateProviderConfigSelect');
     const rateProviderConfigId = document.getElementById('rateProviderConfigId');
     const rateProviderConfigLabel = document.getElementById('rateProviderConfigLabel');
@@ -658,6 +670,7 @@
       logs: 'Backupy, przywracanie, migracje i pełna historia operacji.',
       reports: 'Obsługa zgłoszeń mapowań oraz błędów działania strony.',
       mappings: 'Szybki podgląd liczby wpisów exact/wzorce.',
+      apis: 'Konfiguracja API kursów walut używanych przez kalkulator.',
       sources: 'Konfiguracja URL-i wyszukiwania, ikon i wariantów źródeł.',
       presets: 'Globalne presety układu widoczne dla wszystkich użytkowników.'
     };
@@ -1447,6 +1460,41 @@
       rateProviderConfigSelect.value = providers.some((item) => item.id === current) ? current : (providers[0]?.id || '');
       fillRateProviderEditor(getSelectedRateProviderConfig());
       renderDefaultRateProviderOptions();
+      renderRateProviderOverview();
+    }
+
+    function renderRateProviderOverview() {
+      if (!rateProviderOverview) return;
+      const builtinCards = BUILTIN_RATE_PROVIDER_OPTIONS.map((item) => ({
+        ...item,
+        type: 'Wbudowane',
+        status: 'Włączone'
+      }));
+      const customCards = customRateProvidersConfig.providers.map((item) => ({
+        id: item.id,
+        label: item.label || item.id,
+        type: 'Custom',
+        status: item.enabled !== false ? 'Włączone' : 'Wyłączone',
+        url: item.url,
+        responsePath: item.responsePath,
+        transform: item.transform
+      }));
+      const cards = [...builtinCards, ...customCards];
+      rateProviderOverview.innerHTML = cards.map((item) => `
+        <div class="rate-provider-card ${item.type === 'Custom' ? 'is-custom' : 'is-builtin'}">
+          <div class="rate-provider-card-head">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span>${escapeHtml(item.type)}</span>
+          </div>
+          <div class="rate-provider-card-meta">
+            <span>ID: <code>${escapeHtml(item.id)}</code></span>
+            <span>Status: ${escapeHtml(item.status)}</span>
+            ${item.transform ? `<span>Transformacja: ${escapeHtml(item.transform)}</span>` : ''}
+          </div>
+          ${item.url ? `<div class="rate-provider-card-url"><code>${escapeHtml(item.url)}</code></div>` : ''}
+          ${item.responsePath ? `<div class="rate-provider-card-meta"><span>JSON: <code>${escapeHtml(item.responsePath)}</code></span></div>` : ''}
+        </div>
+      `).join('');
     }
 
     function getSelectedRateProviderConfig() {
