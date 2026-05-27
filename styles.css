@@ -572,6 +572,15 @@ body.layout-edit-mode .page::after {
   background: rgba(21, 128, 61, 0.96);
 }
 
+#layoutFitWindowBtn {
+  background: rgba(14, 165, 233, 0.9);
+  border-color: rgba(186, 230, 253, 0.95);
+}
+
+#layoutFitWindowBtn:hover {
+  background: rgba(2, 132, 199, 0.96);
+}
+
 #layoutResetBtn {
   background: rgba(37, 99, 235, 0.92);
   border-color: rgba(191, 219, 254, 0.95);
@@ -3293,6 +3302,12 @@ body.dark-mode .report-item.is-on-hold .report-kind {
   background: var(--accent);
   color: #fff;
   border-color: rgba(15, 91, 255, 0.4);
+}
+
+.report-save-note {
+  background: var(--card);
+  color: var(--accent);
+  border-color: rgba(15, 91, 255, 0.35);
 }
 
 .report-hold {

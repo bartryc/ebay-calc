@@ -19,6 +19,60 @@
       }
     }
   };
+  const BUILTIN_PROVIDER_KEYS = Object.keys(PROVIDERS);
+
+  function readPath(data, path, currency) {
+    const normalizedPath = String(path || '').replace(/\{CURRENCY\}/g, String(currency || ''));
+    if (!normalizedPath) return null;
+    return normalizedPath
+      .split('.')
+      .filter(Boolean)
+      .reduce((acc, key) => (acc == null ? undefined : acc[key]), data);
+  }
+
+  function normalizeCustomProvider(item) {
+    const idRaw = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!idRaw || BUILTIN_PROVIDER_KEYS.includes(idRaw)) return null;
+    const url = String(item?.url || '').trim();
+    const responsePath = String(item?.responsePath || '').trim();
+    if (!url || !responsePath) return null;
+    const label = String(item?.label || item?.name || '').trim() || idRaw;
+    const transform = String(item?.transform || 'direct').trim().toLowerCase() === 'inverse' ? 'inverse' : 'direct';
+    return {
+      id: idRaw,
+      label,
+      url,
+      responsePath,
+      transform,
+      enabled: item?.enabled !== false
+    };
+  }
+
+  function buildCustomProvider(item) {
+    return {
+      label: item.label,
+      custom: true,
+      buildUrl: (currency) => item.url.replace(/\{CURRENCY\}/g, encodeURIComponent(String(currency || ''))),
+      readRate: (data, currency) => {
+        const raw = parseFloat(String(readPath(data, item.responsePath, currency) ?? '').replace(',', '.'));
+        if (!Number.isFinite(raw) || raw <= 0) return null;
+        return item.transform === 'inverse' ? 1 / raw : raw;
+      }
+    };
+  }
+
+  function registerCustomProviders(items) {
+    Object.keys(PROVIDERS).forEach((key) => {
+      if (!BUILTIN_PROVIDER_KEYS.includes(key)) delete PROVIDERS[key];
+    });
+    const normalized = Array.isArray(items)
+      ? items.map(normalizeCustomProvider).filter((item) => item && item.enabled)
+      : [];
+    normalized.forEach((item) => {
+      PROVIDERS[item.id] = buildCustomProvider(item);
+    });
+    return normalized;
+  }
 
   function normalizeProviderKey(value) {
     const keyRaw = String(value || '').trim().toLowerCase();
@@ -54,6 +108,10 @@
     return Object.keys(PROVIDERS);
   }
 
+  function getProviderOptions() {
+    return getProviderKeys().map((key) => ({ id: key, label: PROVIDERS[key].label }));
+  }
+
   function createFetchRate(fetchImpl) {
     return function fetchRate(providerKey, currency) {
       const { key, provider } = getProvider(providerKey);
@@ -80,6 +138,8 @@
     readProviderRate,
     getDefaultRate,
     getProviderKeys,
+    getProviderOptions,
+    registerCustomProviders,
     createFetchRate
   };
 

@@ -27,6 +27,8 @@ const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
 const SEARCH_SOURCES_CONFIG_CACHE_KEY = 'searchSourcesConfigV1';
 const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
 const RATE_PROVIDER_DEFAULT_CACHE_KEY = 'rateProviderDefaultV1';
+const RATE_PROVIDERS_CONFIG_NOTE_ID = 'rate-providers-config-v1';
+const RATE_PROVIDERS_CONFIG_CACHE_KEY = 'rateProvidersConfigV1';
 const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
 const DEFAULT_COMMISSION_RATE = 15;
 let defaultCommissionRate = DEFAULT_COMMISSION_RATE;
@@ -77,6 +79,7 @@ const layoutExitBtn = document.getElementById('layoutExitBtn');
 const layoutGlobalPresetsEl = document.getElementById('layoutGlobalPresets');
 const layoutColumnRatioEl = document.getElementById('layoutColumnRatio');
 const layoutColumnModeBtn = document.getElementById('layoutColumnModeBtn');
+const layoutFitWindowBtn = document.getElementById('layoutFitWindowBtn');
 const pageLayoutRoot = document.querySelector('body[data-page-title="Kalkulator"] .layout');
 const columnResizer = document.getElementById('columnResizer');
 const columnResizerRight = document.getElementById('columnResizerRight');
@@ -443,6 +446,57 @@ function setLayoutColumnCount(count) {
     renderLayoutItemControls();
     updateLayoutDiffHighlight();
   }
+}
+
+function getCurrentLayoutContainerWidth() {
+  const width = pageLayoutRoot?.getBoundingClientRect?.().width;
+  if (Number.isFinite(width) && width > 0) return width;
+  return window.innerWidth || 0;
+}
+
+function getFitLayoutColumnProfile() {
+  const current = getCurrentLayoutColumnWidth();
+  const containerWidth = getCurrentLayoutContainerWidth();
+  if (current.count === 3) {
+    const resizerSpace = containerWidth <= 760 ? 8 : 24;
+    const usableWidth = Math.max(1, containerWidth - resizerSpace);
+    const infoPx = Math.min(420, Math.max(300, usableWidth * 0.25));
+    const extraPx = Math.min(360, Math.max(240, usableWidth * 0.22));
+    const minPx = Math.max(180, usableWidth * (MIN_THREE_COLUMN_WIDTH / 100));
+    let calcPx = usableWidth - infoPx - extraPx;
+    let nextInfoPx = infoPx;
+    let nextExtraPx = extraPx;
+
+    if (calcPx < minPx) {
+      const deficit = minPx - calcPx;
+      const rest = Math.max(1, nextInfoPx + nextExtraPx);
+      nextInfoPx = Math.max(minPx, nextInfoPx - (deficit * (nextInfoPx / rest)));
+      nextExtraPx = Math.max(minPx, nextExtraPx - (deficit * (nextExtraPx / rest)));
+      calcPx = usableWidth - nextInfoPx - nextExtraPx;
+    }
+
+    return normalizeLayoutColumnProfile({
+      count: 3,
+      widths: {
+        calc: (calcPx / usableWidth) * 100,
+        info: (nextInfoPx / usableWidth) * 100,
+        extra: (nextExtraPx / usableWidth) * 100
+      }
+    });
+  }
+
+  const resizerSpace = containerWidth <= 360 ? 6 : containerWidth <= 760 ? 8 : 12;
+  const usableWidth = Math.max(1, containerWidth - resizerSpace);
+  const infoPx = Math.min(460, Math.max(320, usableWidth * 0.34));
+  const calcPercent = ((usableWidth - infoPx) / usableWidth) * 100;
+  return normalizeLayoutColumnProfile({
+    count: 2,
+    widths: {
+      calc: calcPercent,
+      info: 100 - calcPercent,
+      extra: 0
+    }
+  });
 }
 
 function applyLayoutColumnWidth(value) {
@@ -1547,12 +1601,6 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
   window.CalculatorUI.clearRecalculatedFields();
   const toggleEl = document.getElementById(toggleId);
   if (!toggleEl) return false;
-  const previousSaleIsNet = toggleId === 'markupSaleNetToggle' ? !!toggleEl.checked : null;
-  const targetSaleEl = document.getElementById('targetSaleAmount');
-  const targetSaleValue = parseNumber(targetSaleEl?.value);
-  const targetSaleBruttoBefore = toggleId === 'markupSaleNetToggle' && Number.isFinite(targetSaleValue)
-    ? window.CalculatorCore.amountToBrutto(targetSaleValue, previousSaleIsNet, getClientVatRateFraction())
-    : NaN;
   toggleEl.checked = !!toNetMode;
 
   if (toggleId === 'purchaseAmountNetToggle') {
@@ -1565,18 +1613,10 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
 
   if (toggleId === 'markupSaleNetToggle') {
     updateMarkupAmountModeUI();
-    if (
-      saleCalcSource === 'targetSaleAmount'
-      && targetSaleEl
-      && Number.isFinite(targetSaleBruttoBefore)
-    ) {
-      const convertedSaleValue = window.CalculatorCore.bruttoToInputAmount(targetSaleBruttoBefore, !!toNetMode, getClientVatRateFraction());
-      if (Number.isFinite(convertedSaleValue)) {
-        const formatted = convertedSaleValue.toFixed(2);
-        targetSaleEl.value = formatted;
-        autoLinkedFieldValues.targetSaleAmount = formatted;
-        window.CalculatorUI.flashRecalculatedField(targetSaleEl);
-      }
+    const targetSaleValue = parseNumber(document.getElementById('targetSaleAmount')?.value);
+    if (Number.isFinite(targetSaleValue) && !canAutoUpdateField('targetSaleAmount')) {
+      rememberMarkupSource('targetSaleAmount');
+      markupPriceSource = 'targetSaleAmount';
     }
     updateSaleMarkupOnly();
     if (options.history !== false) addHistoryEntry('markupAmountMode');
@@ -2252,6 +2292,22 @@ if (layoutColumnModeBtn) {
   });
 }
 
+if (layoutFitWindowBtn) {
+  layoutFitWindowBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    preserveLayoutEditScroll(() => {
+      const nextProfile = applyLayoutColumnWidth(getFitLayoutColumnProfile());
+      selectedLayoutPresetKey = 'custom';
+      localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
+      applyPresetSelectionVisual();
+      updateLayoutDiffHighlight();
+      updateLayoutEditBarSpace();
+      showMainToast(`${formatLayoutColumnRatio(nextProfile)} dopasowane do okna.`, 'info');
+    });
+  });
+}
+
 if (layoutExitBtn) {
   layoutExitBtn.addEventListener('click', (event) => {
     event.preventDefault();
@@ -2904,6 +2960,67 @@ function applyRateProviderSelection(value, options = {}) {
   }
 }
 
+function renderRateProviderOptions() {
+  const rateSourceSelect = document.getElementById('rateSource');
+  const statusRow = document.getElementById('rateStatusRow');
+  if (!rateSourceSelect || !window.RateService?.getProviderOptions) return;
+  const current = rateSourceSelect.value || window.RateService.DEFAULT_PROVIDER;
+  const options = window.RateService.getProviderOptions();
+  rateSourceSelect.innerHTML = options
+    .map((item) => `<option value="${item.id}">${item.label}</option>`)
+    .join('');
+  rateSourceSelect.value = window.RateService.normalizeProviderKey(current);
+  if (statusRow) {
+    statusRow.innerHTML = options
+      .map((item) => `<span class="rate-status" data-provider="${item.id}"><span class="dot"></span>${item.label}</span>`)
+      .join('');
+  }
+}
+
+function normalizeRateProvidersConfig(raw) {
+  const incoming = raw && typeof raw === 'object' ? raw : {};
+  const providers = Array.isArray(incoming.providers) ? incoming.providers : [];
+  return {
+    version: Number(incoming.version) || 1,
+    providers: providers.map((item) => ({
+      id: String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, ''),
+      label: String(item?.label || item?.name || '').trim(),
+      enabled: item?.enabled !== false,
+      url: String(item?.url || '').trim(),
+      responsePath: String(item?.responsePath || '').trim(),
+      transform: String(item?.transform || 'direct').trim().toLowerCase() === 'inverse' ? 'inverse' : 'direct'
+    })).filter((item) => item.id && item.url && item.responsePath)
+  };
+}
+
+async function loadCustomRateProviders() {
+  let config = null;
+  const fromLocal = localStorage.getItem(RATE_PROVIDERS_CONFIG_CACHE_KEY);
+  if (fromLocal) {
+    try {
+      config = normalizeRateProvidersConfig(JSON.parse(fromLocal));
+      window.RateService.registerCustomProviders(config.providers);
+      renderRateProviderOptions();
+    } catch (_error) {
+      // ignore local parse error
+    }
+  }
+  if (!window.PN_MAPPINGS_API?.request) return;
+  try {
+    const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(RATE_PROVIDERS_CONFIG_NOTE_ID)}`, { method: 'GET' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const parsed = payload?.note ? JSON.parse(payload.note) : null;
+    if (!parsed) return;
+    config = normalizeRateProvidersConfig(parsed);
+    window.RateService.registerCustomProviders(config.providers);
+    localStorage.setItem(RATE_PROVIDERS_CONFIG_CACHE_KEY, JSON.stringify(config));
+    renderRateProviderOptions();
+  } catch (_error) {
+    // fallback to built-in/local providers
+  }
+}
+
 async function loadDefaultRateProviderSelection() {
   const localDefault = localStorage.getItem(RATE_PROVIDER_DEFAULT_CACHE_KEY);
   if (localDefault) {
@@ -3313,6 +3430,8 @@ updateCommissionFromBaseMultiplier();
 updateSummaryMetrics();
 
 (async () => {
+  renderRateProviderOptions();
+  await loadCustomRateProviders();
   await loadDefaultRateProviderSelection();
   await loadDefaultCommissionRate();
   const currency = document.getElementById('currency').value;
