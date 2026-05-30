@@ -846,10 +846,59 @@ function bindColumnResizer() {
   if (!columnResizer || !pageLayoutRoot) return;
   applyLayoutColumnWidth(getCurrentLayoutColumnWidth());
 
-  const updateFromPointer = (clientX, resizerKey = 'left') => {
+  const getColumnPixelMetrics = () => {
     const rect = pageLayoutRoot.getBoundingClientRect();
-    if (!rect.width) return getCurrentLayoutColumnWidth();
-    const relative = ((clientX - rect.left) / rect.width) * 100;
+    const style = window.getComputedStyle(pageLayoutRoot);
+    const gap = parseFloat(style.columnGap || style.gap || '0') || 0;
+    const current = getCurrentLayoutColumnWidth();
+    const leftResizerWidth = columnResizer?.getBoundingClientRect?.().width || 0;
+    const rawRightResizerWidth = current.count === 3
+      ? (columnResizerRight?.getBoundingClientRect?.().width || 0)
+      : 0;
+    const rightResizerVisible = rawRightResizerWidth > 0 && window.getComputedStyle(columnResizerRight).display !== 'none';
+    const rightResizerWidth = rightResizerVisible ? rawRightResizerWidth : 0;
+    const fixedWidth = current.count === 3 && rightResizerVisible
+      ? leftResizerWidth + rightResizerWidth + (gap * 4)
+      : leftResizerWidth + (gap * 2);
+    return {
+      rect,
+      gap,
+      leftResizerWidth,
+      rightResizerWidth,
+      rightResizerVisible,
+      resizableWidth: Math.max(1, rect.width - fixedWidth)
+    };
+  };
+
+  const getResizerBoundaryClientX = (resizerKey = 'left') => {
+    const current = getCurrentLayoutColumnWidth();
+    const metrics = getColumnPixelMetrics();
+    const calcPx = metrics.resizableWidth * (current.widths.calc / 100);
+    if (current.count === 3 && resizerKey === 'right') {
+      const infoPx = metrics.resizableWidth * (current.widths.info / 100);
+      return metrics.rect.left + calcPx + infoPx + (metrics.gap * 3) + metrics.leftResizerWidth + (metrics.rightResizerWidth / 2);
+    }
+    return metrics.rect.left + calcPx + metrics.gap + (metrics.leftResizerWidth / 2);
+  };
+
+  const getPointerRelativePercent = (clientX, resizerKey = 'left', grabOffset = 0) => {
+    const metrics = getColumnPixelMetrics();
+    if (!metrics.rect.width) return null;
+    const adjustedClientX = clientX - grabOffset;
+    const fixedBeforeBoundary = current => {
+      if (current.count === 3 && resizerKey === 'right' && metrics.rightResizerVisible) {
+        return (metrics.gap * 3) + metrics.leftResizerWidth + (metrics.rightResizerWidth / 2);
+      }
+      return metrics.gap + (metrics.leftResizerWidth / 2);
+    };
+    const current = getCurrentLayoutColumnWidth();
+    const relativePx = adjustedClientX - metrics.rect.left - fixedBeforeBoundary(current);
+    return (relativePx / metrics.resizableWidth) * 100;
+  };
+
+  const updateFromPointer = (clientX, resizerKey = 'left', grabOffset = 0) => {
+    const relative = getPointerRelativePercent(clientX, resizerKey, grabOffset);
+    if (!Number.isFinite(relative)) return getCurrentLayoutColumnWidth();
     const current = getCurrentLayoutColumnWidth();
     let nextProfile;
     if (current.count === 3) {
@@ -892,11 +941,11 @@ function bindColumnResizer() {
     event.preventDefault();
     document.body.classList.add('is-column-resizing');
     resizerEl.setPointerCapture?.(event.pointerId);
-    updateFromPointer(event.clientX, resizerKey);
+    const grabOffset = event.clientX - getResizerBoundaryClientX(resizerKey);
 
     const handleMove = (moveEvent) => {
       moveEvent.preventDefault();
-      updateFromPointer(moveEvent.clientX, resizerKey);
+      updateFromPointer(moveEvent.clientX, resizerKey, grabOffset);
     };
 
     const handleEnd = (endEvent) => {
