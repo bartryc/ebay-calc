@@ -2006,12 +2006,13 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
 
 .currency-config-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 10px;
 }
 
 .currency-config-chip {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px;
   min-width: 0;
   padding: 10px 12px;
@@ -2040,12 +2041,13 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
 }
 
 .currency-config-chip small {
+  grid-column: 1 / -1;
   color: var(--muted);
   font-weight: 650;
 }
 
 .currency-config-controls {
-  grid-template-columns: minmax(90px, 0.45fr) minmax(120px, 0.8fr) minmax(180px, 1fr);
+  grid-template-columns: minmax(90px, 0.34fr) minmax(260px, 1.2fr) minmax(180px, 0.8fr);
   align-items: end;
 }
 
