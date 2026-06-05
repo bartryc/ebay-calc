@@ -1999,6 +1999,60 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
   margin: 0;
 }
 
+.currency-editor {
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+}
+
+.currency-config-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 10px;
+}
+
+.currency-config-chip {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-2);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.currency-config-chip:hover {
+  border-color: var(--accent);
+}
+
+.currency-config-chip strong,
+.currency-config-chip span,
+.currency-config-chip small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.currency-config-chip span {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.currency-config-chip small {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.currency-config-controls {
+  grid-template-columns: minmax(90px, 0.45fr) minmax(120px, 0.8fr) minmax(180px, 1fr);
+  align-items: end;
+}
+
+.currency-config-controls .admin-log-field input {
+  width: 100%;
+}
+
 .rate-provider-config-controls {
   grid-template-columns: minmax(180px, 0.8fr) minmax(160px, 0.7fr) minmax(220px, 1fr);
   grid-template-areas:
@@ -4815,6 +4869,10 @@ footer {
       "path"
       "transform"
       "enabled";
+  }
+
+  .currency-config-controls {
+    grid-template-columns: 1fr;
   }
 
   .source-config-controls {

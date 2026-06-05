@@ -104,6 +104,22 @@
     return DEFAULT_RATES[currency] || 4.3;
   }
 
+  function registerCustomCurrencies(items) {
+    if (!Array.isArray(items)) return [];
+    const normalized = items
+      .map((item) => {
+        const code = String(item?.code || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+        const fallbackRate = parseFloat(String(item?.fallbackRate ?? '').replace(',', '.'));
+        if (!/^[A-Z]{3}$/.test(code) || !Number.isFinite(fallbackRate) || fallbackRate <= 0) return null;
+        return { code, fallbackRate };
+      })
+      .filter(Boolean);
+    normalized.forEach((item) => {
+      DEFAULT_RATES[item.code] = item.fallbackRate;
+    });
+    return normalized;
+  }
+
   function getProviderKeys() {
     return Object.keys(PROVIDERS);
   }
@@ -140,6 +156,7 @@
     getProviderKeys,
     getProviderOptions,
     registerCustomProviders,
+    registerCustomCurrencies,
     createFetchRate
   };
 

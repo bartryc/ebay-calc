@@ -29,9 +29,17 @@ const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
 const RATE_PROVIDER_DEFAULT_CACHE_KEY = 'rateProviderDefaultV1';
 const RATE_PROVIDERS_CONFIG_NOTE_ID = 'rate-providers-config-v1';
 const RATE_PROVIDERS_CONFIG_CACHE_KEY = 'rateProvidersConfigV1';
+const CURRENCIES_CONFIG_NOTE_ID = 'currencies-config-v1';
+const CURRENCIES_CONFIG_CACHE_KEY = 'currenciesConfigV1';
 const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
 const DEFAULT_COMMISSION_RATE = 15;
 let defaultCommissionRate = DEFAULT_COMMISSION_RATE;
+const DEFAULT_CURRENCIES = [
+  { code: 'EUR', label: 'EUR', fallbackRate: 4.3 },
+  { code: 'USD', label: 'USD', fallbackRate: 3.9 },
+  { code: 'GBP', label: 'GBP', fallbackRate: 5.0 }
+];
+let currenciesConfig = { version: 1, currencies: DEFAULT_CURRENCIES };
 
 const INDEX_LAYOUT_STORAGE_KEY = 'indexLayoutOrderV1';
 const INDEX_LAYOUT_COOKIE_KEY = 'indexLayoutOrderV1';
@@ -3026,6 +3034,75 @@ function renderRateProviderOptions() {
   }
 }
 
+function normalizeCurrencyItem(item) {
+  const code = String(item?.code || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+  if (!/^[A-Z]{3}$/.test(code)) return null;
+  const fallbackRate = parseFloat(String(item?.fallbackRate ?? '').replace(',', '.'));
+  return {
+    code,
+    label: String(item?.label || code).trim() || code,
+    enabled: item?.enabled !== false,
+    fallbackRate: Number.isFinite(fallbackRate) && fallbackRate > 0
+      ? fallbackRate
+      : (window.RateService.DEFAULT_RATES[code] || 4.3)
+  };
+}
+
+function normalizeCurrenciesConfig(raw) {
+  const incoming = raw && typeof raw === 'object' ? raw : {};
+  const incomingList = Array.isArray(incoming.currencies) ? incoming.currencies : [];
+  const byCode = new Map(DEFAULT_CURRENCIES.map((item) => [item.code, { ...item, enabled: true }]));
+  incomingList.map(normalizeCurrencyItem).filter(Boolean).forEach((item) => {
+    byCode.set(item.code, item);
+  });
+  return {
+    version: Number(incoming.version) || 1,
+    currencies: Array.from(byCode.values()).filter((item) => item.enabled !== false)
+  };
+}
+
+function renderCurrencyOptions() {
+  const currencySelect = document.getElementById('currency');
+  if (!currencySelect) return;
+  const current = currencySelect.value || 'EUR';
+  currencySelect.innerHTML = currenciesConfig.currencies
+    .map((item) => `<option value="${item.code}">${item.label || item.code}</option>`)
+    .join('');
+  currencySelect.value = currenciesConfig.currencies.some((item) => item.code === current) ? current : 'EUR';
+  document.getElementById('currencyLabel').innerText = currencySelect.value;
+  updateEbayCurrencyLabel();
+}
+
+async function loadCurrenciesConfig() {
+  const fromLocal = localStorage.getItem(CURRENCIES_CONFIG_CACHE_KEY);
+  if (fromLocal) {
+    try {
+      currenciesConfig = normalizeCurrenciesConfig(JSON.parse(fromLocal));
+      window.RateService.registerCustomCurrencies(currenciesConfig.currencies);
+      renderCurrencyOptions();
+    } catch (_error) {
+      // ignore local parse error
+    }
+  } else {
+    window.RateService.registerCustomCurrencies(currenciesConfig.currencies);
+    renderCurrencyOptions();
+  }
+  if (!window.PN_MAPPINGS_API?.request) return;
+  try {
+    const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(CURRENCIES_CONFIG_NOTE_ID)}`, { method: 'GET' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const parsed = payload?.note ? JSON.parse(payload.note) : null;
+    if (!parsed) return;
+    currenciesConfig = normalizeCurrenciesConfig(parsed);
+    window.RateService.registerCustomCurrencies(currenciesConfig.currencies);
+    localStorage.setItem(CURRENCIES_CONFIG_CACHE_KEY, JSON.stringify(currenciesConfig));
+    renderCurrencyOptions();
+  } catch (_error) {
+    // fallback to built-in/local currencies
+  }
+}
+
 function normalizeRateProvidersConfig(raw) {
   const incoming = raw && typeof raw === 'object' ? raw : {};
   const providers = Array.isArray(incoming.providers) ? incoming.providers : [];
@@ -3480,6 +3557,7 @@ updateSummaryMetrics();
 
 (async () => {
   renderRateProviderOptions();
+  await loadCurrenciesConfig();
   await loadCustomRateProviders();
   await loadDefaultRateProviderSelection();
   await loadDefaultCommissionRate();

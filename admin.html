@@ -132,6 +132,33 @@
         <div class="admin-card admin-card-wide" data-admin-tab="apis">
           <h3>API kursów walut</h3>
           <p>Przeglądaj obecne providery kursów i dodawaj własne API. Custom API nie powinno wymagać sekretnego klucza w przeglądarce.</p>
+          <div class="rate-provider-editor currency-editor">
+            <div class="rate-provider-editor-header">
+              <h4>Waluty</h4>
+              <div class="admin-meta">Dodaj kod ISO waluty, np. AUD. Fallback jest używany tylko, gdy API kursu nie odpowie.</div>
+            </div>
+            <div id="currencyConfigList" class="currency-config-list"></div>
+            <div class="admin-log-controls currency-config-controls">
+              <div class="admin-log-field">
+                <label for="currencyConfigCode">Kod</label>
+                <input type="text" id="currencyConfigCode" maxlength="3" placeholder="AUD">
+              </div>
+              <div class="admin-log-field">
+                <label for="currencyConfigLabel">Etykieta</label>
+                <input type="text" id="currencyConfigLabel" maxlength="20" placeholder="AUD">
+              </div>
+              <div class="admin-log-field">
+                <label for="currencyConfigFallback">Fallback PLN → waluta</label>
+                <input type="number" id="currencyConfigFallback" min="0" step="0.0001" placeholder="0.38">
+              </div>
+            </div>
+            <div class="admin-actions source-actions">
+              <button type="button" id="currencyConfigSaveBtn">Dodaj / zapisz walutę</button>
+              <button type="button" id="currencyConfigDeleteBtn">Usuń walutę</button>
+            </div>
+            <div id="currencyConfigHint" class="admin-meta">Wbudowane: EUR, USD, GBP.</div>
+          </div>
+
           <div id="rateProviderOverview" class="rate-provider-overview"></div>
 
           <div class="rate-provider-editor">
@@ -637,6 +664,13 @@
     const defaultRateProviderSelect = document.getElementById('defaultRateProviderSelect');
     const defaultRateProviderSaveBtn = document.getElementById('defaultRateProviderSaveBtn');
     const defaultRateProviderValue = document.getElementById('defaultRateProviderValue');
+    const currencyConfigList = document.getElementById('currencyConfigList');
+    const currencyConfigCode = document.getElementById('currencyConfigCode');
+    const currencyConfigLabel = document.getElementById('currencyConfigLabel');
+    const currencyConfigFallback = document.getElementById('currencyConfigFallback');
+    const currencyConfigSaveBtn = document.getElementById('currencyConfigSaveBtn');
+    const currencyConfigDeleteBtn = document.getElementById('currencyConfigDeleteBtn');
+    const currencyConfigHint = document.getElementById('currencyConfigHint');
     const rateProviderOverview = document.getElementById('rateProviderOverview');
     const rateProviderConfigSelect = document.getElementById('rateProviderConfigSelect');
     const rateProviderConfigId = document.getElementById('rateProviderConfigId');
@@ -658,13 +692,20 @@
     const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
     const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
     const RATE_PROVIDERS_CONFIG_NOTE_ID = 'rate-providers-config-v1';
+    const CURRENCIES_CONFIG_NOTE_ID = 'currencies-config-v1';
     const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
     const DEFAULT_COMMISSION_RATE = 15;
+    const BUILTIN_CURRENCIES = [
+      { code: 'EUR', label: 'EUR', fallbackRate: 4.3 },
+      { code: 'USD', label: 'USD', fallbackRate: 3.9 },
+      { code: 'GBP', label: 'GBP', fallbackRate: 5.0 }
+    ];
     const BUILTIN_RATE_PROVIDER_OPTIONS = [
       { id: 'nbp', label: 'NBP API' },
       { id: 'erapi', label: 'open.er-api.com' }
     ];
     let customRateProvidersConfig = { version: 1, providers: [] };
+    let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES };
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
     const ADMIN_TAB_DESCRIPTIONS = {
       logs: 'Backupy, przywracanie, migracje i pełna historia operacji.',
@@ -1407,6 +1448,87 @@
       const responsePath = String(item?.responsePath || '').trim();
       const transform = String(item?.transform || 'direct').trim().toLowerCase() === 'inverse' ? 'inverse' : 'direct';
       return { id, label, enabled: item?.enabled !== false, url, responsePath, transform };
+    }
+
+    function normalizeCurrencyItem(item) {
+      const code = String(item?.code || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+      if (!/^[A-Z]{3}$/.test(code)) return null;
+      const fallbackRate = parseFloat(String(item?.fallbackRate ?? '').replace(',', '.'));
+      const builtin = BUILTIN_CURRENCIES.find((currency) => currency.code === code);
+      return {
+        code,
+        label: String(item?.label || code).trim() || code,
+        fallbackRate: Number.isFinite(fallbackRate) && fallbackRate > 0
+          ? fallbackRate
+          : (builtin?.fallbackRate || 4.3),
+        enabled: item?.enabled !== false
+      };
+    }
+
+    function normalizeCurrenciesConfig(raw) {
+      const incoming = raw && typeof raw === 'object' ? raw : {};
+      const byCode = new Map(BUILTIN_CURRENCIES.map((item) => [item.code, { ...item, enabled: true }]));
+      const incomingList = Array.isArray(incoming.currencies) ? incoming.currencies : [];
+      incomingList.map(normalizeCurrencyItem).filter(Boolean).forEach((item) => {
+        byCode.set(item.code, item);
+      });
+      return {
+        version: Number(incoming.version) || 1,
+        currencies: Array.from(byCode.values()).filter((item) => item.enabled !== false)
+      };
+    }
+
+    function renderCurrencyConfigList() {
+      if (!currencyConfigList) return;
+      currencyConfigList.innerHTML = currenciesConfig.currencies.map((item) => {
+        const builtin = BUILTIN_CURRENCIES.some((currency) => currency.code === item.code);
+        return `
+          <button type="button" class="currency-config-chip" data-currency-code="${item.code}">
+            <strong>${escapeHtml(item.label || item.code)}</strong>
+            <span>${escapeHtml(item.code)}</span>
+            <small>${builtin ? 'Wbudowana' : `Fallback ${Number(item.fallbackRate).toFixed(4)}`}</small>
+          </button>
+        `;
+      }).join('');
+      if (currencyConfigHint) {
+        currencyConfigHint.textContent = `Aktywne waluty: ${currenciesConfig.currencies.map((item) => item.code).join(', ')}`;
+      }
+    }
+
+    function fillCurrencyEditor(item) {
+      if (currencyConfigCode) currencyConfigCode.value = item?.code || '';
+      if (currencyConfigLabel) currencyConfigLabel.value = item?.label || item?.code || '';
+      if (currencyConfigFallback) currencyConfigFallback.value = item?.fallbackRate ? Number(item.fallbackRate).toFixed(4).replace(/0+$/, '').replace(/\.$/, '') : '';
+    }
+
+    async function saveCurrenciesConfig() {
+      if (!window.PN_MAPPINGS_API?.request) throw new Error('Brak API zapisu');
+      const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(CURRENCIES_CONFIG_NOTE_ID)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: JSON.stringify(currenciesConfig) })
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+    }
+
+    async function loadCurrenciesConfig() {
+      if (!window.PN_MAPPINGS_API?.request) {
+        currenciesConfig = normalizeCurrenciesConfig(null);
+        renderCurrencyConfigList();
+        return;
+      }
+      try {
+        const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(CURRENCIES_CONFIG_NOTE_ID)}`, { method: 'GET' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        currenciesConfig = normalizeCurrenciesConfig(payload?.note ? JSON.parse(payload.note) : null);
+      } catch (_error) {
+        currenciesConfig = normalizeCurrenciesConfig(null);
+      }
+      renderCurrencyConfigList();
     }
 
     function normalizeRateProvidersConfig(raw) {
@@ -2319,8 +2441,58 @@
     setupAdminTabs();
     setupSourcesEditor();
     loadSourcesConfig();
+    loadCurrenciesConfig();
     loadRateProvidersConfig().then(loadDefaultRateProviderSetting);
     loadDefaultCommissionSetting();
+
+    currencyConfigList?.addEventListener('click', (event) => {
+      const chip = event.target.closest('.currency-config-chip');
+      if (!chip) return;
+      const code = chip.getAttribute('data-currency-code') || '';
+      fillCurrencyEditor(currenciesConfig.currencies.find((item) => item.code === code));
+    });
+    currencyConfigSaveBtn?.addEventListener('click', async () => {
+      const item = normalizeCurrencyItem({
+        code: currencyConfigCode?.value,
+        label: currencyConfigLabel?.value,
+        fallbackRate: currencyConfigFallback?.value,
+        enabled: true
+      });
+      if (!item) {
+        showToast('Podaj poprawny 3-literowy kod waluty i fallback.', 'warn');
+        return;
+      }
+      const index = currenciesConfig.currencies.findIndex((currency) => currency.code === item.code);
+      if (index >= 0) currenciesConfig.currencies[index] = item;
+      else currenciesConfig.currencies.push(item);
+      currenciesConfig = normalizeCurrenciesConfig(currenciesConfig);
+      try {
+        await saveCurrenciesConfig();
+        renderCurrencyConfigList();
+        fillCurrencyEditor(item);
+        showToast(`Waluta ${item.code} zapisana.`, 'ok');
+      } catch (error) {
+        showToast(`Błąd zapisu waluty: ${error.message || 'unknown'}`, 'warn');
+      }
+    });
+    currencyConfigDeleteBtn?.addEventListener('click', async () => {
+      const code = String(currencyConfigCode?.value || '').trim().toUpperCase();
+      if (BUILTIN_CURRENCIES.some((item) => item.code === code)) {
+        showToast('Nie można usunąć waluty wbudowanej.', 'warn');
+        return;
+      }
+      if (!code) return;
+      currenciesConfig.currencies = currenciesConfig.currencies.filter((item) => item.code !== code);
+      currenciesConfig = normalizeCurrenciesConfig(currenciesConfig);
+      try {
+        await saveCurrenciesConfig();
+        renderCurrencyConfigList();
+        fillCurrencyEditor(null);
+        showToast(`Waluta ${code} usunięta.`, 'ok');
+      } catch (error) {
+        showToast(`Błąd usuwania waluty: ${error.message || 'unknown'}`, 'warn');
+      }
+    });
 
     rateProviderConfigSelect?.addEventListener('change', () => {
       fillRateProviderEditor(getSelectedRateProviderConfig());
