@@ -55,8 +55,14 @@
     }, 60000);
   }
 
-  function writeField(el, value) {
+  function isActiveElement(doc, el) {
+    const activeElement = doc?.activeElement || root.document?.activeElement || null;
+    return !!el && activeElement === el;
+  }
+
+  function writeField(doc, el, value, options = {}) {
     if (!el || !Number.isFinite(value)) return;
+    if (options.skipActive !== false && isActiveElement(doc, el)) return;
     const nextValue = value.toFixed(2);
     if (el.value === nextValue) return;
     el.value = nextValue;
@@ -68,9 +74,9 @@
     const nettoEl = getElement(doc, 'plnNetto');
     const bruttoEl = getElement(doc, 'plnBrutto');
     const ebayEl = getElement(doc, 'ebayPrice');
-    if (!skip.has('netto')) writeField(nettoEl, result?.netto);
-    if (!skip.has('brutto')) writeField(bruttoEl, result?.brutto);
-    if (!skip.has('ebayPrice')) writeField(ebayEl, result?.ebay);
+    if (!skip.has('netto')) writeField(doc, nettoEl, result?.netto, options);
+    if (!skip.has('brutto')) writeField(doc, bruttoEl, result?.brutto, options);
+    if (!skip.has('ebayPrice')) writeField(doc, ebayEl, result?.ebay, options);
   }
 
   function readMarkupState(doc, getCommissionRate) {
@@ -106,6 +112,7 @@
     readPrimaryState,
     clearRecalculatedFields,
     flashRecalculatedField,
+    isActiveElement,
     writePrimaryResult,
     readMarkupState,
     readBaseState

@@ -1496,13 +1496,13 @@ function syncTargetSaleFromEbay(options = {}) {
   return true;
 }
 
-function getSaleBruttoForCurrentSource() {
+function getSaleBruttoForCurrentSource(options = {}) {
   const state = window.CalculatorUI.readMarkupState(document, getActiveCommissionRate);
   const source = window.CalculatorCore.resolveMarkupSource({
     ...state,
     lastSource: saleCalcSource
   });
-  if (source) rememberMarkupSource(source);
+  if (source && options.rememberSource !== false) rememberMarkupSource(source);
   return window.CalculatorCore.calculateSaleBruttoFromMarkupSource(source, state);
 }
 
@@ -1571,7 +1571,7 @@ function clearPrimaryPricingFields(source) {
   });
   originalEbayPrice = null;
   originalExchangeRate = null;
-  updateMarkupCalculations();
+  updateMarkupCalculations({ syncFields: false });
   updateSummaryMetrics();
   return true;
 }
@@ -1744,7 +1744,7 @@ function updateMinSaleByMarkup() {
     return;
   }
 
-  const saleBrutto = getSaleBruttoForCurrentSource();
+  const saleBrutto = getSaleBruttoForCurrentSource({ rememberSource: false });
   if (!Number.isFinite(saleBrutto)) {
     minSalePlnEl.textContent = '—';
     minSaleEbayEl.textContent = '—';
@@ -1816,8 +1816,10 @@ function updateMarkupFromSale() {
   }
 }
 
-function updateMarkupCalculations() {
-  syncMarkupSourceFields();
+function updateMarkupCalculations(options = {}) {
+  if (options.syncFields !== false) {
+    syncMarkupSourceFields();
+  }
   updateMinSaleByMarkup();
   updateMarkupFromSale();
   updateSummaryMetrics();
@@ -1851,23 +1853,6 @@ function updateCommissionFromBaseMultiplier() {
     return;
   }
   resultEl.textContent = `${(commission * 100).toFixed(2)}%`;
-}
-
-function setupAutoReplaceInput(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-
-  el.addEventListener('focus', () => {
-    requestAnimationFrame(() => {
-      if (document.activeElement !== el) return;
-      if ((el.value || '').trim().length === 0) return;
-      try {
-        el.select();
-      } catch (_error) {
-        // ignore
-      }
-    });
-  });
 }
 
 function updateBaseMultiplier() {
@@ -2107,6 +2092,11 @@ function enforceTwoDecimals(inputEl) {
   if (next !== raw) {
     inputEl.value = next;
   }
+}
+
+function finishDecimalInput(inputEl) {
+  enforceTwoDecimals(inputEl);
+  enforceFieldMax(inputEl);
 }
 
 function enforceFieldMax(inputEl) {
@@ -2676,7 +2666,7 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   }
   updateMarkupAmountModeUI();
   rememberMarkupSource('minMarkup');
-  updateMarkupCalculations();
+  updateMarkupCalculations({ syncFields: false });
   document.getElementById('productId').value = '';
   document.getElementById('currency').value = 'EUR';
   document.getElementById('currencyLabel').innerText = 'EUR';
@@ -2872,16 +2862,22 @@ function updateEbayPriceFromNettoOrBrutto() {
   const primaryState = window.CalculatorUI.readPrimaryState(document, getActiveCommissionRate);
   const { exchangeRate, commission, vatRate } = primaryState;
   const source = window.CalculatorCore.resolvePricingSource({
-    ...primaryState,
-    lastPrimarySource,
-    lastChanged,
+    netto: primaryState.netto,
+    brutto: primaryState.brutto,
+    ebayPrice: NaN,
+    lastPrimarySource: lastPrimarySource === 'netto' || lastPrimarySource === 'brutto' ? lastPrimarySource : null,
+    lastChanged: lastChanged === 'netto' || lastChanged === 'brutto' ? lastChanged : null,
     activeSource: getActivePrimarySource()
   });
 
   if ((source === 'netto' || source === 'brutto') && validateInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
-    const { pricing, skip } = window.CalculatorCore.calculatePrimaryFromSource(source, primaryState, exchangeRate, vatRate, commission);
-    window.CalculatorUI.writePrimaryResult(document, pricing, { skip });
+    const { pricing } = window.CalculatorCore.calculatePrimaryFromSource(source, primaryState, exchangeRate, vatRate, commission);
+    window.CalculatorUI.writePrimaryResult(document, pricing, { skip: ['netto', 'brutto'] });
     rememberPrimarySource(source);
+    originalEbayPrice = Number.isFinite(pricing?.ebay) ? pricing.ebay : originalEbayPrice;
+    originalCurrency = document.getElementById('currency').value;
+    originalExchangeRate = exchangeRate;
+    calculatePrice();
   }
 }
 
@@ -2897,11 +2893,11 @@ function fetchExchangeRate(currency, options = {}) {
   exchangeInfo.innerText = 'Pobieranie kursu...';
   if (exchangeRateTooltip) exchangeRateTooltip.setAttribute('data-tooltip', '');
 
-  const ebayPriceValue = parseNumber(ebayPriceInput.value);
-  const convertEbayPriceNeeded = Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice' && lastCurrency !== currency && !isPresetApplied;
   const nettoValue = parseNumber(document.getElementById('plnNetto').value);
   const bruttoValue = parseNumber(document.getElementById('plnBrutto').value);
-  const updateFromNettoOrBrutto = (Number.isFinite(nettoValue) || Number.isFinite(bruttoValue)) && (lastChanged === 'netto' || lastChanged === 'brutto');
+  const hasPlnPricingBase = Number.isFinite(nettoValue) || Number.isFinite(bruttoValue);
+  const ebayPriceValue = parseNumber(ebayPriceInput.value);
+  const convertEbayPriceNeeded = Number.isFinite(ebayPriceValue) && !hasPlnPricingBase && lastChanged === 'ebayPrice' && lastCurrency !== currency && !isPresetApplied;
   const oldCurrency = lastCurrency;
   lastCurrency = currency;
 
@@ -2921,9 +2917,6 @@ function fetchExchangeRate(currency, options = {}) {
     if (rateSourceSelect && providerKeyUsed && rateSourceSelect.value !== providerKeyUsed) {
       rateSourceSelect.value = providerKeyUsed;
     }
-    updateBaseMultiplier();
-    updateMarkupCalculations();
-
     if (convertEbayPriceNeeded) {
       const newEbayPrice = convertEbayPrice(rate);
       if (newEbayPrice !== null) {
@@ -2935,14 +2928,13 @@ function fetchExchangeRate(currency, options = {}) {
         lastChanged = 'ebayPrice';
         syncFields('ebayPrice');
       }
-    } else if (updateFromNettoOrBrutto) {
-      updateEbayPriceFromNettoOrBrutto();
-      syncFields(lastChanged);
-    } else if (Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice') {
-      syncFields('ebayPrice');
     } else if (isPresetApplied) {
       resyncPricingFromCurrentSource();
       addHistoryEntry('preset');
+    } else if (hasPlnPricingBase) {
+      updateEbayPriceFromNettoOrBrutto();
+    } else if (Number.isFinite(ebayPriceValue) && lastChanged === 'ebayPrice') {
+      syncFields('ebayPrice');
     } else if (lastChanged === 'vatRate') {
       syncFields('vatRate');
     } else {
@@ -2981,8 +2973,6 @@ function fetchExchangeRate(currency, options = {}) {
             if (notify) {
               showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
             }
-            updateBaseMultiplier();
-            updateMarkupCalculations();
             calculatePrice();
             isPresetApplied = false;
           });
@@ -3000,8 +2990,6 @@ function fetchExchangeRate(currency, options = {}) {
       if (notify) {
         showMainToast(`Błąd pobierania kursu. Użyto domyślnego.`, 'warn');
       }
-      updateBaseMultiplier();
-      updateMarkupCalculations();
       calculatePrice();
       isPresetApplied = false;
     });
@@ -3179,8 +3167,6 @@ async function loadDefaultCommissionRate() {
       resetCommissionInputToDefault();
       setFieldBaseline('commission');
     }
-    updateBaseMultiplier();
-    updateMarkupCalculations();
     calculatePrice();
   } catch (_error) {
     // fallback to default 15%
@@ -3267,7 +3253,6 @@ plnNettoInput.addEventListener('input', () => {
   lastChanged = 'netto';
   markupPriceSource = null;
   hideSelfTestDetails();
-  enforceTwoDecimals(plnNettoInput);
   syncFields('netto');
   scheduleHistoryLog('netto');
 });
@@ -3275,6 +3260,8 @@ plnNettoInput.addEventListener('focus', () => {
   setFieldBaseline('netto');
 });
 plnNettoInput.addEventListener('blur', () => {
+  finishDecimalInput(plnNettoInput);
+  syncFields('netto');
   flushHistoryLog('netto');
 });
 
@@ -3282,7 +3269,6 @@ plnBruttoInput.addEventListener('input', () => {
   lastChanged = 'brutto';
   markupPriceSource = null;
   hideSelfTestDetails();
-  enforceTwoDecimals(plnBruttoInput);
   syncFields('brutto');
   scheduleHistoryLog('brutto');
 });
@@ -3290,6 +3276,8 @@ plnBruttoInput.addEventListener('focus', () => {
   setFieldBaseline('brutto');
 });
 plnBruttoInput.addEventListener('blur', () => {
+  finishDecimalInput(plnBruttoInput);
+  syncFields('brutto');
   flushHistoryLog('brutto');
 });
 
@@ -3298,15 +3286,17 @@ ebayPriceInputEl.addEventListener('input', () => {
   markupPriceSource = 'ebayPrice';
   rememberMarkupSource('ebayPrice');
   hideSelfTestDetails();
-  enforceTwoDecimals(ebayPriceInputEl);
   syncFields('ebayPrice');
-  updateMarkupCalculations();
+  updateMarkupCalculations({ syncFields: false });
   scheduleHistoryLog('ebayPrice');
 });
 ebayPriceInputEl.addEventListener('focus', () => {
   setFieldBaseline('ebayPrice');
 });
 ebayPriceInputEl.addEventListener('blur', () => {
+  finishDecimalInput(ebayPriceInputEl);
+  syncFields('ebayPrice');
+  updateMarkupCalculations({ syncFields: false });
   flushHistoryLog('ebayPrice');
 });
 
@@ -3314,8 +3304,6 @@ vatRateInputEl.addEventListener('input', () => {
   lastChanged = 'vatRate';
   hideSelfTestDetails();
   syncFields('vatRate');
-  updateBaseMultiplier();
-  updateMarkupCalculations();
   scheduleHistoryLog('vatRate');
 });
 vatRateInputEl.addEventListener('focus', () => {
@@ -3362,8 +3350,6 @@ function resyncPricingFromCurrentSource(preferredSource = null) {
   } else {
     calculatePrice();
   }
-  updateBaseMultiplier();
-  updateMarkupCalculations();
   updateCommissionFromBaseMultiplier();
 }
 
@@ -3388,7 +3374,6 @@ currencySelectEl.addEventListener('change', () => {
   hideSelfTestDetails();
   fetchExchangeRate(selectedCurrency, { notify: false });
   checkRateProvidersStatus(selectedCurrency);
-  updateMarkupCalculations();
   addHistoryEntry('currency');
 });
 
@@ -3397,8 +3382,6 @@ currencySelectEl.addEventListener('change', () => {
   if (!el) return;
   el.addEventListener('input', () => {
     window.CalculatorUI.clearRecalculatedFields();
-    enforceTwoDecimals(el);
-    enforceFieldMax(el);
     if (id === 'minMarkup') {
       rememberMarkupSource('minMarkup');
     }
@@ -3407,7 +3390,7 @@ currencySelectEl.addEventListener('change', () => {
   });
   el.addEventListener('change', () => {
     window.CalculatorUI.clearRecalculatedFields();
-    enforceFieldMax(el);
+    finishDecimalInput(el);
     if (id === 'minMarkup') {
       rememberMarkupSource('minMarkup');
     }
@@ -3417,6 +3400,7 @@ currencySelectEl.addEventListener('change', () => {
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     window.CalculatorUI.clearRecalculatedFields();
+    finishDecimalInput(el);
     if (id === 'minMarkup') {
       rememberMarkupSource('minMarkup');
     }
@@ -3427,6 +3411,7 @@ currencySelectEl.addEventListener('change', () => {
     setFieldBaseline(id);
   });
   el.addEventListener('blur', () => {
+    finishDecimalInput(el);
     flushHistoryLog(id, { force: true });
   });
 });
@@ -3528,8 +3513,6 @@ document.addEventListener('click', (event) => {
   });
 });
 
-['purchaseAmount', 'minMarkup', 'currentBaseMultiplier', 'targetSaleAmount'].forEach(setupAutoReplaceInput);
-
 const refreshRateBtn = document.getElementById('refreshRateBtn');
 if (refreshRateBtn) {
   refreshRateBtn.addEventListener('click', () => {
@@ -3551,7 +3534,7 @@ updateEbayCurrencyLabel();
 updatePurchaseAmountModeUI();
 updateMarkupAmountModeUI();
 renderHistory();
-updateMarkupCalculations();
+updateMarkupCalculations({ syncFields: false });
 updateCommissionFromBaseMultiplier();
 updateSummaryMetrics();
 

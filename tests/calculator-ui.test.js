@@ -61,6 +61,12 @@
   equal(doc.elements.plnBrutto.value, '246.00', 'write brutto');
   equal(doc.elements.ebayPrice.value, '66.60', 'write ebay');
 
+  doc.activeElement = doc.elements.plnBrutto;
+  doc.elements.plnBrutto.value = '246.';
+  ui.writePrimaryResult(doc, { netto: 200, brutto: 246, ebay: 66.6 });
+  equal(doc.elements.plnBrutto.value, '246.', 'write skips active field');
+  doc.activeElement = null;
+
   const markup = ui.readMarkupState(doc, () => 12.5);
   approx(markup.purchaseAmount, 1000, 'markup purchase');
   approx(markup.markupPercent, 30, 'markup percent');
