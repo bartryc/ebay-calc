@@ -3441,6 +3441,51 @@ body.dark-mode .report-item.is-on-hold .report-kind {
   cursor: pointer;
 }
 
+.source-icon-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.source-icon-upload-row input[type="file"] {
+  max-width: min(100%, 320px);
+}
+
+.source-icon-upload-row button {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.source-icon-preview {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.source-icon-preview.is-empty::before {
+  content: "—";
+  color: var(--muted);
+}
+
+.source-icon-preview img {
+  max-width: 28px;
+  max-height: 28px;
+  object-fit: contain;
+}
+
 .report-form button:hover {
   filter: brightness(0.95);
 }

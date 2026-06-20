@@ -385,12 +385,22 @@
             </div>
             <div class="admin-log-field admin-log-field-wide source-field source-field-icon">
               <label for="sourceConfigIcon">Ikona light (URL/ścieżka)</label>
-              <input type="text" id="sourceConfigIcon" maxlength="200" placeholder="resources/icon-ebay.svg">
+              <input type="text" id="sourceConfigIcon" maxlength="200000" placeholder="resources/icon-ebay.svg">
+              <div class="source-icon-upload-row">
+                <input type="file" id="sourceConfigIconUpload" accept="image/svg+xml,image/png,image/webp,image/jpeg,image/x-icon">
+                <button type="button" id="sourceConfigIconClearBtn">Usuń ikonę light</button>
+                <span class="source-icon-preview" id="sourceConfigIconPreview" aria-hidden="true"></span>
+              </div>
               <label class="source-dual-icon-toggle">
                 <input type="checkbox" id="sourceConfigUseDarkIcon">
                 <span>Dodaj wersję dark mode</span>
               </label>
-              <input type="text" id="sourceConfigIconDark" maxlength="200" placeholder="resources/icon-ebay-dark.svg" style="display:none;">
+              <input type="text" id="sourceConfigIconDark" maxlength="200000" placeholder="resources/icon-ebay-dark.svg" style="display:none;">
+              <div class="source-icon-upload-row" id="sourceConfigIconDarkUploadRow" style="display:none;">
+                <input type="file" id="sourceConfigIconDarkUpload" accept="image/svg+xml,image/png,image/webp,image/jpeg,image/x-icon">
+                <button type="button" id="sourceConfigIconDarkClearBtn">Usuń ikonę dark</button>
+                <span class="source-icon-preview" id="sourceConfigIconDarkPreview" aria-hidden="true"></span>
+              </div>
               <div class="admin-meta">Wpisz <code>PLACEHOLDER</code>, aby zamiast ikonki pokazać tekstowy badge z nazwą źródła.</div>
             </div>
             <div class="admin-log-field admin-log-field-wide source-field source-field-search">
@@ -637,8 +647,15 @@
     const sourceConfigSelect = document.getElementById('sourceConfigSelect');
     const sourceConfigName = document.getElementById('sourceConfigName');
     const sourceConfigIcon = document.getElementById('sourceConfigIcon');
+    const sourceConfigIconUpload = document.getElementById('sourceConfigIconUpload');
+    const sourceConfigIconClearBtn = document.getElementById('sourceConfigIconClearBtn');
+    const sourceConfigIconPreview = document.getElementById('sourceConfigIconPreview');
     const sourceConfigUseDarkIcon = document.getElementById('sourceConfigUseDarkIcon');
     const sourceConfigIconDark = document.getElementById('sourceConfigIconDark');
+    const sourceConfigIconDarkUpload = document.getElementById('sourceConfigIconDarkUpload');
+    const sourceConfigIconDarkClearBtn = document.getElementById('sourceConfigIconDarkClearBtn');
+    const sourceConfigIconDarkPreview = document.getElementById('sourceConfigIconDarkPreview');
+    const sourceConfigIconDarkUploadRow = document.getElementById('sourceConfigIconDarkUploadRow');
     const sourceConfigSearchUrl = document.getElementById('sourceConfigSearchUrl');
     const sourceConfigDirectMode = document.getElementById('sourceConfigDirectMode');
     const sourceConfigDirectUrl = document.getElementById('sourceConfigDirectUrl');
@@ -695,6 +712,7 @@
     const CURRENCIES_CONFIG_NOTE_ID = 'currencies-config-v1';
     const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
     const DEFAULT_COMMISSION_RATE = 15;
+    const SOURCE_ICON_MAX_BYTES = 100 * 1024;
     const BUILTIN_CURRENCIES = [
       { code: 'EUR', label: 'EUR', fallbackRate: 4.3 },
       { code: 'USD', label: 'USD', fallbackRate: 3.9 },
@@ -1330,9 +1348,65 @@
       if (!sourceConfigUseDarkIcon || !sourceConfigIconDark) return;
       const enabled = !!sourceConfigUseDarkIcon.checked;
       sourceConfigIconDark.style.display = enabled ? '' : 'none';
+      if (sourceConfigIconDarkUploadRow) sourceConfigIconDarkUploadRow.style.display = enabled ? '' : 'none';
       sourceConfigIconDark.disabled = !enabled;
       if (!enabled) {
         sourceConfigIconDark.value = '';
+        if (sourceConfigIconDarkUpload) sourceConfigIconDarkUpload.value = '';
+      }
+      updateSourceIconPreview(sourceConfigIconDark, sourceConfigIconDarkPreview);
+    }
+
+    function updateSourceIconPreview(inputEl, previewEl) {
+      if (!previewEl) return;
+      const src = String(inputEl?.value || '').trim();
+      previewEl.innerHTML = '';
+      previewEl.classList.toggle('is-empty', !src || src.toUpperCase() === 'PLACEHOLDER');
+      if (!src || src.toUpperCase() === 'PLACEHOLDER') return;
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = '';
+      previewEl.appendChild(img);
+    }
+
+    function updateSourceIconPreviews() {
+      updateSourceIconPreview(sourceConfigIcon, sourceConfigIconPreview);
+      updateSourceIconPreview(sourceConfigIconDark, sourceConfigIconDarkPreview);
+    }
+
+    function readSourceIconFile(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) {
+          resolve('');
+          return;
+        }
+        if (!/^image\/(svg\+xml|png|webp|jpeg|x-icon|vnd\.microsoft\.icon)$/.test(file.type || '')) {
+          reject(new Error('Dozwolone formaty: SVG, PNG, WEBP, JPG, ICO.'));
+          return;
+        }
+        if (file.size > SOURCE_ICON_MAX_BYTES) {
+          reject(new Error('Ikona jest za duża. Limit to 100 KB.'));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Nie udało się odczytać pliku.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function applySourceIconUpload(fileInput, targetInput, previewEl) {
+      const file = fileInput?.files?.[0];
+      if (!file || !targetInput) return;
+      try {
+        targetInput.value = await readSourceIconFile(file);
+        updateSourceIconPreview(targetInput, previewEl);
+        refreshSourceConfigDirtyState();
+        showToast('Ikona załadowana do konfiguracji.', 'ok');
+      } catch (error) {
+        showToast(error.message || 'Nie udało się wczytać ikony.', 'warn');
+      } finally {
+        if (fileInput) fileInput.value = '';
       }
     }
 
@@ -1348,6 +1422,7 @@
       if (sourceConfigDirectUrl) sourceConfigDirectUrl.value = source.directUrl || '';
       updateDirectModeHint();
       updateDarkIconUi();
+      updateSourceIconPreviews();
       renderSourceVariantRows(source);
       isSourceEditorFilling = false;
       updateSourceTokenPreview();
@@ -1810,6 +1885,9 @@
         const changeEvent = input.tagName === 'SELECT' ? 'change' : 'input';
         input.addEventListener(changeEvent, () => {
           if (isSourceEditorFilling) return;
+          if (input === sourceConfigIcon || input === sourceConfigIconDark) {
+            updateSourceIconPreviews();
+          }
           refreshSourceConfigDirtyState();
         });
       });
@@ -1836,6 +1914,24 @@
       sourceConfigUseDarkIcon?.addEventListener('change', () => {
         updateDarkIconUi();
         if (isSourceEditorFilling) return;
+        refreshSourceConfigDirtyState();
+      });
+      sourceConfigIconUpload?.addEventListener('change', () => {
+        applySourceIconUpload(sourceConfigIconUpload, sourceConfigIcon, sourceConfigIconPreview);
+      });
+      sourceConfigIconDarkUpload?.addEventListener('change', () => {
+        applySourceIconUpload(sourceConfigIconDarkUpload, sourceConfigIconDark, sourceConfigIconDarkPreview);
+      });
+      sourceConfigIconClearBtn?.addEventListener('click', () => {
+        if (sourceConfigIcon) sourceConfigIcon.value = '';
+        if (sourceConfigIconUpload) sourceConfigIconUpload.value = '';
+        updateSourceIconPreviews();
+        refreshSourceConfigDirtyState();
+      });
+      sourceConfigIconDarkClearBtn?.addEventListener('click', () => {
+        if (sourceConfigIconDark) sourceConfigIconDark.value = '';
+        if (sourceConfigIconDarkUpload) sourceConfigIconDarkUpload.value = '';
+        updateSourceIconPreviews();
         refreshSourceConfigDirtyState();
       });
       sourceConfigDirectMode?.addEventListener('change', () => {
