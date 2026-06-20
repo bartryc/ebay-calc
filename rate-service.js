@@ -3,23 +3,25 @@
 
   const DEFAULT_RATES = { EUR: 4.3, USD: 3.9, GBP: 5.0 };
   const DEFAULT_PROVIDER = 'erapi';
-  const PROVIDERS = {
-    erapi: {
+  const DEFAULT_RATE_PROVIDERS = [
+    {
+      id: 'erapi',
       label: 'open.er-api.com',
-      buildUrl: () => 'https://open.er-api.com/v6/latest/PLN',
-      readRate: (data, currency) => data?.rates?.[currency]
+      enabled: true,
+      url: 'https://open.er-api.com/v6/latest/PLN',
+      responsePath: 'rates.{CURRENCY}',
+      transform: 'direct'
     },
-    nbp: {
+    {
+      id: 'nbp',
       label: 'NBP API',
-      buildUrl: (currency) => `https://api.nbp.pl/api/exchangerates/rates/A/${currency}/?format=json`,
-      readRate: (data) => {
-        const mid = data?.rates?.[0]?.mid;
-        if (!Number.isFinite(mid) || mid <= 0) return null;
-        return 1 / mid;
-      }
+      enabled: true,
+      url: 'https://api.nbp.pl/api/exchangerates/rates/A/{CURRENCY}/?format=json',
+      responsePath: 'rates.0.mid',
+      transform: 'inverse'
     }
-  };
-  const BUILTIN_PROVIDER_KEYS = Object.keys(PROVIDERS);
+  ];
+  const PROVIDERS = {};
 
   function readPath(data, path, currency) {
     const normalizedPath = String(path || '').replace(/\{CURRENCY\}/g, String(currency || ''));
@@ -32,7 +34,7 @@
 
   function normalizeCustomProvider(item) {
     const idRaw = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-    if (!idRaw || BUILTIN_PROVIDER_KEYS.includes(idRaw)) return null;
+    if (!idRaw) return null;
     const url = String(item?.url || '').trim();
     const responsePath = String(item?.responsePath || '').trim();
     if (!url || !responsePath) return null;
@@ -63,7 +65,7 @@
 
   function registerCustomProviders(items) {
     Object.keys(PROVIDERS).forEach((key) => {
-      if (!BUILTIN_PROVIDER_KEYS.includes(key)) delete PROVIDERS[key];
+      delete PROVIDERS[key];
     });
     const normalized = Array.isArray(items)
       ? items.map(normalizeCustomProvider).filter((item) => item && item.enabled)
@@ -78,7 +80,9 @@
     const keyRaw = String(value || '').trim().toLowerCase();
     const key = keyRaw === 'exchangerate' ? 'nbp' : keyRaw;
     if (key === 'frankfurter') return DEFAULT_PROVIDER;
-    return PROVIDERS[key] ? key : DEFAULT_PROVIDER;
+    if (PROVIDERS[key]) return key;
+    if (PROVIDERS[DEFAULT_PROVIDER]) return DEFAULT_PROVIDER;
+    return Object.keys(PROVIDERS)[0] || DEFAULT_PROVIDER;
   }
 
   function getProvider(key) {
@@ -147,6 +151,7 @@
   const api = {
     DEFAULT_RATES,
     DEFAULT_PROVIDER,
+    DEFAULT_RATE_PROVIDERS,
     PROVIDERS,
     normalizeProviderKey,
     getProvider,
@@ -159,6 +164,8 @@
     registerCustomCurrencies,
     createFetchRate
   };
+
+  registerCustomProviders(DEFAULT_RATE_PROVIDERS);
 
   root.RateService = api;
   if (typeof module !== 'undefined' && module.exports) {

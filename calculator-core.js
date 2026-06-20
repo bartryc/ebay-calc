@@ -114,6 +114,20 @@
     };
   }
 
+  function resolvePlnPricingSource(options = {}) {
+    const values = {
+      netto: parseNumber(options.netto),
+      brutto: parseNumber(options.brutto)
+    };
+    const isPlnSource = (source) => source === 'netto' || source === 'brutto';
+    if (isPlnSource(options.preferredSource) && Number.isFinite(values[options.preferredSource])) return options.preferredSource;
+    if (isPlnSource(options.lastPrimarySource) && Number.isFinite(values[options.lastPrimarySource])) return options.lastPrimarySource;
+    if (isPlnSource(options.lastChanged) && Number.isFinite(values[options.lastChanged])) return options.lastChanged;
+    if (Number.isFinite(values.brutto)) return 'brutto';
+    if (Number.isFinite(values.netto)) return 'netto';
+    return null;
+  }
+
   function amountToBrutto(amount, isNetMode, clientVatRate) {
     const value = parseNumber(amount);
     const vat = parseNumber(clientVatRate);
@@ -266,6 +280,7 @@
     calculatePrimaryFromBrutto,
     calculatePrimaryFromEbay,
     resolvePricingSource,
+    resolvePlnPricingSource,
     calculatePrimaryFromSource,
     amountToBrutto,
     bruttoToInputAmount,

@@ -40,6 +40,24 @@ const DEFAULT_CURRENCIES = [
   { code: 'GBP', label: 'GBP', fallbackRate: 5.0 }
 ];
 let currenciesConfig = { version: 1, currencies: DEFAULT_CURRENCIES };
+const DEFAULT_RATE_PROVIDERS = window.RateService?.DEFAULT_RATE_PROVIDERS || [
+  {
+    id: 'erapi',
+    label: 'open.er-api.com',
+    enabled: true,
+    url: 'https://open.er-api.com/v6/latest/PLN',
+    responsePath: 'rates.{CURRENCY}',
+    transform: 'direct'
+  },
+  {
+    id: 'nbp',
+    label: 'NBP API',
+    enabled: true,
+    url: 'https://api.nbp.pl/api/exchangerates/rates/A/{CURRENCY}/?format=json',
+    responsePath: 'rates.0.mid',
+    transform: 'inverse'
+  }
+];
 
 const INDEX_LAYOUT_STORAGE_KEY = 'indexLayoutOrderV1';
 const INDEX_LAYOUT_COOKIE_KEY = 'indexLayoutOrderV1';
@@ -2861,13 +2879,11 @@ function convertEbayPrice(newRate) {
 function updateEbayPriceFromNettoOrBrutto() {
   const primaryState = window.CalculatorUI.readPrimaryState(document, getActiveCommissionRate);
   const { exchangeRate, commission, vatRate } = primaryState;
-  const source = window.CalculatorCore.resolvePricingSource({
+  const source = window.CalculatorCore.resolvePlnPricingSource({
     netto: primaryState.netto,
     brutto: primaryState.brutto,
-    ebayPrice: NaN,
-    lastPrimarySource: lastPrimarySource === 'netto' || lastPrimarySource === 'brutto' ? lastPrimarySource : null,
-    lastChanged: lastChanged === 'netto' || lastChanged === 'brutto' ? lastChanged : null,
-    activeSource: getActivePrimarySource()
+    lastPrimarySource,
+    lastChanged
   });
 
   if ((source === 'netto' || source === 'brutto') && validateInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
@@ -3093,22 +3109,29 @@ async function loadCurrenciesConfig() {
 
 function normalizeRateProvidersConfig(raw) {
   const incoming = raw && typeof raw === 'object' ? raw : {};
-  const providers = Array.isArray(incoming.providers) ? incoming.providers : [];
-  return {
-    version: Number(incoming.version) || 1,
-    providers: providers.map((item) => ({
+  const providers = Array.isArray(incoming.providers) ? incoming.providers : DEFAULT_RATE_PROVIDERS;
+  const byId = new Map();
+  providers.forEach((item) => {
+    const normalized = {
       id: String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, ''),
       label: String(item?.label || item?.name || '').trim(),
       enabled: item?.enabled !== false,
       url: String(item?.url || '').trim(),
       responsePath: String(item?.responsePath || '').trim(),
       transform: String(item?.transform || 'direct').trim().toLowerCase() === 'inverse' ? 'inverse' : 'direct'
-    })).filter((item) => item.id && item.url && item.responsePath)
+    };
+    if (normalized.id && normalized.url && normalized.responsePath) byId.set(normalized.id, normalized);
+  });
+  return {
+    version: Number(incoming.version) || 1,
+    providers: Array.from(byId.values())
   };
 }
 
 async function loadCustomRateProviders() {
-  let config = null;
+  let config = normalizeRateProvidersConfig(null);
+  window.RateService.registerCustomProviders(config.providers);
+  renderRateProviderOptions();
   const fromLocal = localStorage.getItem(RATE_PROVIDERS_CONFIG_CACHE_KEY);
   if (fromLocal) {
     try {
@@ -3369,6 +3392,7 @@ function resyncPricingFromCurrentSource(preferredSource = null) {
 
 currencySelectEl.addEventListener('change', () => {
   const selectedCurrency = currencySelectEl.value;
+  window.CalculatorUI.clearRecalculatedFields();
   document.getElementById('currencyLabel').innerText = selectedCurrency;
   updateEbayCurrencyLabel();
   hideSelfTestDetails();

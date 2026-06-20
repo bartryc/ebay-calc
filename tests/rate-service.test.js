@@ -26,6 +26,9 @@
   approx(service.readProviderRate('erapi', { rates: { EUR: 0.2357 } }, 'EUR'), 0.2357, 'erapi rate');
   approx(service.readProviderRate('nbp', { rates: [{ mid: 4.2427 }] }, 'EUR'), 1 / 4.2427, 'nbp inverse rate');
   equal(service.readProviderRate('nbp', { rates: [{ mid: 0 }] }, 'EUR'), null, 'nbp invalid rate');
+  service.registerCustomProviders([{ id: 'erapi', label: 'ERP override', url: 'https://example.test', responsePath: 'rate', transform: 'direct' }]);
+  equal(service.getProvider('erapi').provider.label, 'ERP override', 'erapi is configurable');
+  service.registerCustomProviders(service.DEFAULT_RATE_PROVIDERS);
   approx(service.getDefaultRate('GBP'), 5, 'default known rate');
   approx(service.getDefaultRate('CHF'), 4.3, 'default unknown rate');
   equal(service.getProviderKeys().includes('erapi'), true, 'provider keys erapi');

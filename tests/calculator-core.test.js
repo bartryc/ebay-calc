@@ -61,6 +61,10 @@
   equal(core.resolvePricingSource({ netto: 100, brutto: 123, ebayPrice: NaN, activeSource: 'netto' }), 'netto', 'source keeps active input');
   equal(core.resolvePricingSource({ netto: 100, brutto: 123, ebayPrice: NaN }), 'brutto', 'source fallback prefers brutto');
   equal(core.resolvePricingSource({ netto: '', brutto: '', ebayPrice: '' }), null, 'source empty');
+  equal(core.resolvePlnPricingSource({ netto: 100, brutto: 123, lastPrimarySource: 'ebayPrice', lastChanged: 'ebayPrice' }), 'brutto', 'PLN source ignores ebay');
+  equal(core.resolvePlnPricingSource({ netto: 100, brutto: 123, lastPrimarySource: 'netto' }), 'netto', 'PLN source keeps last PLN source');
+  equal(core.resolvePlnPricingSource({ netto: 100, brutto: NaN }), 'netto', 'PLN source fallback netto');
+  equal(core.resolvePlnPricingSource({ netto: NaN, brutto: NaN }), null, 'PLN source empty');
 
   const fromSource = core.calculatePrimaryFromSource('brutto', { brutto: 123 }, 0.25, 0.23, 0.15);
   approx(fromSource.pricing.netto, 100, 'primary from source netto');

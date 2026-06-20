@@ -131,7 +131,7 @@
 
         <div class="admin-card admin-card-wide" data-admin-tab="apis">
           <h3>API kursów walut</h3>
-          <p>Przeglądaj obecne providery kursów i dodawaj własne API. Custom API nie powinno wymagać sekretnego klucza w przeglądarce.</p>
+          <p>Przeglądaj i edytuj providery kursów. API nie powinno wymagać sekretnego klucza w przeglądarce.</p>
           <div class="rate-provider-editor currency-editor">
             <div class="rate-provider-editor-header">
               <h4>Waluty</h4>
@@ -163,12 +163,12 @@
 
           <div class="rate-provider-editor">
             <div class="rate-provider-editor-header">
-              <h4>Edytor custom API</h4>
+              <h4>Edytor API</h4>
               <div class="admin-meta">Znacznik <code>{CURRENCY}</code> zostanie zastąpiony walutą, np. EUR.</div>
             </div>
             <div class="admin-log-controls rate-provider-config-controls">
               <div class="admin-log-field rate-provider-field-select">
-                <label for="rateProviderConfigSelect">Custom API</label>
+                <label for="rateProviderConfigSelect">API</label>
                 <select id="rateProviderConfigSelect"></select>
               </div>
               <div class="admin-log-field rate-provider-field-id">
@@ -207,7 +207,7 @@
               <button type="button" id="rateProviderConfigDeleteBtn">Usuń API</button>
               <button type="button" id="rateProviderConfigTestBtn">Test EUR</button>
             </div>
-            <div id="rateProviderConfigHint" class="admin-meta">Brak custom API.</div>
+            <div id="rateProviderConfigHint" class="admin-meta">Brak API.</div>
           </div>
         </div>
 
@@ -700,9 +700,23 @@
       { code: 'USD', label: 'USD', fallbackRate: 3.9 },
       { code: 'GBP', label: 'GBP', fallbackRate: 5.0 }
     ];
-    const BUILTIN_RATE_PROVIDER_OPTIONS = [
-      { id: 'nbp', label: 'NBP API' },
-      { id: 'erapi', label: 'open.er-api.com' }
+    const DEFAULT_RATE_PROVIDERS = [
+      {
+        id: 'erapi',
+        label: 'open.er-api.com',
+        enabled: true,
+        url: 'https://open.er-api.com/v6/latest/PLN',
+        responsePath: 'rates.{CURRENCY}',
+        transform: 'direct'
+      },
+      {
+        id: 'nbp',
+        label: 'NBP API',
+        enabled: true,
+        url: 'https://api.nbp.pl/api/exchangerates/rates/A/{CURRENCY}/?format=json',
+        responsePath: 'rates.0.mid',
+        transform: 'inverse'
+      }
     ];
     let customRateProvidersConfig = { version: 1, providers: [] };
     let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES };
@@ -1533,12 +1547,14 @@
 
     function normalizeRateProvidersConfig(raw) {
       const incoming = raw && typeof raw === 'object' ? raw : {};
-      const providers = Array.isArray(incoming.providers) ? incoming.providers : [];
+      const providers = Array.isArray(incoming.providers) ? incoming.providers : DEFAULT_RATE_PROVIDERS;
+      const byId = new Map();
+      providers.map(normalizeCustomRateProvider).forEach((item) => {
+        if (item.id) byId.set(item.id, item);
+      });
       return {
         version: Number(incoming.version) || 1,
-        providers: providers
-          .map(normalizeCustomRateProvider)
-          .filter((item) => item.id && !BUILTIN_RATE_PROVIDER_OPTIONS.some((builtin) => builtin.id === item.id))
+        providers: Array.from(byId.values()).filter((item) => item.id)
       };
     }
 
@@ -1546,13 +1562,14 @@
       const customOptions = customRateProvidersConfig.providers
         .filter((item) => item.enabled !== false && item.url && item.responsePath)
         .map((item) => ({ id: item.id, label: item.label || item.id }));
-      return [...BUILTIN_RATE_PROVIDER_OPTIONS, ...customOptions];
+      return customOptions;
     }
 
     function normalizeRateProvider(value) {
       const keyRaw = String(value || '').trim().toLowerCase();
       const key = keyRaw === 'exchangerate' ? 'nbp' : keyRaw;
-      return getRateProviderOptions().some((item) => item.id === key) ? key : 'erapi';
+      if (getRateProviderOptions().some((item) => item.id === key)) return key;
+      return getRateProviderOptions()[0]?.id || 'erapi';
     }
 
     function normalizeCommissionDefault(value, fallback = DEFAULT_COMMISSION_RATE) {
@@ -1578,7 +1595,7 @@
       const providers = customRateProvidersConfig.providers;
       rateProviderConfigSelect.innerHTML = providers.length
         ? providers.map((item) => `<option value="${item.id}">${item.label || item.id}</option>`).join('')
-        : '<option value="">Brak custom API</option>';
+        : '<option value="">Brak API</option>';
       rateProviderConfigSelect.value = providers.some((item) => item.id === current) ? current : (providers[0]?.id || '');
       fillRateProviderEditor(getSelectedRateProviderConfig());
       renderDefaultRateProviderOptions();
@@ -1587,23 +1604,18 @@
 
     function renderRateProviderOverview() {
       if (!rateProviderOverview) return;
-      const builtinCards = BUILTIN_RATE_PROVIDER_OPTIONS.map((item) => ({
-        ...item,
-        type: 'Wbudowane',
-        status: 'Włączone'
-      }));
       const customCards = customRateProvidersConfig.providers.map((item) => ({
         id: item.id,
         label: item.label || item.id,
-        type: 'Custom',
+        type: 'Konfigurowane',
         status: item.enabled !== false ? 'Włączone' : 'Wyłączone',
         url: item.url,
         responsePath: item.responsePath,
         transform: item.transform
       }));
-      const cards = [...builtinCards, ...customCards];
+      const cards = customCards;
       rateProviderOverview.innerHTML = cards.map((item) => `
-        <div class="rate-provider-card ${item.type === 'Custom' ? 'is-custom' : 'is-builtin'}">
+        <div class="rate-provider-card is-custom">
           <div class="rate-provider-card-head">
             <strong>${escapeHtml(item.label)}</strong>
             <span>${escapeHtml(item.type)}</span>
@@ -1634,7 +1646,7 @@
       if (rateProviderConfigHint) {
         rateProviderConfigHint.textContent = provider
           ? 'URL obsługuje znacznik {CURRENCY}. Ścieżka JSON może używać np. rates.{CURRENCY}.'
-          : 'Brak custom API.';
+          : 'Brak API.';
       }
     }
 
@@ -1664,6 +1676,7 @@
 
     async function loadRateProvidersConfig() {
       if (!window.PN_MAPPINGS_API?.request) {
+        customRateProvidersConfig = normalizeRateProvidersConfig(null);
         renderRateProviderConfigSelect();
         return;
       }
@@ -1698,8 +1711,9 @@
       if (!defaultRateProviderSelect) return;
       renderDefaultRateProviderOptions();
       if (!window.PN_MAPPINGS_API?.request) {
-        defaultRateProviderSelect.value = 'erapi';
-        if (defaultRateProviderValue) defaultRateProviderValue.textContent = 'open.er-api.com';
+        const key = normalizeRateProvider('erapi');
+        defaultRateProviderSelect.value = key;
+        if (defaultRateProviderValue) defaultRateProviderValue.textContent = getRateProviderOptions().find((item) => item.id === key)?.label || key;
         return;
       }
       try {
@@ -1712,8 +1726,9 @@
         defaultRateProviderSelect.value = key;
         if (defaultRateProviderValue) defaultRateProviderValue.textContent = getRateProviderOptions().find((item) => item.id === key)?.label || key;
       } catch (_error) {
-        defaultRateProviderSelect.value = 'erapi';
-        if (defaultRateProviderValue) defaultRateProviderValue.textContent = 'open.er-api.com';
+        const key = normalizeRateProvider('erapi');
+        defaultRateProviderSelect.value = key;
+        if (defaultRateProviderValue) defaultRateProviderValue.textContent = getRateProviderOptions().find((item) => item.id === key)?.label || key;
       }
     }
 
@@ -2526,7 +2541,7 @@
         renderRateProviderConfigSelect();
         rateProviderConfigSelect.value = provider.id;
         fillRateProviderEditor(getSelectedRateProviderConfig());
-        showToast('Custom API kursów zapisane.', 'ok');
+        showToast('API kursów zapisane.', 'ok');
       } catch (error) {
         showToast(`Błąd zapisu API kursów: ${error.message || 'unknown'}`, 'warn');
       }
@@ -2538,7 +2553,7 @@
       try {
         await saveRateProvidersConfig();
         renderRateProviderConfigSelect();
-        showToast('Custom API usunięte.', 'ok');
+        showToast('API usunięte.', 'ok');
       } catch (error) {
         showToast(`Błąd usuwania API kursów: ${error.message || 'unknown'}`, 'warn');
       }
@@ -3415,7 +3430,7 @@
       }
 
       reportList.innerHTML = sections.join('');
-      // Statusy i zmiany typu są odtwarzane z logów akcji, bez requestu per zgłoszenie.
+      hydrateAdminNotes();
 
       if (!reportList.innerHTML.trim()) {
         reportList.textContent = 'Brak zgłoszeń.';
@@ -3456,9 +3471,9 @@
             </div>
             ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować treść uwagi"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
             <div class="report-form">
-              <textarea class="report-note" rows="2" placeholder="Notatki admina (opcjonalne)">${storedNote}</textarea>
+              <textarea class="report-note" rows="2" placeholder="Notatki admina (opcjonalne)" data-saved-note="${escapeHtml(storedNote)}">${escapeHtml(storedNote)}</textarea>
               <div class="report-actions">
-                <button type="button" class="report-save-note">Zapisz notatkę</button>
+                <button type="button" class="report-save-note" hidden>Zapisz notatkę</button>
                 <button type="button" class="report-resolve">Resolved</button>
                 <button type="button" class="report-hold">On hold</button>
                 <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
@@ -3553,8 +3568,15 @@
         const data = await resp.json().catch(() => ({}));
         const note = typeof data.note === 'string' ? data.note : '';
         adminNotesCache.set(reportId, note);
-        const field = document.querySelector(`.report-item[data-report-id="${reportId}"] .report-note`);
-        if (field) field.value = note;
+        const field = document.querySelector(`.report-item[data-report-id="${reportId}"] .report-note:not([disabled])`);
+        if (field) {
+          const saved = field.dataset.savedNote || '';
+          if ((field.value || '') === saved) {
+            field.value = note;
+          }
+          field.dataset.savedNote = note;
+          updateReportNoteSaveState(field.closest('.report-item'));
+        }
       } catch (error) {
         adminNotesCache.set(reportId, '');
       } finally {
@@ -3568,13 +3590,15 @@
       if (!window.PN_MAPPINGS_API?.request) return false;
       try {
         if (note) {
-          await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(reportId)}`, {
+          const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(reportId)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ note })
           });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         } else {
-          await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(reportId)}`, { method: 'DELETE' });
+          const resp = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(reportId)}`, { method: 'DELETE' });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         }
         return true;
       } catch (error) {
@@ -3601,14 +3625,25 @@
     }
 
     function hydrateAdminNotes() {
-      const noteFields = Array.from(document.querySelectorAll('.report-item .report-note'));
+      const noteFields = Array.from(document.querySelectorAll('.report-item .report-note:not([disabled])'));
       noteFields.forEach((field) => {
+        updateReportNoteSaveState(field.closest('.report-item'));
         const reportId = field.closest('.report-item')?.getAttribute('data-report-id') || '';
         if (!reportId) return;
         if (!adminNotesCache.has(reportId)) {
           fetchAdminNote(reportId);
         }
       });
+    }
+
+    function updateReportNoteSaveState(item) {
+      if (!item) return;
+      const field = item.querySelector('.report-note:not([disabled])');
+      const saveBtn = item.querySelector('.report-save-note');
+      if (!field || !saveBtn) return;
+      const saved = field.dataset.savedNote || '';
+      const current = field.value || '';
+      saveBtn.hidden = current === saved;
     }
 
     function hydrateReportKinds() {}
@@ -3819,6 +3854,12 @@
       });
     }
     if (reportList) {
+      reportList.addEventListener('input', (event) => {
+        const target = event.target;
+        if (!target?.classList?.contains('report-note')) return;
+        updateReportNoteSaveState(target.closest('.report-item'));
+      });
+
       reportList.addEventListener('click', async (event) => {
         const target = event.target;
         if (!target) return;
@@ -3857,13 +3898,19 @@
           const item = saveNoteBtn.closest('.report-item');
           if (!item) return;
           const reportId = item.getAttribute('data-report-id') || '';
-          const adminNote = item.querySelector('.report-note')?.value?.trim() || '';
+          const adminNote = item.querySelector('.report-note')?.value || '';
           saveNoteBtn.disabled = true;
           try {
             const saved = await setAdminNote(reportId, adminNote);
+            if (saved) {
+              const noteField = item.querySelector('.report-note');
+              if (noteField) noteField.dataset.savedNote = adminNote;
+              updateReportNoteSaveState(item);
+            }
             showToast(saved ? 'Notatka admina zapisana.' : 'Notatka zapisana lokalnie, ale API jej nie przyjęło.', saved ? 'ok' : 'warn');
           } finally {
             saveNoteBtn.disabled = false;
+            updateReportNoteSaveState(item);
           }
           return;
         }
