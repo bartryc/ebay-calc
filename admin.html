@@ -212,6 +212,54 @@
         </div>
 
         <div class="admin-card admin-card-wide" data-admin-tab="presets">
+          <details id="calculatorPresetSection" open>
+            <summary class="report-summary">
+              <span>Presety kalkulatora</span>
+            </summary>
+            <p>Zdefiniuj szybkie presety widoczne nad kalkulatorem. Aktywne presety ustawiają walutę, VAT oraz opcjonalnie prowizję i narzut.</p>
+            <div class="admin-log-controls calculator-preset-controls">
+              <div class="admin-log-field">
+                <label for="calculatorPresetSelect">Istniejące</label>
+                <select id="calculatorPresetSelect">
+                  <option value="">Nowy preset</option>
+                </select>
+              </div>
+              <div class="admin-log-field admin-log-field-wide">
+                <label for="calculatorPresetLabel">Nazwa przycisku</label>
+                <input type="text" id="calculatorPresetLabel" maxlength="40" placeholder="Np. EU safe">
+              </div>
+              <div class="admin-log-field">
+                <label for="calculatorPresetCurrency">Waluta</label>
+                <select id="calculatorPresetCurrency"></select>
+              </div>
+              <div class="admin-log-field">
+                <label for="calculatorPresetVat">VAT (%)</label>
+                <input type="number" id="calculatorPresetVat" min="0" max="100" step="0.1" placeholder="23">
+              </div>
+              <div class="admin-log-field">
+                <label for="calculatorPresetCommission">Prowizja (%)</label>
+                <input type="number" id="calculatorPresetCommission" min="0" max="100" step="0.1" placeholder="Opcjonalnie">
+              </div>
+              <div class="admin-log-field">
+                <label for="calculatorPresetMarkup">Narzut (%)</label>
+                <input type="number" id="calculatorPresetMarkup" min="-99.9" step="0.1" placeholder="Opcjonalnie">
+              </div>
+              <div class="admin-log-field">
+                <label class="source-dual-icon-toggle calculator-preset-enabled">
+                  <input type="checkbox" id="calculatorPresetEnabled" checked>
+                  <span>Włączony</span>
+                </label>
+              </div>
+            </div>
+            <div class="admin-actions source-actions">
+              <button type="button" id="calculatorPresetNewBtn">Nowy preset</button>
+              <button type="button" id="calculatorPresetSaveBtn">Zapisz preset</button>
+              <button type="button" id="calculatorPresetDeleteBtn">Usuń preset</button>
+            </div>
+            <div id="calculatorPresetHint" class="admin-meta">Aktywne presety pojawią się na stronie kalkulatora.</div>
+            <div id="calculatorPresetList" class="calculator-preset-list"></div>
+          </details>
+
           <details id="layoutPresetSection" open>
             <summary class="report-summary">
               <span>Kreator presetów układu</span>
@@ -639,6 +687,18 @@
     const layoutPresetItems = document.getElementById('layoutPresetItems');
     const layoutPresetSaveBtn = document.getElementById('layoutPresetSaveBtn');
     const layoutPresetDeleteBtn = document.getElementById('layoutPresetDeleteBtn');
+    const calculatorPresetSelect = document.getElementById('calculatorPresetSelect');
+    const calculatorPresetLabel = document.getElementById('calculatorPresetLabel');
+    const calculatorPresetCurrency = document.getElementById('calculatorPresetCurrency');
+    const calculatorPresetVat = document.getElementById('calculatorPresetVat');
+    const calculatorPresetCommission = document.getElementById('calculatorPresetCommission');
+    const calculatorPresetMarkup = document.getElementById('calculatorPresetMarkup');
+    const calculatorPresetEnabled = document.getElementById('calculatorPresetEnabled');
+    const calculatorPresetNewBtn = document.getElementById('calculatorPresetNewBtn');
+    const calculatorPresetSaveBtn = document.getElementById('calculatorPresetSaveBtn');
+    const calculatorPresetDeleteBtn = document.getElementById('calculatorPresetDeleteBtn');
+    const calculatorPresetHint = document.getElementById('calculatorPresetHint');
+    const calculatorPresetList = document.getElementById('calculatorPresetList');
     const LAYOUT_PRESET_DEFAULT_COLUMN_WIDTH = 62;
     const LAYOUT_PRESET_MIN_COLUMN_WIDTH = 35;
     const LAYOUT_PRESET_MAX_COLUMN_WIDTH = 80;
@@ -706,6 +766,7 @@
     const defaultCommissionValue = document.getElementById('defaultCommissionValue');
     const adminTabDescription = document.getElementById('adminTabDescription');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
+    const CALCULATOR_PRESETS_NOTE_ID = 'calculator-presets-v1';
     const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
     const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
     const RATE_PROVIDERS_CONFIG_NOTE_ID = 'rate-providers-config-v1';
@@ -738,6 +799,7 @@
     ];
     let customRateProvidersConfig = { version: 1, providers: [] };
     let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES };
+    let calculatorPresetsConfig = { version: 1, presets: [] };
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
     const ADMIN_TAB_DESCRIPTIONS = {
       logs: 'Backupy, przywracanie, migracje i pełna historia operacji.',
@@ -745,7 +807,7 @@
       mappings: 'Szybki podgląd liczby wpisów exact/wzorce.',
       apis: 'Konfiguracja API kursów walut używanych przez kalkulator.',
       sources: 'Konfiguracja URL-i wyszukiwania, ikon i wariantów źródeł.',
-      presets: 'Globalne presety układu widoczne dla wszystkich użytkowników.'
+      presets: 'Globalne presety kalkulatora i układu widoczne dla użytkowników.'
     };
     const LAYOUT_SECTION_SCHEMA = [
       { id: 'calc-presets', label: 'Presety waluta/VAT', column: 'calc' },
@@ -1582,6 +1644,7 @@
       if (currencyConfigHint) {
         currencyConfigHint.textContent = `Aktywne waluty: ${currenciesConfig.currencies.map((item) => item.code).join(', ')}`;
       }
+      renderCalculatorPresetCurrencyOptions();
     }
 
     function fillCurrencyEditor(item) {
@@ -1618,6 +1681,194 @@
         currenciesConfig = normalizeCurrenciesConfig(null);
       }
       renderCurrencyConfigList();
+    }
+
+    function normalizeCalculatorPreset(item, index = 0) {
+      const currency = String(item?.currency || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+      if (!/^[A-Z]{3}$/.test(currency)) return null;
+      const vat = parseFloat(String(item?.vat ?? '').replace(',', '.'));
+      if (!Number.isFinite(vat) || vat < 0 || vat > 100) return null;
+      const commission = parseFloat(String(item?.commission ?? '').replace(',', '.'));
+      const markup = parseFloat(String(item?.markup ?? '').replace(',', '.'));
+      const id = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || `preset-${index + 1}`;
+      const label = String(item?.label || `${currency} VAT ${vat.toFixed(1).replace(/\.0$/, '')}%`).trim().slice(0, 40);
+      return {
+        id,
+        label: label || `${currency} VAT ${vat.toFixed(1).replace(/\.0$/, '')}%`,
+        currency,
+        vat,
+        commission: Number.isFinite(commission) && commission >= 0 && commission <= 100 ? commission : null,
+        markup: Number.isFinite(markup) && markup > -100 ? markup : null,
+        enabled: item?.enabled !== false
+      };
+    }
+
+    function normalizeCalculatorPresetsConfig(raw) {
+      const incoming = raw && typeof raw === 'object' ? raw : {};
+      const source = Array.isArray(incoming.presets) ? incoming.presets : [];
+      const seen = new Set();
+      const presets = source
+        .map(normalizeCalculatorPreset)
+        .filter(Boolean)
+        .map((item, index) => {
+          let id = item.id;
+          if (seen.has(id)) id = `${id}-${index + 1}`;
+          seen.add(id);
+          return { ...item, id };
+        });
+      return {
+        version: Number(incoming.version) || 1,
+        presets
+      };
+    }
+
+    function formatOptionalPercentValue(value) {
+      const parsed = parseFloat(String(value ?? '').replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed.toFixed(1).replace(/\.0$/, '') : '';
+    }
+
+    function renderCalculatorPresetCurrencyOptions() {
+      if (!calculatorPresetCurrency) return;
+      const current = calculatorPresetCurrency.value || 'EUR';
+      const list = currenciesConfig.currencies.length ? currenciesConfig.currencies : BUILTIN_CURRENCIES;
+      calculatorPresetCurrency.innerHTML = list
+        .map((item) => `<option value="${item.code}">${escapeHtml(item.label || item.code)}</option>`)
+        .join('');
+      calculatorPresetCurrency.value = list.some((item) => item.code === current) ? current : (list[0]?.code || 'EUR');
+    }
+
+    function renderCalculatorPresetSelect() {
+      if (!calculatorPresetSelect) return;
+      const current = calculatorPresetSelect.value || '';
+      calculatorPresetSelect.innerHTML = '<option value="">Nowy preset</option>' + calculatorPresetsConfig.presets
+        .map((item) => `<option value="${item.id}">${escapeHtml(item.label)}${item.enabled === false ? ' (wyłączony)' : ''}</option>`)
+        .join('');
+      calculatorPresetSelect.value = calculatorPresetsConfig.presets.some((item) => item.id === current) ? current : '';
+    }
+
+    function renderCalculatorPresetList() {
+      if (!calculatorPresetList) return;
+      const activeCount = calculatorPresetsConfig.presets.filter((item) => item.enabled !== false).length;
+      if (calculatorPresetHint) {
+        calculatorPresetHint.textContent = `Aktywne presety: ${activeCount}/${calculatorPresetsConfig.presets.length}.`;
+      }
+      calculatorPresetList.innerHTML = calculatorPresetsConfig.presets.map((item) => `
+        <button type="button" class="calculator-preset-row ${item.enabled === false ? 'is-disabled' : ''}" data-preset-id="${item.id}">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(item.currency)} • VAT ${formatOptionalPercentValue(item.vat)}%</span>
+          <small>${item.commission == null ? 'Prowizja domyślna' : `Prowizja ${formatOptionalPercentValue(item.commission)}%`} • ${item.markup == null ? 'Narzut bez zmian' : `Narzut ${formatOptionalPercentValue(item.markup)}%`}</small>
+        </button>
+      `).join('');
+    }
+
+    function fillCalculatorPresetEditor(preset) {
+      if (calculatorPresetSelect) calculatorPresetSelect.value = preset?.id || '';
+      if (calculatorPresetLabel) calculatorPresetLabel.value = preset?.label || '';
+      renderCalculatorPresetCurrencyOptions();
+      if (calculatorPresetCurrency) calculatorPresetCurrency.value = preset?.currency || calculatorPresetCurrency.value || 'EUR';
+      if (calculatorPresetVat) calculatorPresetVat.value = preset ? formatOptionalPercentValue(preset.vat) : '';
+      if (calculatorPresetCommission) calculatorPresetCommission.value = preset?.commission == null ? '' : formatOptionalPercentValue(preset.commission);
+      if (calculatorPresetMarkup) calculatorPresetMarkup.value = preset?.markup == null ? '' : formatOptionalPercentValue(preset.markup);
+      if (calculatorPresetEnabled) calculatorPresetEnabled.checked = preset?.enabled !== false;
+    }
+
+    function renderCalculatorPresetsEditor() {
+      renderCalculatorPresetCurrencyOptions();
+      renderCalculatorPresetSelect();
+      renderCalculatorPresetList();
+      if (!calculatorPresetSelect?.value) {
+        fillCalculatorPresetEditor(null);
+      }
+    }
+
+    function collectCalculatorPresetFromEditor() {
+      return normalizeCalculatorPreset({
+        id: calculatorPresetSelect?.value || undefined,
+        label: calculatorPresetLabel?.value,
+        currency: calculatorPresetCurrency?.value,
+        vat: calculatorPresetVat?.value,
+        commission: calculatorPresetCommission?.value,
+        markup: calculatorPresetMarkup?.value,
+        enabled: calculatorPresetEnabled?.checked
+      });
+    }
+
+    async function saveCalculatorPresetsConfig() {
+      if (!window.PN_MAPPINGS_API?.request) throw new Error('Brak API zapisu');
+      const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(CALCULATOR_PRESETS_NOTE_ID)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: JSON.stringify(calculatorPresetsConfig) })
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+    }
+
+    async function loadCalculatorPresetsConfig() {
+      if (!window.PN_MAPPINGS_API?.request) {
+        calculatorPresetsConfig = normalizeCalculatorPresetsConfig(null);
+        renderCalculatorPresetsEditor();
+        return;
+      }
+      try {
+        const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(CALCULATOR_PRESETS_NOTE_ID)}`, { method: 'GET' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        calculatorPresetsConfig = normalizeCalculatorPresetsConfig(payload?.note ? JSON.parse(payload.note) : null);
+      } catch (_error) {
+        calculatorPresetsConfig = normalizeCalculatorPresetsConfig(null);
+      }
+      renderCalculatorPresetsEditor();
+    }
+
+    async function handleSaveCalculatorPreset() {
+      const item = collectCalculatorPresetFromEditor();
+      if (!item) {
+        showToast('Uzupełnij nazwę, walutę i poprawny VAT.', 'warn');
+        return;
+      }
+      const selectedId = calculatorPresetSelect?.value || '';
+      let savedId = selectedId;
+      if (selectedId) {
+        calculatorPresetsConfig.presets = calculatorPresetsConfig.presets.map((preset) => (
+          preset.id === selectedId ? { ...item, id: selectedId } : preset
+        ));
+      } else {
+        const baseId = item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || item.id;
+        let nextId = baseId;
+        let counter = 2;
+        while (calculatorPresetsConfig.presets.some((preset) => preset.id === nextId)) {
+          nextId = `${baseId}-${counter}`;
+          counter += 1;
+        }
+        savedId = nextId;
+        calculatorPresetsConfig.presets.push({ ...item, id: nextId });
+      }
+      calculatorPresetsConfig = normalizeCalculatorPresetsConfig(calculatorPresetsConfig);
+      const t0 = performance.now();
+      await saveCalculatorPresetsConfig();
+      renderCalculatorPresetsEditor();
+      const saved = calculatorPresetsConfig.presets.find((preset) => preset.id === savedId);
+      if (calculatorPresetSelect && saved) calculatorPresetSelect.value = saved.id;
+      if (saved) fillCalculatorPresetEditor(saved);
+      showToast('Preset kalkulatora zapisany.', 'ok', performance.now() - t0);
+    }
+
+    async function handleDeleteCalculatorPreset() {
+      const selectedId = calculatorPresetSelect?.value || '';
+      if (!selectedId) {
+        showToast('Wybierz preset do usunięcia.', 'warn');
+        return;
+      }
+      const existing = calculatorPresetsConfig.presets.find((item) => item.id === selectedId);
+      calculatorPresetsConfig.presets = calculatorPresetsConfig.presets.filter((item) => item.id !== selectedId);
+      calculatorPresetsConfig = normalizeCalculatorPresetsConfig(calculatorPresetsConfig);
+      const t0 = performance.now();
+      await saveCalculatorPresetsConfig();
+      renderCalculatorPresetsEditor();
+      showToast(`Usunięto preset: ${existing?.label || selectedId}.`, 'ok', performance.now() - t0);
     }
 
     function normalizeRateProvidersConfig(raw) {
@@ -2508,6 +2759,53 @@
       });
     }
 
+    if (calculatorPresetSelect) {
+      calculatorPresetSelect.addEventListener('change', () => {
+        const preset = calculatorPresetsConfig.presets.find((item) => item.id === calculatorPresetSelect.value);
+        fillCalculatorPresetEditor(preset || null);
+      });
+    }
+
+    if (calculatorPresetNewBtn) {
+      calculatorPresetNewBtn.addEventListener('click', () => {
+        if (calculatorPresetSelect) calculatorPresetSelect.value = '';
+        fillCalculatorPresetEditor(null);
+        calculatorPresetLabel?.focus();
+      });
+    }
+
+    if (calculatorPresetSaveBtn) {
+      calculatorPresetSaveBtn.addEventListener('click', async () => {
+        try {
+          await handleSaveCalculatorPreset();
+        } catch (error) {
+          showToast(`Nie udało się zapisać presetu kalkulatora: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+    }
+
+    if (calculatorPresetDeleteBtn) {
+      calculatorPresetDeleteBtn.addEventListener('click', async () => {
+        try {
+          await handleDeleteCalculatorPreset();
+        } catch (error) {
+          showToast(`Nie udało się usunąć presetu kalkulatora: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+    }
+
+    if (calculatorPresetList) {
+      calculatorPresetList.addEventListener('click', (event) => {
+        const row = event.target.closest('.calculator-preset-row');
+        if (!row) return;
+        const presetId = row.getAttribute('data-preset-id') || '';
+        const preset = calculatorPresetsConfig.presets.find((item) => item.id === presetId);
+        if (!preset) return;
+        if (calculatorPresetSelect) calculatorPresetSelect.value = preset.id;
+        fillCalculatorPresetEditor(preset);
+      });
+    }
+
     if (layoutPresetItems) {
       layoutPresetItems.addEventListener('click', (event) => {
         const row = event.target.closest('.layout-preset-row');
@@ -2553,6 +2851,7 @@
     setupSourcesEditor();
     loadSourcesConfig();
     loadCurrenciesConfig();
+    loadCalculatorPresetsConfig();
     loadRateProvidersConfig().then(loadDefaultRateProviderSetting);
     loadDefaultCommissionSetting();
 

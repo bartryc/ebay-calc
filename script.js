@@ -32,6 +32,8 @@ const RATE_PROVIDERS_CONFIG_CACHE_KEY = 'rateProvidersConfigV1';
 const CURRENCIES_CONFIG_NOTE_ID = 'currencies-config-v1';
 const CURRENCIES_CONFIG_CACHE_KEY = 'currenciesConfigV1';
 const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
+const CALCULATOR_PRESETS_NOTE_ID = 'calculator-presets-v1';
+const CALCULATOR_PRESETS_CACHE_KEY = 'calculatorPresetsV1';
 const DEFAULT_COMMISSION_RATE = 15;
 let defaultCommissionRate = DEFAULT_COMMISSION_RATE;
 const DEFAULT_CURRENCIES = [
@@ -40,6 +42,7 @@ const DEFAULT_CURRENCIES = [
   { code: 'GBP', label: 'GBP', fallbackRate: 5.0 }
 ];
 let currenciesConfig = { version: 1, currencies: DEFAULT_CURRENCIES };
+let calculatorPresetsConfig = { version: 1, presets: [] };
 const DEFAULT_RATE_PROVIDERS = window.RateService?.DEFAULT_RATE_PROVIDERS || [
   {
     id: 'erapi',
@@ -1407,6 +1410,15 @@ function parseNumber(value) {
 function formatPercent(value) {
   if (!Number.isFinite(value)) return '0';
   return numberFormatter.format(value);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function hideSelfTestDetails() {}
@@ -2856,19 +2868,116 @@ function calculatePrice() {
   resultDiv.classList.toggle('is-visible', resultHTML.trim().length > 0);
 }
 
-function applyPreset(currency, vat) {
+function normalizeCalculatorPreset(item, index = 0) {
+  const currency = String(item?.currency || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+  if (!/^[A-Z]{3}$/.test(currency)) return null;
+  const vat = parseNumber(item?.vat);
+  if (!Number.isFinite(vat) || vat < 0 || vat > 100) return null;
+  const commission = parseNumber(item?.commission);
+  const markup = parseNumber(item?.markup);
+  const rawId = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  const label = String(item?.label || item?.name || `${currency} VAT ${formatPercent(vat)}%`).trim();
+  return {
+    id: rawId || `preset-${index + 1}`,
+    label: label.slice(0, 40) || `${currency} VAT ${formatPercent(vat)}%`,
+    currency,
+    vat,
+    commission: Number.isFinite(commission) && commission >= 0 && commission <= 100 ? commission : null,
+    markup: Number.isFinite(markup) && markup > -100 ? markup : null,
+    enabled: item?.enabled !== false
+  };
+}
+
+function normalizeCalculatorPresetsConfig(raw) {
+  const incoming = raw && typeof raw === 'object' ? raw : {};
+  const source = Array.isArray(incoming.presets) ? incoming.presets : [];
+  const seen = new Set();
+  const presets = source
+    .map(normalizeCalculatorPreset)
+    .filter(Boolean)
+    .map((item, index) => {
+      let id = item.id;
+      if (seen.has(id)) id = `${id}-${index + 1}`;
+      seen.add(id);
+      return { ...item, id };
+    });
+  return {
+    version: Number(incoming.version) || 1,
+    presets
+  };
+}
+
+function renderCalculatorPresetButtons() {
+  const container = document.getElementById('calculatorPresetButtons');
+  if (!container) return;
+  const activeCurrencyCodes = new Set(currenciesConfig.currencies.map((item) => item.code));
+  const presets = calculatorPresetsConfig.presets.filter((item) => item.enabled !== false && activeCurrencyCodes.has(item.currency));
+  if (!presets.length) {
+    container.innerHTML = '<span class="preset-empty">Brak aktywnych presetów</span>';
+    return;
+  }
+  container.innerHTML = presets
+    .map((item) => `<button type="button" data-calculator-preset-id="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>`)
+    .join('');
+}
+
+async function loadCalculatorPresetsConfig() {
+  const fromLocal = localStorage.getItem(CALCULATOR_PRESETS_CACHE_KEY);
+  if (fromLocal) {
+    try {
+      calculatorPresetsConfig = normalizeCalculatorPresetsConfig(JSON.parse(fromLocal));
+      renderCalculatorPresetButtons();
+    } catch (_error) {
+      // ignore local parse error
+    }
+  } else {
+    calculatorPresetsConfig = normalizeCalculatorPresetsConfig(null);
+    renderCalculatorPresetButtons();
+  }
+  if (!window.PN_MAPPINGS_API?.request) return;
+  try {
+    const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(CALCULATOR_PRESETS_NOTE_ID)}`, { method: 'GET' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const parsed = payload?.note ? JSON.parse(payload.note) : null;
+    if (!parsed) return;
+    calculatorPresetsConfig = normalizeCalculatorPresetsConfig(parsed);
+    localStorage.setItem(CALCULATOR_PRESETS_CACHE_KEY, JSON.stringify(calculatorPresetsConfig));
+    renderCalculatorPresetButtons();
+  } catch (_error) {
+    // fallback to built-in/local presets
+  }
+}
+
+function applyPreset(currencyOrPreset, vat) {
+  const preset = typeof currencyOrPreset === 'object' && currencyOrPreset
+    ? normalizeCalculatorPreset(currencyOrPreset)
+    : normalizeCalculatorPreset({ currency: currencyOrPreset, vat });
+  if (!preset) return;
   isPresetApplied = true;
   const sourceBeforePreset = getSourceForPricingParamChange();
-  applyPresetAmountModes(vat);
-  document.getElementById('currency').value = currency;
-  document.getElementById('vatRate').value = parseNumber(vat).toString();
-  document.getElementById('currencyLabel').innerText = currency;
-  const label = `${currency} (z VAT ${formatPercent(parseNumber(vat))}%)`
+  applyPresetAmountModes(preset.vat);
+  document.getElementById('currency').value = preset.currency;
+  document.getElementById('vatRate').value = parseNumber(preset.vat).toString();
+  if (Number.isFinite(preset.commission)) {
+    advancedOptionsToggle.checked = true;
+    advancedOptions.style.display = 'block';
+    exchangeRateInput.disabled = false;
+    document.getElementById('commission').value = formatCommissionRate(preset.commission);
+    setFieldBaseline('commission');
+  }
+  if (Number.isFinite(preset.markup)) {
+    document.getElementById('minMarkup').value = formatPercent(preset.markup);
+    rememberMarkupSource('minMarkup');
+  }
+  document.getElementById('currencyLabel').innerText = preset.currency;
+  const label = `${preset.currency} (z VAT ${formatPercent(parseNumber(preset.vat))}%)`
     .replace(/\s+/g, ' ')
     .trim();
   ebayCurrencyLabel.textContent = label;
   resyncPricingFromCurrentSource(sourceBeforePreset || 'vatRate');
-  fetchExchangeRate(currency);
+  updateMarkupCalculations();
+  fetchExchangeRate(preset.currency);
 }
 
 function convertEbayPrice(newRate) {
@@ -3562,10 +3671,22 @@ updateMarkupCalculations({ syncFields: false });
 updateCommissionFromBaseMultiplier();
 updateSummaryMetrics();
 
+const calculatorPresetButtons = document.getElementById('calculatorPresetButtons');
+if (calculatorPresetButtons) {
+  calculatorPresetButtons.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-calculator-preset-id]');
+    if (!button) return;
+    const presetId = button.getAttribute('data-calculator-preset-id') || '';
+    const preset = calculatorPresetsConfig.presets.find((item) => item.id === presetId);
+    if (preset) applyPreset(preset);
+  });
+}
+
 (async () => {
   renderRateProviderOptions();
   await loadCurrenciesConfig();
   await loadCustomRateProviders();
+  await loadCalculatorPresetsConfig();
   await loadDefaultRateProviderSelection();
   await loadDefaultCommissionRate();
   const currency = document.getElementById('currency').value;

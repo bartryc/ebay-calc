@@ -54,12 +54,7 @@
       <section class="app-card">
         <form id="priceForm">
           <div id="calcLayoutContainer">
-            <div class="preset-buttons layout-item" data-layout-item="calc-presets">
-              <button type="button" onclick="applyPreset('USD', 0)">USD VAT 0%</button>
-              <button type="button" onclick="applyPreset('EUR', 0)">EUR VAT 0%</button>
-              <button type="button" onclick="applyPreset('EUR', 23)">EUR VAT 23%</button>
-              <button type="button" onclick="applyPreset('GBP', 0)">GBP VAT 0%</button>
-            </div>
+            <div class="preset-buttons layout-item" data-layout-item="calc-presets" id="calculatorPresetButtons"></div>
 
             <div class="layout-item" data-layout-item="calc-netto">
               <label for="plnNetto" class="field-label">Kwota netto w PLN

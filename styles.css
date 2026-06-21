@@ -2055,6 +2055,50 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
   width: 100%;
 }
 
+.calculator-preset-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.calculator-preset-row {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  background: var(--card-2);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.calculator-preset-row:hover {
+  border-color: var(--accent);
+}
+
+.calculator-preset-row.is-disabled {
+  opacity: 0.58;
+}
+
+.calculator-preset-row strong,
+.calculator-preset-row span,
+.calculator-preset-row small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.calculator-preset-row span,
+.calculator-preset-row small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.calculator-preset-enabled {
+  margin-top: 26px;
+}
+
 .rate-provider-config-controls {
   grid-template-columns: minmax(180px, 0.8fr) minmax(160px, 0.7fr) minmax(220px, 1fr);
   grid-template-areas:
@@ -3674,6 +3718,12 @@ body.dark-mode .search-card {
 .preset-buttons button:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.preset-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 0.35rem 0;
 }
 
 label {
