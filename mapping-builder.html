@@ -58,9 +58,6 @@
           </div>
           <div class="admin-meta creator-test-note">Kreator jest testowy. Zgloszenia z tej strony trafiaja jako blad dzialania strony.</div>
           <textarea id="patternSeedInput" class="admin-textarea" rows="6" placeholder="Wklej PN-y (po jednym w linii)"></textarea>
-          <div class="admin-actions">
-            <button type="button" id="patternGenerateBtn">Generuj propozycje</button>
-          </div>
           <div id="patternSuggestions" class="pattern-suggestions"></div>
           <div class="pattern-apply">
             <input type="text" id="patternResult" placeholder="Wzorzec (np. SR0** lub 100-******)">
@@ -107,7 +104,6 @@
   <script src="pn-mappings.js"></script>
   <script>
     const patternSeedInput = document.getElementById('patternSeedInput');
-    const patternGenerateBtn = document.getElementById('patternGenerateBtn');
     const patternSuggestions = document.getElementById('patternSuggestions');
     const patternResult = document.getElementById('patternResult');
     const patternVendorSelect = document.getElementById('patternVendorSelect');
@@ -142,6 +138,13 @@
         .split(/[\s,;]+/g)
         .map((item) => item.trim())
         .filter(Boolean);
+    }
+
+    function countUniqueSeeds(rawList) {
+      const values = rawList
+        .map((val) => normalizeSeed(val, patternStripSpecial?.checked))
+        .filter(Boolean);
+      return new Set(values).size;
     }
 
     function normalizeSeedTextarea() {
@@ -387,8 +390,12 @@
 
     const refreshPatternSuggestions = (notify = false) => {
       const list = toPnLineList(patternSeedInput?.value || '');
-      if (!list.length) {
-        renderPatternSuggestions([], { notify });
+      const uniqueCount = countUniqueSeeds(list);
+      if (uniqueCount < 2) {
+        if (patternSuggestions) {
+          patternSuggestions.innerHTML = '<div class="pattern-suggestion"><span>Podaj minimum 2 różne PN-y, żeby wygenerować propozycję.</span></div>';
+        }
+        if (notify) showToast('Podaj minimum 2 różne PN-y.', 'warn');
         return;
       }
       const suggestions = generatePatternSuggestions(list, {
@@ -453,12 +460,6 @@
         patternSeedInput.setRangeText(insert, start, end, 'end');
         normalizeSeedTextarea();
         scheduleRefreshPatternSuggestions();
-      });
-    }
-
-    if (patternGenerateBtn) {
-      patternGenerateBtn.addEventListener('click', () => {
-        refreshPatternSuggestions(true);
       });
     }
 

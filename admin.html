@@ -691,7 +691,6 @@
     const migrateLogsList = document.getElementById('migrateLogsList');
     const dedupLogsBtn = document.getElementById('dedupLogsBtn');
     const patternSeedInput = document.getElementById('patternSeedInput');
-    const patternGenerateBtn = document.getElementById('patternGenerateBtn');
     const patternSuggestions = document.getElementById('patternSuggestions');
     const patternResult = document.getElementById('patternResult');
     const patternVendorSelect = document.getElementById('patternVendorSelect');
@@ -1177,6 +1176,13 @@
         if (b.count !== a.count) return b.count - a.count;
         return b.pattern.length - a.pattern.length;
       });
+    }
+
+    function countUniquePatternSeeds(rawList) {
+      const values = rawList
+        .map((val) => normalizeSeed(val, patternStripSpecial?.checked))
+        .filter(Boolean);
+      return new Set(values).size;
     }
 
     function renderPatternSuggestions(list) {
@@ -2700,20 +2706,6 @@
       });
     }
 
-    if (patternGenerateBtn) {
-      patternGenerateBtn.addEventListener('click', () => {
-        const list = String(patternSeedInput?.value || '')
-          .split(/[\s,;]+/g)
-          .map((item) => item.trim())
-          .filter(Boolean);
-        const suggestions = generatePatternSuggestions(list, {
-          stripSpecial: patternStripSpecial?.checked,
-          preferPlus: patternPreferPlus?.checked
-        });
-        renderPatternSuggestions(suggestions);
-      });
-    }
-
     if (patternSeedInput) {
       const splitToLineTokens = (raw) => String(raw || '')
         .split(/[\s,;]+/g)
@@ -2729,6 +2721,12 @@
       };
       const refreshPatternSuggestionsLive = () => {
         const list = splitToLineTokens(patternSeedInput.value);
+        if (countUniquePatternSeeds(list) < 2) {
+          if (patternSuggestions) {
+            patternSuggestions.innerHTML = '<div class="pattern-suggestion"><span>Podaj minimum 2 różne PN-y, żeby wygenerować propozycję.</span></div>';
+          }
+          return;
+        }
         const suggestions = generatePatternSuggestions(list, {
           stripSpecial: patternStripSpecial?.checked,
           preferPlus: patternPreferPlus?.checked
