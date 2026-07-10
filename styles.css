@@ -1534,6 +1534,11 @@ body.is-external-network .search-sources .source-icon {
   display: none;
 }
 
+.internal-only-feature[hidden],
+[data-internal-only][hidden] {
+  display: none !important;
+}
+
 .source-icon-placeholder {
   display: none;
   min-width: 30px;
