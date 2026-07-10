@@ -420,6 +420,9 @@
               <div class="admin-meta">Ta kolejność jest używana na stronie kalkulatora.</div>
             </div>
             <div id="sourceOrderList" class="source-order-list" aria-label="Kolejność źródeł wyszukiwania"></div>
+            <div class="admin-actions source-actions source-actions-top">
+              <button type="button" id="sourceConfigSaveTopBtn">Zapisz zmiany</button>
+            </div>
           </div>
           <details class="source-token-examples">
             <summary>Przykłady użycia znaczników</summary>
@@ -528,9 +531,8 @@
           <div class="admin-actions source-actions">
             <button type="button" id="sourceConfigNewBtn">Nowe źródło</button>
             <button type="button" id="sourceVariantAddBtn">Dodaj wariant</button>
-            <button type="button" id="sourceConfigSaveBtn">Zapisz źródło</button>
             <button type="button" id="sourceConfigDeleteBtn">Usuń źródło</button>
-            <button type="button" id="sourceConfigSaveAllBtn">Zapisz konfigurację</button>
+            <button type="button" id="sourceConfigSaveAllBtn">Zapisz zmiany</button>
           </div>
           <div id="sourceConfigSaveHint" class="admin-meta">Brak niezapisanych zmian.</div>
           <div class="admin-meta">Zmiany zapisują się globalnie i są czytane przez kalkulator.</div>
@@ -743,6 +745,7 @@
     const sourceConfigSaveBtn = document.getElementById('sourceConfigSaveBtn');
     const sourceConfigDeleteBtn = document.getElementById('sourceConfigDeleteBtn');
     const sourceConfigSaveAllBtn = document.getElementById('sourceConfigSaveAllBtn');
+    const sourceConfigSaveTopBtn = document.getElementById('sourceConfigSaveTopBtn');
     const sourceConfigSaveHint = document.getElementById('sourceConfigSaveHint');
     const sourceOrderList = document.getElementById('sourceOrderList');
     const sourceTokenPreviewInput = document.getElementById('sourceTokenPreviewInput');
@@ -1313,7 +1316,7 @@
 
     function updateSourceSaveUi() {
       const isDirty = !!sourceConfigDirty;
-      [sourceConfigSaveBtn, sourceConfigSaveAllBtn].forEach((btn) => {
+      [sourceConfigSaveBtn, sourceConfigSaveAllBtn, sourceConfigSaveTopBtn].forEach((btn) => {
         if (!btn) return;
         btn.classList.toggle('is-dirty', isDirty);
       });
@@ -2427,7 +2430,7 @@
           showToast(`Błąd usuwania źródła: ${error.message || 'unknown'}`, 'warn');
         }
       });
-      sourceConfigSaveAllBtn?.addEventListener('click', async () => {
+      const saveSourceConfigChanges = async () => {
         const source = getSelectedSourceConfig();
         if (source) {
           applySourceEditorToConfigDraft(sourceConfig);
@@ -2438,7 +2441,9 @@
         } catch (error) {
           showToast(`Błąd zapisu konfiguracji: ${error.message || 'unknown'}`, 'warn');
         }
-      });
+      };
+      sourceConfigSaveAllBtn?.addEventListener('click', saveSourceConfigChanges);
+      sourceConfigSaveTopBtn?.addEventListener('click', saveSourceConfigChanges);
       sourceTokenPreviewInput?.addEventListener('input', updateSourceTokenPreview);
       updateSourceTokenPreview();
       updateDarkIconUi();
