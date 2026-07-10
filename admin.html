@@ -111,6 +111,16 @@
         </div>
 
         <div class="admin-card" data-admin-tab="logs">
+          <h3>Dostęp HD</h3>
+          <p>Dodaj aktualne publiczne IP do whitelisty sieci HD. Tylko te IP widzą opcje Base i STOCK na kalkulatorze.</p>
+          <div class="admin-actions">
+            <button type="button" id="hdWhitelistAddCurrentBtn">Tak, jestem w sieci HD - dodaj moje IP</button>
+          </div>
+          <div class="admin-meta">Aktualne IP: <span id="hdWhitelistCurrentIp">—</span></div>
+          <div class="admin-meta">Whitelista: <span id="hdWhitelistValue">—</span></div>
+        </div>
+
+        <div class="admin-card" data-admin-tab="logs">
           <h3>Przywracanie</h3>
           <p>Wczytaj plik JSON i nadpisz mapowania w bazie.</p>
           <div class="admin-actions">
@@ -404,6 +414,13 @@
             <code class="has-tooltip" data-tooltip="PN jako slug URL (uproszczony pod bezpośrednie linki).">{PN_SLUG}</code>,
             <code class="has-tooltip" data-tooltip="Zapytanie jak {QUERY}, ale bez cudzysłowów i ze spacjami zamienionymi na +.">{QUERY_PLUS}</code>.
           </p>
+          <div class="source-order-panel">
+            <div class="source-order-header">
+              <h4>Kolejność źródeł</h4>
+              <div class="admin-meta">Ta kolejność jest używana na stronie kalkulatora.</div>
+            </div>
+            <div id="sourceOrderList" class="source-order-list" aria-label="Kolejność źródeł wyszukiwania"></div>
+          </div>
           <details class="source-token-examples">
             <summary>Przykłady użycia znaczników</summary>
             <div class="source-token-preview">
@@ -727,6 +744,7 @@
     const sourceConfigDeleteBtn = document.getElementById('sourceConfigDeleteBtn');
     const sourceConfigSaveAllBtn = document.getElementById('sourceConfigSaveAllBtn');
     const sourceConfigSaveHint = document.getElementById('sourceConfigSaveHint');
+    const sourceOrderList = document.getElementById('sourceOrderList');
     const sourceTokenPreviewInput = document.getElementById('sourceTokenPreviewInput');
     const tokenPreviewPn = document.getElementById('tokenPreviewPn');
     const tokenPreviewPnRaw = document.getElementById('tokenPreviewPnRaw');
@@ -764,6 +782,9 @@
     const defaultCommissionInput = document.getElementById('defaultCommissionInput');
     const defaultCommissionSaveBtn = document.getElementById('defaultCommissionSaveBtn');
     const defaultCommissionValue = document.getElementById('defaultCommissionValue');
+    const hdWhitelistAddCurrentBtn = document.getElementById('hdWhitelistAddCurrentBtn');
+    const hdWhitelistCurrentIp = document.getElementById('hdWhitelistCurrentIp');
+    const hdWhitelistValue = document.getElementById('hdWhitelistValue');
     const adminTabDescription = document.getElementById('adminTabDescription');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
     const CALCULATOR_PRESETS_NOTE_ID = 'calculator-presets-v1';
@@ -772,7 +793,13 @@
     const RATE_PROVIDERS_CONFIG_NOTE_ID = 'rate-providers-config-v1';
     const CURRENCIES_CONFIG_NOTE_ID = 'currencies-config-v1';
     const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
+    const HD_WHITELIST_NOTE_ID = 'hd-network-whitelist-v1';
     const DEFAULT_COMMISSION_RATE = 15;
+    const DEFAULT_HD_WHITELIST = [];
+    const PUBLIC_IP_ENDPOINTS = [
+      'https://api.ipify.org?format=json',
+      'https://api64.ipify.org?format=json'
+    ];
     const SOURCE_ICON_MAX_BYTES = 100 * 1024;
     const BUILTIN_CURRENCIES = [
       { code: 'EUR', label: 'EUR', fallbackRate: 4.3 },
@@ -800,6 +827,7 @@
     let customRateProvidersConfig = { version: 1, providers: [] };
     let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES };
     let calculatorPresetsConfig = { version: 1, presets: [] };
+    let hdWhitelistConfig = { version: 1, ips: [] };
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
     const ADMIN_TAB_DESCRIPTIONS = {
       logs: 'Backupy, przywracanie, migracje i pełna historia operacji.',
@@ -1353,6 +1381,37 @@
       return sourceConfig.sources.find((s) => s.id === id) || null;
     }
 
+    function renderSourceOrderList() {
+      if (!sourceOrderList || !sourceConfig) return;
+      const sources = Array.isArray(sourceConfig.sources) ? sourceConfig.sources : [];
+      sourceOrderList.innerHTML = sources.map((source, index) => `
+        <div class="source-order-row" data-source-id="${escapeHtml(source.id)}">
+          <button type="button" class="source-order-move" data-direction="up" ${index === 0 ? 'disabled' : ''} aria-label="Przesuń ${escapeHtml(source.name || source.id)} wyżej">↑</button>
+          <button type="button" class="source-order-move" data-direction="down" ${index === sources.length - 1 ? 'disabled' : ''} aria-label="Przesuń ${escapeHtml(source.name || source.id)} niżej">↓</button>
+          <span class="source-order-position">${index + 1}</span>
+          <span class="source-order-name">${escapeHtml(source.name || source.id)}</span>
+          <span class="source-order-id">${escapeHtml(source.id)}</span>
+        </div>
+      `).join('');
+      if (!sources.length) {
+        sourceOrderList.innerHTML = '<div class="admin-meta">Brak źródeł do ustawienia.</div>';
+      }
+    }
+
+    function moveSourceConfigItem(sourceId, direction) {
+      if (!sourceConfig || !Array.isArray(sourceConfig.sources)) return;
+      applySourceEditorToConfigDraft(sourceConfig);
+      const currentIndex = sourceConfig.sources.findIndex((source) => source.id === sourceId);
+      if (currentIndex < 0) return;
+      const delta = direction === 'up' ? -1 : 1;
+      const nextIndex = currentIndex + delta;
+      if (nextIndex < 0 || nextIndex >= sourceConfig.sources.length) return;
+      const [item] = sourceConfig.sources.splice(currentIndex, 1);
+      sourceConfig.sources.splice(nextIndex, 0, item);
+      renderSourceSelect(sourceId);
+      refreshSourceConfigDirtyState();
+    }
+
     function renderSourceVariantRows(source) {
       if (!sourceVariantsList) return;
       const variants = Array.isArray(source?.variants) ? source.variants : [];
@@ -1490,15 +1549,16 @@
       updateSourceTokenPreview();
     }
 
-    function renderSourceSelect() {
+    function renderSourceSelect(preferredId) {
       if (!sourceConfigSelect || !sourceConfig) return;
-      const current = sourceConfigSelect.value;
+      const current = preferredId || sourceConfigSelect.value;
       sourceConfigSelect.innerHTML = sourceConfig.sources
         .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || s.id)}</option>`)
         .join('');
       const next = sourceConfig.sources.find((s) => s.id === current)?.id || sourceConfig.sources[0]?.id || '';
       sourceConfigSelect.value = next;
       fillSourceEditor(getSelectedSourceConfig());
+      renderSourceOrderList();
     }
 
     function collectVariantsFromEditor() {
@@ -1908,6 +1968,92 @@
       return `${normalizeCommissionDefault(value).toFixed(1).replace(/\.0$/, '')}%`;
     }
 
+    function normalizeIpList(values) {
+      const list = Array.isArray(values) ? values : [];
+      return Array.from(new Set(list
+        .map((value) => String(value || '').trim())
+        .filter((value) => /^[a-f0-9:.]+$/i.test(value) && (value.includes('.') || value.includes(':')))));
+    }
+
+    function normalizeHdWhitelistConfig(raw) {
+      const incoming = raw && typeof raw === 'object' ? raw : {};
+      const ips = normalizeIpList(incoming.ips || incoming.allowedIps || DEFAULT_HD_WHITELIST);
+      return {
+        version: Number(incoming.version) || 1,
+        ips: ips.length ? ips : [...DEFAULT_HD_WHITELIST]
+      };
+    }
+
+    function renderHdWhitelistConfig() {
+      if (hdWhitelistValue) hdWhitelistValue.textContent = hdWhitelistConfig.ips.join(', ') || '—';
+    }
+
+    async function fetchCurrentPublicIp() {
+      for (const endpoint of PUBLIC_IP_ENDPOINTS) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            cache: 'no-store',
+            referrerPolicy: 'no-referrer'
+          });
+          if (!response.ok) continue;
+          const data = await response.json();
+          const ip = String(data?.ip || '').trim();
+          if (ip) return ip;
+        } catch (_error) {
+          // Try the next endpoint.
+        }
+      }
+      return '';
+    }
+
+    async function loadHdWhitelistConfig() {
+      if (!window.PN_MAPPINGS_API?.request) {
+        hdWhitelistConfig = normalizeHdWhitelistConfig(null);
+        renderHdWhitelistConfig();
+        return;
+      }
+      try {
+        const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(HD_WHITELIST_NOTE_ID)}`, { method: 'GET' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        hdWhitelistConfig = normalizeHdWhitelistConfig(payload?.note ? JSON.parse(payload.note) : null);
+      } catch (_error) {
+        hdWhitelistConfig = normalizeHdWhitelistConfig(null);
+      }
+      renderHdWhitelistConfig();
+    }
+
+    async function saveHdWhitelistConfig() {
+      if (!window.PN_MAPPINGS_API?.request) throw new Error('Brak API zapisu');
+      hdWhitelistConfig = normalizeHdWhitelistConfig(hdWhitelistConfig);
+      const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(HD_WHITELIST_NOTE_ID)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: JSON.stringify(hdWhitelistConfig) })
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      renderHdWhitelistConfig();
+    }
+
+    async function addCurrentIpToHdWhitelist() {
+      const ip = await fetchCurrentPublicIp();
+      if (!ip) throw new Error('Nie udało się pobrać aktualnego IP');
+      if (hdWhitelistCurrentIp) hdWhitelistCurrentIp.textContent = ip;
+      hdWhitelistConfig = normalizeHdWhitelistConfig(hdWhitelistConfig);
+      if (!hdWhitelistConfig.ips.includes(ip)) {
+        hdWhitelistConfig.ips.push(ip);
+        await saveHdWhitelistConfig();
+        showToast(`Dodano IP ${ip} do whitelisty HD.`, 'ok');
+      } else {
+        renderHdWhitelistConfig();
+        showToast(`IP ${ip} jest już na whitelistcie HD.`, 'info');
+      }
+    }
+
     function renderDefaultRateProviderOptions() {
       if (!defaultRateProviderSelect) return;
       defaultRateProviderSelect.innerHTML = getRateProviderOptions()
@@ -2194,6 +2340,15 @@
         updateSourceTokenPreview();
       });
       sourceConfigSearchUrl?.addEventListener('input', updateSourceTokenPreview);
+      sourceOrderList?.addEventListener('click', (event) => {
+        const button = event.target.closest('.source-order-move');
+        if (!button) return;
+        const row = button.closest('.source-order-row');
+        const sourceId = String(row?.getAttribute('data-source-id') || '');
+        const direction = String(button.getAttribute('data-direction') || '');
+        if (!sourceId || !direction) return;
+        moveSourceConfigItem(sourceId, direction);
+      });
       sourceConfigNewBtn?.addEventListener('click', () => {
         const raw = prompt('Podaj ID źródła (np. amazon):');
         const id = String(raw || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -2214,7 +2369,7 @@
           variants: [{ id: 'default', label: 'Domyślnie', append: '', isDefault: true, resetAfterSearch: true }]
         });
         refreshSourceConfigDirtyState();
-        renderSourceSelect();
+        renderSourceSelect(id);
         sourceConfigSelect.value = id;
         fillSourceEditor(getSelectedSourceConfig());
       });
@@ -2854,6 +3009,7 @@
     loadCalculatorPresetsConfig();
     loadRateProvidersConfig().then(loadDefaultRateProviderSetting);
     loadDefaultCommissionSetting();
+    loadHdWhitelistConfig();
 
     currencyConfigList?.addEventListener('click', (event) => {
       const chip = event.target.closest('.currency-config-chip');
@@ -2976,6 +3132,18 @@
         await saveDefaultCommissionSetting();
       } catch (error) {
         showToast(`Błąd zapisu domyślnej prowizji: ${error.message || 'unknown'}`, 'warn');
+      }
+    });
+
+    hdWhitelistAddCurrentBtn?.addEventListener('click', async () => {
+      try {
+        hdWhitelistAddCurrentBtn.disabled = true;
+        await loadHdWhitelistConfig();
+        await addCurrentIpToHdWhitelist();
+      } catch (error) {
+        showToast(`Błąd whitelisty HD: ${error.message || 'unknown'}`, 'warn');
+      } finally {
+        hdWhitelistAddCurrentBtn.disabled = false;
       }
     });
 

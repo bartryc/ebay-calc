@@ -23,6 +23,9 @@ const appVersion = appVersionEl?.textContent?.trim() || window.AppVersionInfo?.v
 if (appVersion) {
   localStorage.setItem('appVersion', appVersion);
 }
+const INTERNAL_FEATURE_ACCESS_CACHE_KEY = 'internalFeatureAccessV1';
+const INTERNAL_FEATURE_ACCESS_TTL_MS = 5 * 60 * 1000;
+const INTERNAL_FEATURE_ACCESS_PATH = '/internal-access';
 const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
 const SEARCH_SOURCES_CONFIG_CACHE_KEY = 'searchSourcesConfigV1';
 const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
@@ -61,6 +64,72 @@ const DEFAULT_RATE_PROVIDERS = window.RateService?.DEFAULT_RATE_PROVIDERS || [
     transform: 'inverse'
   }
 ];
+
+function readInternalFeatureAccessCache() {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(INTERNAL_FEATURE_ACCESS_CACHE_KEY) || 'null');
+    if (!cached || typeof cached !== 'object') return null;
+    if (cached.allowed !== true) return null;
+    const checkedAt = Number(cached.checkedAt) || 0;
+    if (Date.now() - checkedAt > INTERNAL_FEATURE_ACCESS_TTL_MS) return null;
+    return cached;
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeInternalFeatureAccessCache(value) {
+  try {
+    sessionStorage.setItem(INTERNAL_FEATURE_ACCESS_CACHE_KEY, JSON.stringify({
+      ...value,
+      checkedAt: Date.now()
+    }));
+  } catch (error) {
+    // Access still works for the current load; cache is only an optimization.
+  }
+}
+
+function applyInternalFeatureAccess(isAllowed, ip = '') {
+  document.body?.classList.toggle('is-internal-network', !!isAllowed);
+  document.body?.classList.toggle('is-external-network', !isAllowed);
+  if (ip) document.body.dataset.clientIp = ip;
+  document.querySelectorAll('[data-internal-only]').forEach((el) => {
+    el.hidden = !isAllowed;
+    el.setAttribute('aria-hidden', isAllowed ? 'false' : 'true');
+  });
+  document.dispatchEvent(new CustomEvent('internal-feature-access-change', {
+    detail: { allowed: !!isAllowed, ip }
+  }));
+}
+
+async function checkInternalFeatureAccess() {
+  if (!window.PN_MAPPINGS_API?.request) return { allowed: false, ip: '' };
+  try {
+    const response = await window.PN_MAPPINGS_API.request(INTERNAL_FEATURE_ACCESS_PATH, { method: 'GET' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    return {
+      allowed: payload?.allowed === true,
+      ip: String(payload?.ip || '')
+    };
+  } catch (error) {
+    return { allowed: false, ip: '' };
+  }
+}
+
+async function initInternalFeatureGate() {
+  applyInternalFeatureAccess(false);
+  const cached = readInternalFeatureAccessCache();
+  if (cached?.ip) {
+    applyInternalFeatureAccess(!!cached.allowed, cached.ip);
+    return;
+  }
+  const access = await checkInternalFeatureAccess();
+  writeInternalFeatureAccessCache(access);
+  applyInternalFeatureAccess(access.allowed, access.ip);
+}
+
+initInternalFeatureGate();
 
 const INDEX_LAYOUT_STORAGE_KEY = 'indexLayoutOrderV1';
 const INDEX_LAYOUT_COOKIE_KEY = 'indexLayoutOrderV1';
@@ -1941,7 +2010,7 @@ function openSearch(urlBase, query) {
   const trimmed = query.trim();
   if (!trimmed) return false;
   const url = `${urlBase}${encodeURIComponent(trimmed)}`;
-  window.open(url, '_blank', 'noopener');
+  window.open(url, '_blank', 'noopener,noreferrer');
   return true;
 }
 
@@ -3358,7 +3427,7 @@ function openStockFromInput() {
   if (/^\d{1,6}$/.test(productId)) {
     const url = `https://stock/product/product/details/${productId}`;
     logActivity('stock-open', { productId, url });
-    window.open(url, '_blank');
+    window.open(url, '_blank', 'noopener,noreferrer');
     productInput.value = '';
   } else {
     document.getElementById('result').innerHTML = '<span class="error">ID produktu musi być liczbą od 1 do 6 cyfr.</span>';
@@ -3898,6 +3967,7 @@ if (partNumberInput) {
     }
   };
   const applySourceVisuals = () => {
+    const canShowBrandLogos = document.body?.classList.contains('is-internal-network');
     sourceInputMap.forEach((inputEl, sourceId) => {
       if (!inputEl || !searchSourcesContainer) return;
       const label = inputEl.closest('.source-option');
@@ -3916,7 +3986,7 @@ if (partNumberInput) {
       const iconRaw = String(cfg?.icon || '').trim();
       const iconDarkRaw = String(cfg?.iconDark || '').trim();
       const isPlaceholder = iconRaw.toUpperCase() === 'PLACEHOLDER';
-      if (isPlaceholder) {
+      if (!canShowBrandLogos || isPlaceholder) {
         label.classList.add('source-option-has-placeholder');
         iconEl.classList.add('is-hidden');
         placeholderEl.textContent = sourceName;
@@ -3933,6 +4003,7 @@ if (partNumberInput) {
       syncSourceIconTheme(iconEl, nextIcon, nextDark);
     });
   };
+  document.addEventListener('internal-feature-access-change', applySourceVisuals);
   const getSourceSubmenu = (sourceId) => searchSourcesContainer?.querySelector(`.source-option-wrap-${sourceId} .source-submenu`);
   const renderSourceVariants = (sourceId, submenuEl, cfg) => {
     if (!submenuEl) return;
@@ -4304,7 +4375,7 @@ if (partNumberInput) {
         variant: String(variant?.id || 'default')
       };
       if (url) {
-        window.open(url, '_blank', 'noopener');
+        window.open(url, '_blank', 'noopener,noreferrer');
         openedCount += 1;
         openedForPn.add(sourceId);
       }

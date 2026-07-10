@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="referrer" content="no-referrer">
   <title>eBay Calc</title>
   <link rel="icon" href="resources/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body data-page-title="Kalkulator">
+<body data-page-title="Kalkulator" class="is-external-network">
   <div class="page">
     <header class="topbar">
       <div class="top-actions">
@@ -174,10 +175,10 @@
                 </label>
                 <input type="number" id="commission" value="15" step="0.1" min="0" max="100" required>
 
-                <label for="productId" class="field-label">ID produktu w STOCK
+                <label for="productId" class="field-label internal-only-feature" data-internal-only hidden>ID produktu w STOCK
                   <span class="field-help" data-tooltip="Pole pomocnicze do szybkiego otwarcia karty produktu w STOCK." aria-label="Pomoc">?</span>
                 </label>
-                <div class="currency-row">
+                <div class="currency-row internal-only-feature" data-internal-only hidden>
                   <input type="number" id="productId" min="1" placeholder="Wprowadź ID produktu (1-6 cyfr)">
                   <button type="button" id="stockUrlBtn">Otwórz w STOCK</button>
                 </div>
@@ -284,7 +285,7 @@
             </div>
           </div>
         </details>
-        <details class="info-card highlight-card collapsible-card base-collapsible layout-item" id="baseCard" data-layout-item="base-card">
+        <details class="info-card highlight-card collapsible-card base-collapsible layout-item internal-only-feature" id="baseCard" data-layout-item="base-card" data-internal-only hidden>
           <summary class="collapsible-summary">
             <h3>Mnożnik dla <a class="highlight-link-inline" href="https://panel-e.baselinker.com/inventory_settings#price_groups" target="_blank" rel="noopener noreferrer">Base</a></h3>
             <div class="collapsible-summary-right">
