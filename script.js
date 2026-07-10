@@ -1963,7 +1963,7 @@ function updateBaseMultiplier() {
   const commission = baseState.commission;
   const vatRate = baseState.vatRate;
 
-  if (!Number.isFinite(exchangeRate) || !Number.isFinite(commission) || !Number.isFinite(vatRate)) {
+  if (!Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0 || !Number.isFinite(vatRate) || vatRate < 0) {
     multiplierEl.textContent = '—';
     multiplierEl.dataset.value = '';
     if (multiplierSummaryEl) multiplierSummaryEl.textContent = '—';
@@ -1972,6 +1972,13 @@ function updateBaseMultiplier() {
   }
 
   const multiplierBrutto = window.CalculatorCore.baseMultiplier(exchangeRate, vatRate, commission);
+  if (!Number.isFinite(multiplierBrutto)) {
+    multiplierEl.textContent = '—';
+    multiplierEl.dataset.value = '';
+    if (multiplierSummaryEl) multiplierSummaryEl.textContent = '—';
+    updateCommissionFromBaseMultiplier();
+    return;
+  }
   const formatted = multiplierBrutto.toFixed(4);
   multiplierEl.textContent = formatted;
   multiplierEl.dataset.value = formatted;
@@ -2769,8 +2776,9 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   document.getElementById('productId').value = '';
   document.getElementById('currency').value = 'EUR';
   document.getElementById('currencyLabel').innerText = 'EUR';
+  exchangeRateInput.value = window.RateService.getDefaultRate('EUR').toFixed(4);
+  currentExchangeRate = window.RateService.getDefaultRate('EUR');
   updateEbayCurrencyLabel(); // Ensure label updates with default VAT 23%
-  updateSummaryMetrics();
   advancedOptionsToggle.checked = false;
   advancedOptions.style.display = 'none';
   exchangeRateInput.disabled = true;
@@ -2783,6 +2791,8 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   hideSelfTestDetails();
   historyEntries.length = 0;
   renderHistory();
+  updateBaseMultiplier();
+  updateSummaryMetrics();
   fetchExchangeRate('EUR');
 });
 
@@ -2822,6 +2832,7 @@ function syncFields(source) {
   }
   if (source === 'vatRate' && Number.isFinite(vatInputValue) && vatInputValue < 0) {
     resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>';
+    updateBaseMultiplier();
     updateSummaryMetrics();
     return;
   }
@@ -2873,6 +2884,8 @@ function syncFields(source) {
       const { pricing, skip } = window.CalculatorCore.calculatePrimaryFromSource(sourceToSync, primaryState, exchangeRate, nextVatRate, commission);
       if (!pricing) {
         resultDiv.innerHTML = '<span class="error">Wpisz kwotę netto, brutto lub eBay, aby przeliczyć cenę z nową stawką VAT.</span>';
+        updateBaseMultiplier();
+        updateMarkupCalculations({ syncFields: false });
         updateSummaryMetrics();
         return;
       }
@@ -2883,6 +2896,7 @@ function syncFields(source) {
       originalExchangeRate = exchangeRate;
     } else {
       resultDiv.innerHTML = '<span class="error">Wpisz poprawny kurs, prowizję i VAT, aby przeliczyć cenę.</span>';
+      updateBaseMultiplier();
       updateSummaryMetrics();
       return;
     }
@@ -3505,12 +3519,16 @@ vatRateInputEl.addEventListener('input', () => {
   lastChanged = 'vatRate';
   hideSelfTestDetails();
   syncFields('vatRate');
+  updateBaseMultiplier();
+  updateMarkupCalculations({ syncFields: false });
   scheduleHistoryLog('vatRate');
 });
 vatRateInputEl.addEventListener('focus', () => {
   setFieldBaseline('vatRate');
 });
 vatRateInputEl.addEventListener('blur', () => {
+  updateBaseMultiplier();
+  updateMarkupCalculations({ syncFields: false });
   flushHistoryLog('vatRate');
 });
 
@@ -3551,7 +3569,7 @@ function resyncPricingFromCurrentSource(preferredSource = null) {
   } else {
     calculatePrice();
   }
-  updateCommissionFromBaseMultiplier();
+  updateBaseMultiplier();
 }
 
 ['exchangeRate', 'commission'].forEach(id => {
@@ -3737,7 +3755,7 @@ updatePurchaseAmountModeUI();
 updateMarkupAmountModeUI();
 renderHistory();
 updateMarkupCalculations({ syncFields: false });
-updateCommissionFromBaseMultiplier();
+updateBaseMultiplier();
 updateSummaryMetrics();
 
 const calculatorPresetButtons = document.getElementById('calculatorPresetButtons');
