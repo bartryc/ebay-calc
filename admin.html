@@ -1729,6 +1729,7 @@
     ];
     const adminEditScopes = new Map();
     let adminEditObserver = null;
+    let adminEditSyncFrame = null;
 
     function getAdminEditScopeControls(scope) {
       const selector = [scope.controls, scope.actions].filter(Boolean).join(', ');
@@ -1765,6 +1766,14 @@
       syncAdminEditScope(scope);
     }
 
+    function scheduleAdminEditSync() {
+      if (adminEditSyncFrame !== null) return;
+      adminEditSyncFrame = requestAnimationFrame(() => {
+        adminEditSyncFrame = null;
+        adminEditScopes.forEach(syncAdminEditScope);
+      });
+    }
+
     function createAdminEditButton(scope) {
       const bar = document.createElement('div');
       bar.className = 'admin-edit-bar';
@@ -1797,9 +1806,7 @@
       });
       const adminShell = document.querySelector('.admin-shell');
       if (!adminShell || adminEditObserver) return;
-      adminEditObserver = new MutationObserver(() => {
-        adminEditScopes.forEach(syncAdminEditScope);
-      });
+      adminEditObserver = new MutationObserver(scheduleAdminEditSync);
       adminEditObserver.observe(adminShell, { childList: true, subtree: true });
     }
 
