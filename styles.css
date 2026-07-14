@@ -1855,6 +1855,46 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
   color: var(--accent);
 }
 
+.admin-edit-scope {
+  position: relative;
+}
+
+.admin-edit-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0 10px;
+}
+
+.admin-edit-toggle {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.admin-edit-toggle:hover,
+.admin-edit-scope.is-admin-editing .admin-edit-toggle {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.admin-edit-scope.is-admin-edit-locked .admin-edit-action {
+  display: none !important;
+}
+
+.admin-edit-scope.is-admin-edit-locked input:disabled,
+.admin-edit-scope.is-admin-edit-locked select:disabled,
+.admin-edit-scope.is-admin-edit-locked textarea:disabled {
+  opacity: 1;
+  background: var(--card-2);
+  color: var(--muted);
+  cursor: default;
+}
+
 .default-calculator-settings {
   --default-setting-control-height: 44px;
   display: flex;
@@ -2376,6 +2416,17 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
   color: #1f8a4c;
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.hd-whitelist-row:not(.is-editing) .hd-whitelist-save,
+.hd-whitelist-row:not(.is-editing) .hd-whitelist-delete,
+.hd-whitelist-row.is-editing .hd-whitelist-edit {
+  display: none;
+}
+
+.hd-whitelist-row input[readonly] {
+  color: var(--ink);
+  cursor: default;
 }
 
 @media (max-width: 680px) {

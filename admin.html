@@ -1683,6 +1683,126 @@
       applyAdminTab(saved);
     }
 
+    const ADMIN_EDIT_SCOPE_CONFIGS = [
+      {
+        id: 'default-settings',
+        root: '.default-calculator-settings',
+        controls: '#defaultRateProviderSelect, #defaultCommissionInput',
+        actions: '#defaultRateProviderSaveBtn, #defaultCommissionSaveBtn'
+      },
+      {
+        id: 'currency-config',
+        root: '.currency-editor',
+        controls: '#currencyConfigCode, #currencyConfigLabel, #currencyConfigFallback',
+        actions: '#currencyConfigSaveBtn, #currencyConfigDeleteBtn'
+      },
+      {
+        id: 'rate-provider-config',
+        root: '.rate-provider-editor:not(.currency-editor)',
+        controls: '#rateProviderConfigId, #rateProviderConfigLabel, #rateProviderConfigUrl, #rateProviderConfigPath, #rateProviderConfigTransform, #rateProviderConfigEnabled',
+        actions: '#rateProviderConfigNewBtn, #rateProviderConfigSaveBtn, #rateProviderConfigDeleteBtn, #rateProviderConfigTestBtn'
+      },
+      {
+        id: 'calculator-presets',
+        root: '#calculatorPresetSection',
+        controls: '#calculatorPresetLabel, #calculatorPresetCurrency, #calculatorPresetVat, #calculatorPresetCommission, #calculatorPresetMarkup, #calculatorPresetEnabled',
+        actions: '#calculatorPresetNewBtn, #calculatorPresetSaveBtn, #calculatorPresetDeleteBtn'
+      },
+      {
+        id: 'layout-presets',
+        root: '#layoutPresetSection',
+        controls: '#layoutPresetName, #layoutPresetColumnWidth, #layoutPresetColumnMode, .layout-preset-row button, .layout-preset-row select, .layout-preset-row input',
+        actions: '#layoutPresetSaveBtn, #layoutPresetDeleteBtn'
+      },
+      {
+        id: 'sources-config',
+        root: '[data-admin-tab="sources"]',
+        controls: '#sourceConfigName, #sourceConfigIcon, #sourceConfigIconUpload, #sourceConfigUseDarkIcon, #sourceConfigIconDark, #sourceConfigIconDarkUpload, #sourceConfigSearchUrl, #sourceConfigDirectMode, #sourceConfigDirectUrl, .source-insert-btn, .source-insert-item, #sourceOrderList button, #sourceVariantsList input, #sourceVariantsList button',
+        actions: '#sourceConfigSaveTopBtn, #sourceConfigIconClearBtn, #sourceConfigIconDarkClearBtn, #sourceConfigNewBtn, #sourceVariantAddBtn, #sourceConfigDeleteBtn, #sourceConfigSaveAllBtn'
+      },
+      {
+        id: 'hd-access',
+        root: '.hd-access-card',
+        controls: '#hdWhitelistList input',
+        actions: '#hdWhitelistAddCurrentBtn, #hdWhitelistList button'
+      }
+    ];
+    const adminEditScopes = new Map();
+    let adminEditObserver = null;
+
+    function getAdminEditScopeControls(scope) {
+      const selector = [scope.controls, scope.actions].filter(Boolean).join(', ');
+      if (!selector) return [];
+      return Array.from(scope.root.querySelectorAll(selector)).filter((el) => !el.matches('[data-admin-edit-free], .admin-edit-toggle'));
+    }
+
+    function syncAdminEditScope(scope) {
+      const isEditing = scope.root.classList.contains('is-admin-editing');
+      scope.root.classList.toggle('is-admin-edit-locked', !isEditing);
+      if (scope.actions) {
+        scope.root.querySelectorAll(scope.actions).forEach((el) => {
+          el.classList.add('admin-edit-action');
+        });
+      }
+      if (!isEditing && scope.id === 'hd-access') {
+        scope.root.querySelectorAll('.hd-whitelist-row.is-editing').forEach((row) => {
+          row.classList.remove('is-editing');
+          const input = row.querySelector('.hd-whitelist-input');
+          if (input) input.readOnly = true;
+        });
+      }
+      getAdminEditScopeControls(scope).forEach((el) => {
+        el.disabled = !isEditing;
+      });
+      if (scope.button) {
+        scope.button.textContent = isEditing ? 'Zakończ edycję' : 'Edytuj';
+        scope.button.setAttribute('aria-pressed', isEditing ? 'true' : 'false');
+      }
+    }
+
+    function setAdminEditScope(scope, isEditing) {
+      scope.root.classList.toggle('is-admin-editing', !!isEditing);
+      syncAdminEditScope(scope);
+    }
+
+    function createAdminEditButton(scope) {
+      const bar = document.createElement('div');
+      bar.className = 'admin-edit-bar';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'admin-edit-toggle';
+      button.dataset.adminEditFree = 'true';
+      button.addEventListener('click', () => {
+        setAdminEditScope(scope, !scope.root.classList.contains('is-admin-editing'));
+      });
+      bar.appendChild(button);
+      const firstChild = scope.root.firstElementChild;
+      if (scope.root.tagName === 'DETAILS' && firstChild?.tagName === 'SUMMARY') {
+        firstChild.insertAdjacentElement('afterend', bar);
+      } else {
+        scope.root.insertBefore(bar, firstChild?.nextSibling || null);
+      }
+      scope.button = button;
+    }
+
+    function setupAdminEditScopes() {
+      ADMIN_EDIT_SCOPE_CONFIGS.forEach((config) => {
+        const root = document.querySelector(config.root);
+        if (!root || adminEditScopes.has(config.id)) return;
+        const scope = { ...config, root, button: null };
+        root.classList.add('admin-edit-scope');
+        adminEditScopes.set(config.id, scope);
+        createAdminEditButton(scope);
+        setAdminEditScope(scope, false);
+      });
+      const adminShell = document.querySelector('.admin-shell');
+      if (!adminShell || adminEditObserver) return;
+      adminEditObserver = new MutationObserver(() => {
+        adminEditScopes.forEach(syncAdminEditScope);
+      });
+      adminEditObserver.observe(adminShell, { childList: true, subtree: true });
+    }
+
     function normalizeCustomRateProvider(item) {
       const id = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
       const label = String(item?.label || '').trim() || id;
@@ -2031,8 +2151,9 @@
       hdWhitelistList.innerHTML = ips.map((ip, index) => `
         <div class="hd-whitelist-row" data-index="${index}">
           <span class="hd-whitelist-index">${index + 1}</span>
-          <input type="text" class="hd-whitelist-input" value="${escapeHtml(ip)}" aria-label="IP na whiteliście HD">
+          <input type="text" class="hd-whitelist-input" value="${escapeHtml(ip)}" aria-label="IP na whiteliście HD" readonly>
           <span class="hd-whitelist-current" ${ip === currentHdPublicIp ? '' : 'hidden'}>aktualne</span>
+          <button type="button" class="hd-whitelist-edit">Edytuj</button>
           <button type="button" class="hd-whitelist-save">Zapisz</button>
           <button type="button" class="hd-whitelist-delete">Usuń</button>
         </div>
@@ -3103,6 +3224,7 @@
     }
 
     setupAdminTabs();
+    setupAdminEditScopes();
     setupSourcesEditor();
     loadSourcesConfig();
     loadCurrenciesConfig();
@@ -3260,7 +3382,14 @@
       if (!Number.isInteger(index)) return;
       const input = row.querySelector('.hd-whitelist-input');
       try {
-        if (event.target.closest('.hd-whitelist-save')) {
+        if (event.target.closest('.hd-whitelist-edit')) {
+          row.classList.add('is-editing');
+          if (input) {
+            input.readOnly = false;
+            input.focus();
+            input.select();
+          }
+        } else if (event.target.closest('.hd-whitelist-save')) {
           await updateHdWhitelistIp(index, input?.value || '');
         } else if (event.target.closest('.hd-whitelist-delete')) {
           await deleteHdWhitelistIp(index);
@@ -3274,8 +3403,9 @@
       if (event.key !== 'Enter') return;
       const input = event.target.closest('.hd-whitelist-input');
       if (!input) return;
-      event.preventDefault();
       const row = input.closest('.hd-whitelist-row');
+      if (!row?.classList.contains('is-editing')) return;
+      event.preventDefault();
       const index = Number.parseInt(row?.getAttribute('data-index') || '', 10);
       if (!Number.isInteger(index)) return;
       try {
