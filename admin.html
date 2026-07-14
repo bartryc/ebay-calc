@@ -114,10 +114,12 @@
           <h3>Dostęp HD</h3>
           <p>Dodaj aktualne publiczne IP do whitelisty sieci HD. Tylko te IP widzą opcje Base i STOCK na kalkulatorze.</p>
           <div class="admin-actions">
-            <button type="button" id="hdWhitelistAddCurrentBtn">Tak, jestem w sieci HD - dodaj moje IP</button>
+            <button type="button" id="hdWhitelistAddCurrentBtn" hidden>Tak, jestem w sieci HD - dodaj moje IP</button>
           </div>
           <div class="admin-meta">Aktualne IP: <span id="hdWhitelistCurrentIp">—</span></div>
+          <div class="admin-meta">Status: <span id="hdWhitelistStatus">Sprawdzanie…</span></div>
           <div class="admin-meta">Whitelista: <span id="hdWhitelistValue">—</span></div>
+          <div id="hdWhitelistList" class="hd-whitelist-list"></div>
         </div>
 
         <div class="admin-card" data-admin-tab="logs">
@@ -341,9 +343,9 @@
             <div class="report-filter">
               <label for="reportFilter">Filtr zgłoszeń</label>
               <select id="reportFilter">
-                <option value="all">Wszystkie</option>
+                <option value="all" selected>Wszystkie</option>
                 <option value="mapping">Tylko mapowania</option>
-                <option value="ui" selected>Tylko błędy strony</option>
+                <option value="ui">Tylko błędy strony</option>
               </select>
             </div>
             <div id="reportList" class="report-list">Brak zgłoszeń.</div>
@@ -786,7 +788,9 @@
     const defaultCommissionValue = document.getElementById('defaultCommissionValue');
     const hdWhitelistAddCurrentBtn = document.getElementById('hdWhitelistAddCurrentBtn');
     const hdWhitelistCurrentIp = document.getElementById('hdWhitelistCurrentIp');
+    const hdWhitelistStatus = document.getElementById('hdWhitelistStatus');
     const hdWhitelistValue = document.getElementById('hdWhitelistValue');
+    const hdWhitelistList = document.getElementById('hdWhitelistList');
     const adminTabDescription = document.getElementById('adminTabDescription');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
     const CALCULATOR_PRESETS_NOTE_ID = 'calculator-presets-v1';
@@ -830,6 +834,7 @@
     let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES };
     let calculatorPresetsConfig = { version: 1, presets: [] };
     let hdWhitelistConfig = { version: 1, ips: [] };
+    let currentHdPublicIp = '';
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
     const ADMIN_TAB_DESCRIPTIONS = {
       logs: 'Backupy, przywracanie, migracje i pełna historia operacji.',
@@ -1984,6 +1989,10 @@
         .filter((value) => /^[a-f0-9:.]+$/i.test(value) && (value.includes('.') || value.includes(':')))));
     }
 
+    function normalizeIpValue(value) {
+      return normalizeIpList([value])[0] || '';
+    }
+
     function normalizeHdWhitelistConfig(raw) {
       const incoming = raw && typeof raw === 'object' ? raw : {};
       const ips = normalizeIpList(incoming.ips || incoming.allowedIps || DEFAULT_HD_WHITELIST);
@@ -1995,6 +2004,44 @@
 
     function renderHdWhitelistConfig() {
       if (hdWhitelistValue) hdWhitelistValue.textContent = hdWhitelistConfig.ips.join(', ') || '—';
+      if (!hdWhitelistList) return;
+      const ips = Array.isArray(hdWhitelistConfig.ips) ? hdWhitelistConfig.ips : [];
+      if (!ips.length) {
+        hdWhitelistList.innerHTML = '<div class="admin-meta">Brak zapisanych IP.</div>';
+        return;
+      }
+      hdWhitelistList.innerHTML = ips.map((ip, index) => `
+        <div class="hd-whitelist-row" data-index="${index}">
+          <input type="text" class="hd-whitelist-input" value="${escapeHtml(ip)}" aria-label="IP na whiteliście HD">
+          <button type="button" class="hd-whitelist-save">Zapisz</button>
+          <button type="button" class="hd-whitelist-delete">Usuń</button>
+        </div>
+      `).join('');
+    }
+
+    function renderHdWhitelistAccessState() {
+      const ip = String(currentHdPublicIp || '').trim();
+      const isAllowed = !!ip && hdWhitelistConfig.ips.includes(ip);
+      if (hdWhitelistCurrentIp) hdWhitelistCurrentIp.textContent = ip || '—';
+      if (hdWhitelistStatus) {
+        hdWhitelistStatus.textContent = ip
+          ? (isAllowed ? 'Jesteś na whiteliście HD.' : 'Tego IP nie ma na whiteliście HD.')
+          : 'Nie udało się sprawdzić aktualnego IP.';
+      }
+      if (hdWhitelistAddCurrentBtn) {
+        hdWhitelistAddCurrentBtn.hidden = !ip || isAllowed;
+        hdWhitelistAddCurrentBtn.disabled = !ip || isAllowed;
+      }
+    }
+
+    async function refreshHdWhitelistAccessState() {
+      if (hdWhitelistStatus) hdWhitelistStatus.textContent = 'Sprawdzanie…';
+      if (hdWhitelistAddCurrentBtn) {
+        hdWhitelistAddCurrentBtn.hidden = true;
+        hdWhitelistAddCurrentBtn.disabled = true;
+      }
+      currentHdPublicIp = await fetchCurrentPublicIp();
+      renderHdWhitelistAccessState();
     }
 
     async function fetchCurrentPublicIp() {
@@ -2031,6 +2078,7 @@
         hdWhitelistConfig = normalizeHdWhitelistConfig(null);
       }
       renderHdWhitelistConfig();
+      if (currentHdPublicIp) renderHdWhitelistAccessState();
     }
 
     async function saveHdWhitelistConfig() {
@@ -2049,18 +2097,47 @@
     }
 
     async function addCurrentIpToHdWhitelist() {
-      const ip = await fetchCurrentPublicIp();
+      const ip = currentHdPublicIp || await fetchCurrentPublicIp();
       if (!ip) throw new Error('Nie udało się pobrać aktualnego IP');
+      currentHdPublicIp = ip;
       if (hdWhitelistCurrentIp) hdWhitelistCurrentIp.textContent = ip;
       hdWhitelistConfig = normalizeHdWhitelistConfig(hdWhitelistConfig);
       if (!hdWhitelistConfig.ips.includes(ip)) {
         hdWhitelistConfig.ips.push(ip);
         await saveHdWhitelistConfig();
+        renderHdWhitelistAccessState();
         showToast(`Dodano IP ${ip} do whitelisty HD.`, 'ok');
       } else {
         renderHdWhitelistConfig();
-        showToast(`IP ${ip} jest już na whitelistcie HD.`, 'info');
+        renderHdWhitelistAccessState();
+        showToast(`IP ${ip} jest już na whiteliście HD.`, 'info');
       }
+    }
+
+    async function updateHdWhitelistIp(index, rawValue) {
+      const nextIp = normalizeIpValue(rawValue);
+      if (!nextIp) {
+        showToast('Podaj poprawny adres IP.', 'warn');
+        renderHdWhitelistConfig();
+        return;
+      }
+      const ips = [...hdWhitelistConfig.ips];
+      if (index < 0 || index >= ips.length) return;
+      ips[index] = nextIp;
+      hdWhitelistConfig.ips = normalizeIpList(ips);
+      await saveHdWhitelistConfig();
+      renderHdWhitelistAccessState();
+      showToast(`Zapisano IP ${nextIp}.`, 'ok');
+    }
+
+    async function deleteHdWhitelistIp(index) {
+      const ips = [...hdWhitelistConfig.ips];
+      if (index < 0 || index >= ips.length) return;
+      const removedIp = ips[index];
+      hdWhitelistConfig.ips = normalizeIpList(ips.filter((_ip, itemIndex) => itemIndex !== index));
+      await saveHdWhitelistConfig();
+      renderHdWhitelistAccessState();
+      showToast(`Usunięto IP ${removedIp}.`, 'ok');
     }
 
     function renderDefaultRateProviderOptions() {
@@ -3012,7 +3089,11 @@
     loadCalculatorPresetsConfig();
     loadRateProvidersConfig().then(loadDefaultRateProviderSetting);
     loadDefaultCommissionSetting();
-    loadHdWhitelistConfig();
+    loadHdWhitelistConfig()
+      .then(refreshHdWhitelistAccessState)
+      .catch(() => {
+        renderHdWhitelistAccessState();
+      });
 
     currencyConfigList?.addEventListener('click', (event) => {
       const chip = event.target.closest('.currency-config-chip');
@@ -3142,11 +3223,45 @@
       try {
         hdWhitelistAddCurrentBtn.disabled = true;
         await loadHdWhitelistConfig();
+        renderHdWhitelistAccessState();
+        if (!currentHdPublicIp || hdWhitelistConfig.ips.includes(currentHdPublicIp)) return;
         await addCurrentIpToHdWhitelist();
       } catch (error) {
         showToast(`Błąd whitelisty HD: ${error.message || 'unknown'}`, 'warn');
       } finally {
-        hdWhitelistAddCurrentBtn.disabled = false;
+        renderHdWhitelistAccessState();
+      }
+    });
+
+    hdWhitelistList?.addEventListener('click', async (event) => {
+      const row = event.target.closest('.hd-whitelist-row');
+      if (!row) return;
+      const index = Number.parseInt(row.getAttribute('data-index') || '', 10);
+      if (!Number.isInteger(index)) return;
+      const input = row.querySelector('.hd-whitelist-input');
+      try {
+        if (event.target.closest('.hd-whitelist-save')) {
+          await updateHdWhitelistIp(index, input?.value || '');
+        } else if (event.target.closest('.hd-whitelist-delete')) {
+          await deleteHdWhitelistIp(index);
+        }
+      } catch (error) {
+        showToast(`Błąd zapisu whitelisty HD: ${error.message || 'unknown'}`, 'warn');
+      }
+    });
+
+    hdWhitelistList?.addEventListener('keydown', async (event) => {
+      if (event.key !== 'Enter') return;
+      const input = event.target.closest('.hd-whitelist-input');
+      if (!input) return;
+      event.preventDefault();
+      const row = input.closest('.hd-whitelist-row');
+      const index = Number.parseInt(row?.getAttribute('data-index') || '', 10);
+      if (!Number.isInteger(index)) return;
+      try {
+        await updateHdWhitelistIp(index, input.value);
+      } catch (error) {
+        showToast(`Błąd zapisu whitelisty HD: ${error.message || 'unknown'}`, 'warn');
       }
     });
 
@@ -3561,41 +3676,59 @@
     async function fetchReports() {
       try {
         const pageSize = 200;
-        let offset = 0;
-        let total = null;
         const allLogs = [];
-        let pageGuard = 0;
-        const maxPages = 100;
 
-        while (pageGuard < maxPages) {
-          const resp = await window.PN_MAPPINGS_API.request(
-            `/logs?limit=${pageSize}&offset=${offset}&type=mapping-report`,
-            { method: 'GET' }
-          );
-          if (!resp.ok) {
-            const text = await resp.text().catch(() => '');
-            throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+        const fetchLogPages = async ({ type = '', maxPages = 20 } = {}) => {
+          let offset = 0;
+          let total = null;
+          let pageGuard = 0;
+          while (pageGuard < maxPages) {
+            const params = new URLSearchParams();
+            params.set('limit', String(pageSize));
+            params.set('offset', String(offset));
+            if (type) params.set('type', type);
+            const resp = await window.PN_MAPPINGS_API.request(
+              `/logs?${params.toString()}`,
+              { method: 'GET' }
+            );
+            if (!resp.ok) {
+              const text = await resp.text().catch(() => '');
+              throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+            }
+            const data = await resp.json();
+            const pageItems = Array.isArray(data.logs) ? data.logs : [];
+            if (Number.isFinite(data.total)) {
+              total = data.total;
+            }
+            allLogs.push(...pageItems);
+            offset += pageItems.length;
+            pageGuard += 1;
+
+            if (!pageItems.length) break;
+            if (Number.isFinite(total) && offset >= total) break;
+            if (pageItems.length < pageSize) break;
           }
-          const data = await resp.json();
-          const pageItems = Array.isArray(data.logs) ? data.logs : [];
-          if (Number.isFinite(data.total)) {
-            total = data.total;
-          }
-          allLogs.push(...pageItems);
-          offset += pageItems.length;
-          pageGuard += 1;
+        };
 
-          if (!pageItems.length) break;
-          if (Number.isFinite(total) && offset >= total) break;
-          if (pageItems.length < pageSize) break;
-        }
+        await fetchLogPages({ type: 'mapping-report', maxPages: 100 });
+        await fetchLogPages({ maxPages: 5 });
 
-        reportsCache = allLogs.map(normalizeLogEntry).filter((entry) => isReportLike(entry));
+        const byKey = new Map();
+        allLogs.map(normalizeLogEntry).forEach((entry) => {
+          if (!isReportLike(entry)) return;
+          const key = entry.logId || `${entry.ts || ''}|${entry.ray || ''}|${buildReportKey(entry)}`;
+          if (!key) return;
+          byKey.set(key, entry);
+        });
+        reportsCache = Array.from(byKey.values());
         syncReportStateFromLogs(reportsCache);
         renderReports();
         scheduleRenderReports();
       } catch (error) {
-        // keep existing report list on failure
+        if (reportList && !reportsCache.length) {
+          reportList.textContent = 'Nie udało się pobrać zgłoszeń.';
+        }
+        showToast(`Błąd pobierania zgłoszeń: ${error.message || 'unknown'}`, 'warn');
       }
     }
 
@@ -3689,19 +3822,16 @@
       if (type === 'mapping-report') return true;
       const meta = safeObject(entry.meta);
       const report = safeObject(meta.report);
+      const kind = meta.kind || report.kind;
+      const hasKnownReportKind = kind === 'ui' || kind === 'mapping';
+      const hasReportObject = Object.keys(report).length > 0;
+      const hasReportId = !!(meta.reportId || report.reportId);
+      const hasReportText = !!(meta.reason || report.reason || meta.suggestedVendor || report.suggestedVendor || meta.detail || report.detail);
       return !!(
-        meta.reportId ||
-        report.reportId ||
-        meta.reason ||
-        meta.query ||
-        meta.suggestedVendor ||
-        meta.detail ||
-        report.reason ||
-        report.query ||
-        report.suggestedVendor ||
-        report.detail ||
-        meta.kind ||
-        report.kind
+        hasReportId ||
+        hasReportObject ||
+        (hasKnownReportKind && (hasReportText || meta.query || report.query)) ||
+        (hasReportText && (meta.source || report.source || meta.query || report.query))
       );
     }
 
@@ -3885,7 +4015,7 @@
       reportKindCache.clear();
       reportStatusCache.clear();
       entries
-        .filter((entry) => entry?.type === 'mapping-report' && entry?.meta?.action)
+        .filter((entry) => isReportLike(entry) && entry?.meta?.action)
         .slice()
         .sort((a, b) => {
           const left = a?.ts ? Date.parse(a.ts) : 0;
@@ -3921,24 +4051,28 @@
     function renderReports() {
       if (!reportList) return;
       try {
-      const allReports = reportsCache.map(normalizeLogEntry).filter((entry) => entry.type === 'mapping-report');
-      const baseReports = allReports.filter((entry) => !entry?.meta?.action);
-      const reportById = new Map();
-      baseReports.forEach((entry) => {
-        const reportId = buildReportId(entry);
-        if (!reportId) return;
-        const prev = reportById.get(reportId);
-        if (!prev) {
-          reportById.set(reportId, entry);
-          return;
-        }
-        const prevTs = prev.ts ? Date.parse(prev.ts) : 0;
-        const nextTs = entry.ts ? Date.parse(entry.ts) : 0;
-        if (nextTs >= prevTs) {
-          reportById.set(reportId, entry);
-        }
-      });
-      const reports = Array.from(reportById.values());
+        const allReports = reportsCache.map(normalizeLogEntry).filter((entry) => isReportLike(entry));
+        const baseReports = allReports.filter((entry) => !entry?.meta?.action);
+        const reportById = new Map();
+        baseReports.forEach((entry) => {
+          const reportId = buildReportId(entry);
+          if (!reportId) return;
+          const prev = reportById.get(reportId);
+          if (!prev) {
+            reportById.set(reportId, entry);
+            return;
+          }
+          const prevTs = prev.ts ? Date.parse(prev.ts) : 0;
+          const nextTs = entry.ts ? Date.parse(entry.ts) : 0;
+          if (nextTs >= prevTs) {
+            reportById.set(reportId, entry);
+          }
+        });
+        const reports = Array.from(reportById.values()).sort((a, b) => {
+          const left = a?.ts ? Date.parse(a.ts) : 0;
+          const right = b?.ts ? Date.parse(b.ts) : 0;
+          return right - left;
+        });
       const mappingReports = [];
       const uiReports = [];
       reports.forEach((entry) => {
@@ -3948,7 +4082,7 @@
       });
       const resolvedKeys = new Set();
       reportsCache.forEach((entry) => {
-        if (entry.type !== 'mapping-report') return;
+        if (!isReportLike(entry)) return;
         const action = entry?.meta?.action;
         if (!action || action === 'on-hold' || action === 'retype') return;
         const key = buildReportKey(entry);

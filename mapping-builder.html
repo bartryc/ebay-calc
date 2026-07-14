@@ -580,7 +580,7 @@
       });
     }
     if (creatorReportSend) {
-      creatorReportSend.addEventListener('click', () => {
+      creatorReportSend.addEventListener('click', async () => {
         const reason = (creatorReportReason?.value || '').trim();
         if (!reason) {
           showToast('Uzupelnij opis zgloszenia.', 'warn');
@@ -599,21 +599,26 @@
         const fallbackLog = () => {
           window.PN_MAPPINGS_API?.log?.('mapping-report', payload);
         };
-        if (window.PN_MAPPINGS_API?.request) {
-          window.PN_MAPPINGS_API.request('/log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'mapping-report', meta: payload })
-          }).then((resp) => {
-            if (!resp.ok) fallbackLog();
-          }).catch(() => {
+        creatorReportSend.disabled = true;
+        try {
+          if (window.PN_MAPPINGS_API?.request) {
+            const response = await window.PN_MAPPINGS_API.request('/log', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'mapping-report', meta: payload })
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          } else {
             fallbackLog();
-          });
-        } else {
+          }
+          showToast(`Wyslano zgloszenie (${reportId}).`, 'ok');
+          closeCreatorReportModal();
+        } catch (error) {
           fallbackLog();
+          showToast(`Nie potwierdzono zapisu w workerze. Zapisano lokalnie do kolejki logów (${reportId}).`, 'warn');
+        } finally {
+          creatorReportSend.disabled = false;
         }
-        showToast(`Wyslano zgloszenie (${reportId}).`, 'ok');
-        closeCreatorReportModal();
       });
     }
 
