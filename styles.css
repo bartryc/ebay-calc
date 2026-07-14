@@ -2272,31 +2272,47 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
   overflow-wrap: anywhere;
 }
 
-.hd-whitelist-list {
+.hd-access-card {
   display: grid;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 14px;
 }
 
-.hd-whitelist-row {
+.hd-access-overview {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) auto auto;
-  gap: 8px;
-  align-items: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: stretch;
 }
 
-.hd-whitelist-row input {
+.hd-access-status {
+  display: grid;
+  gap: 4px;
   min-width: 0;
-  padding: 8px 10px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--card);
-  color: var(--ink);
+  background: var(--card-2);
 }
 
+.hd-access-status span,
+.hd-access-status small,
+.hd-whitelist-header span {
+  color: var(--muted);
+}
+
+.hd-access-status strong {
+  overflow-wrap: anywhere;
+}
+
+.hd-access-action {
+  display: flex;
+  align-items: stretch;
+}
+
+.hd-access-action button,
 .hd-whitelist-row button {
-  min-height: 36px;
-  padding: 6px 12px;
+  min-height: 38px;
+  padding: 7px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card);
@@ -2305,9 +2321,61 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
   font-weight: 700;
 }
 
+.hd-access-action button:hover,
 .hd-whitelist-row button:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.hd-whitelist-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.hd-whitelist-header h4 {
+  margin: 0;
+}
+
+.hd-whitelist-list {
+  display: grid;
+  gap: 6px;
+}
+
+.hd-whitelist-row {
+  display: grid;
+  grid-template-columns: 32px minmax(160px, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.hd-whitelist-index {
+  color: var(--muted);
+  font-weight: 700;
+  text-align: center;
+}
+
+.hd-whitelist-row input {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-2);
+  color: var(--ink);
+}
+
+.hd-whitelist-current {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(31, 157, 85, 0.12);
+  color: #1f8a4c;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 @media (max-width: 680px) {
@@ -2323,12 +2391,21 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
     grid-column: 4;
   }
 
+  .hd-access-overview {
+    grid-template-columns: 1fr;
+  }
+
   .hd-whitelist-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 32px 1fr 1fr;
   }
 
   .hd-whitelist-row input {
-    grid-column: 1 / -1;
+    grid-column: 2 / -1;
+  }
+
+  .hd-whitelist-current {
+    grid-column: 2 / -1;
+    justify-self: start;
   }
 }
 

@@ -57,6 +57,7 @@
       </div>
       <div class="admin-tabs" role="tablist" aria-label="Sekcje panelu admina">
         <button type="button" class="admin-tab-btn is-active" data-admin-tab-btn="logs" role="tab" aria-selected="true">Logi</button>
+        <button type="button" class="admin-tab-btn" data-admin-tab-btn="system" role="tab" aria-selected="false">System</button>
         <button type="button" class="admin-tab-btn" data-admin-tab-btn="reports" role="tab" aria-selected="false">Zgłoszenia</button>
         <button type="button" class="admin-tab-btn" data-admin-tab-btn="mappings" role="tab" aria-selected="false">Mapowania</button>
         <button type="button" class="admin-tab-btn" data-admin-tab-btn="apis" role="tab" aria-selected="false">API kursów</button>
@@ -66,7 +67,7 @@
       <div id="adminTabDescription" class="admin-tab-description"></div>
 
       <div class="admin-grid">
-        <div class="admin-card" data-admin-tab="logs">
+        <div class="admin-card" data-admin-tab="system">
           <h3>Backup mapowań</h3>
           <p>Zapisz bieżące mapowania do pliku JSON. Przyda się przed większymi zmianami.</p>
           <div class="admin-actions">
@@ -76,7 +77,7 @@
           <div class="admin-meta">Ostatni backup: <span id="lastBackupValue">brak</span></div>
         </div>
 
-        <div class="admin-card" data-admin-tab="logs">
+        <div class="admin-card" data-admin-tab="system">
           <h3>Backup logów</h3>
           <p>Bezpieczna kopia historii działań w KV. Pozwala szybko odtworzyć logi.</p>
           <div class="backup-status">Status: <strong id="logsBackupStatus">Sprawdzam…</strong></div>
@@ -87,7 +88,7 @@
           <div class="admin-meta">Ostatni backup logów: <span id="logsBackupTs">brak</span></div>
         </div>
 
-        <div class="admin-card" data-admin-tab="logs">
+        <div class="admin-card" data-admin-tab="system">
           <h3>Domyślne ustawienia kalkulatora</h3>
           <p>Ustaw domyślne źródło kursu i prowizję używaną po wejściu na kalkulator oraz po zamknięciu opcji zaawansowanych.</p>
           <div class="default-calculator-settings">
@@ -110,19 +111,32 @@
           </div>
         </div>
 
-        <div class="admin-card" data-admin-tab="logs">
+        <div class="admin-card admin-card-wide hd-access-card" data-admin-tab="system">
           <h3>Dostęp HD</h3>
-          <p>Dodaj aktualne publiczne IP do whitelisty sieci HD. Tylko te IP widzą opcje Base i STOCK na kalkulatorze.</p>
-          <div class="admin-actions">
-            <button type="button" id="hdWhitelistAddCurrentBtn" hidden>Tak, jestem w sieci HD - dodaj moje IP</button>
+          <p>Kontrola dostępu do opcji Base i STOCK na kalkulatorze.</p>
+          <div class="hd-access-overview">
+            <div class="hd-access-status">
+              <span>Aktualne IP</span>
+              <strong id="hdWhitelistCurrentIp">—</strong>
+              <small id="hdWhitelistStatus">Sprawdzanie…</small>
+            </div>
+            <div class="hd-access-status">
+              <span>Whitelista</span>
+              <strong id="hdWhitelistCount">0 IP</strong>
+              <small id="hdWhitelistValue">—</small>
+            </div>
+            <div class="hd-access-action">
+              <button type="button" id="hdWhitelistAddCurrentBtn" hidden>Dodaj aktualne IP</button>
+            </div>
           </div>
-          <div class="admin-meta">Aktualne IP: <span id="hdWhitelistCurrentIp">—</span></div>
-          <div class="admin-meta">Status: <span id="hdWhitelistStatus">Sprawdzanie…</span></div>
-          <div class="admin-meta">Whitelista: <span id="hdWhitelistValue">—</span></div>
+          <div class="hd-whitelist-header">
+            <h4>Adresy IP</h4>
+            <span>Edytuj lub usuń adres bez grzebania w workerze.</span>
+          </div>
           <div id="hdWhitelistList" class="hd-whitelist-list"></div>
         </div>
 
-        <div class="admin-card" data-admin-tab="logs">
+        <div class="admin-card" data-admin-tab="system">
           <h3>Przywracanie</h3>
           <p>Wczytaj plik JSON i nadpisz mapowania w bazie.</p>
           <div class="admin-actions">
@@ -131,7 +145,7 @@
           <div class="admin-meta warn">Uwaga: przywrócenie backupu nadpisuje bieżące mapowania.</div>
         </div>
 
-        <div class="admin-card" data-admin-tab="logs">
+        <div class="admin-card" data-admin-tab="system">
           <h3>Aktualizacja logów</h3>
           <p>Podnieś starsze zgłoszenia do nowego formatu (kind/reportId).</p>
           <div class="admin-actions">
@@ -789,6 +803,7 @@
     const hdWhitelistAddCurrentBtn = document.getElementById('hdWhitelistAddCurrentBtn');
     const hdWhitelistCurrentIp = document.getElementById('hdWhitelistCurrentIp');
     const hdWhitelistStatus = document.getElementById('hdWhitelistStatus');
+    const hdWhitelistCount = document.getElementById('hdWhitelistCount');
     const hdWhitelistValue = document.getElementById('hdWhitelistValue');
     const hdWhitelistList = document.getElementById('hdWhitelistList');
     const adminTabDescription = document.getElementById('adminTabDescription');
@@ -837,7 +852,8 @@
     let currentHdPublicIp = '';
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
     const ADMIN_TAB_DESCRIPTIONS = {
-      logs: 'Backupy, przywracanie, migracje i pełna historia operacji.',
+      logs: 'Pełna historia operacji zapisywana przez worker.',
+      system: 'Backupy, domyślne ustawienia, dostęp HD i narzędzia utrzymaniowe.',
       reports: 'Obsługa zgłoszeń mapowań oraz błędów działania strony.',
       mappings: 'Szybki podgląd liczby wpisów exact/wzorce.',
       apis: 'Konfiguracja API kursów walut używanych przez kalkulator.',
@@ -1637,7 +1653,8 @@
     }
 
     function applyAdminTab(tab) {
-      const validTab = tab || 'logs';
+      const requestedTab = tab || 'logs';
+      const validTab = adminTabButtons.some((btn) => btn.getAttribute('data-admin-tab-btn') === requestedTab) ? requestedTab : 'logs';
       adminTabButtons.forEach((btn) => {
         const isActive = btn.getAttribute('data-admin-tab-btn') === validTab;
         btn.classList.toggle('is-active', isActive);
@@ -2003,16 +2020,19 @@
     }
 
     function renderHdWhitelistConfig() {
-      if (hdWhitelistValue) hdWhitelistValue.textContent = hdWhitelistConfig.ips.join(', ') || '—';
-      if (!hdWhitelistList) return;
       const ips = Array.isArray(hdWhitelistConfig.ips) ? hdWhitelistConfig.ips : [];
+      if (hdWhitelistCount) hdWhitelistCount.textContent = `${ips.length} IP`;
+      if (hdWhitelistValue) hdWhitelistValue.textContent = ips.length ? 'Lista aktywna' : 'Brak adresów';
+      if (!hdWhitelistList) return;
       if (!ips.length) {
         hdWhitelistList.innerHTML = '<div class="admin-meta">Brak zapisanych IP.</div>';
         return;
       }
       hdWhitelistList.innerHTML = ips.map((ip, index) => `
         <div class="hd-whitelist-row" data-index="${index}">
+          <span class="hd-whitelist-index">${index + 1}</span>
           <input type="text" class="hd-whitelist-input" value="${escapeHtml(ip)}" aria-label="IP na whiteliście HD">
+          <span class="hd-whitelist-current" ${ip === currentHdPublicIp ? '' : 'hidden'}>aktualne</span>
           <button type="button" class="hd-whitelist-save">Zapisz</button>
           <button type="button" class="hd-whitelist-delete">Usuń</button>
         </div>
