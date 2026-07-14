@@ -391,8 +391,8 @@
                 </select>
               </div>
               <div class="admin-log-field admin-log-field-wide">
-                <label for="logQuery">Szukaj (IP / FP / UA / miasto)</label>
-                <input type="text" id="logQuery" placeholder="np. 185.152, fp-123, Chrome, Warsaw">
+                <label for="logQuery">Szukaj w logach</label>
+                <input type="text" id="logQuery" placeholder="IP, FP, UA, miasto, PN, vendor, reason, meta">
               </div>
               <div class="admin-log-field">
                 <label for="logPageSize">Na stronę</label>
@@ -3795,12 +3795,34 @@
         const query = (logQuery?.value || '').trim();
         const pageSize = Number(logPageSize?.value) || 20;
         const offset = Math.max(0, (logPage - 1) * pageSize);
+        const needsClientFilter = query || typeFilter === 'backup-all' || typeFilter === 'backup' || typeFilter === 'mapping-report';
+
+        if (needsClientFilter) {
+          let candidates = [];
+          if (typeFilter === 'mapping-report') {
+            await fetchReports();
+            candidates = reportsCache.map(normalizeLogEntry);
+          } else {
+            const serverType = typeFilter !== 'all' && typeFilter !== 'backup-all' && typeFilter !== 'backup'
+              ? typeFilter
+              : '';
+            candidates = await fetchLogPagesForAdmin({ type: serverType });
+          }
+          const filtered = candidates
+            .filter((entry) => logEntryMatchesType(entry, typeFilter))
+            .filter((entry) => logEntryMatchesQuery(entry, query));
+          totalLogs = filtered.length;
+          logsCache = filtered.slice(offset, offset + pageSize);
+          renderLogs();
+          if (notifySuccess) {
+            showToast('Logi odświeżone.', 'ok', performance.now() - t0);
+          }
+          return;
+        }
         const params = new URLSearchParams();
         params.set('limit', String(pageSize));
         params.set('offset', String(offset));
-        const compositeBackup = typeFilter === 'backup-all' || typeFilter === 'backup';
-        if (typeFilter !== 'all' && !compositeBackup) params.set('type', typeFilter);
-        if (query) params.set('query', query);
+        if (typeFilter !== 'all') params.set('type', typeFilter);
         const resp = await window.PN_MAPPINGS_API.request(`/logs?${params.toString()}`, { method: 'GET' });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
@@ -3810,15 +3832,6 @@
         const t1 = performance.now();
         logsCache = Array.isArray(data.logs) ? data.logs.map(normalizeLogEntry) : [];
         totalLogs = Number.isFinite(data.total) ? data.total : null;
-        if (compositeBackup) {
-          const backupTypes = new Set(['backup', 'backup-full', 'backup-logs', 'restore-logs']);
-          logsCache = logsCache.filter((entry) => backupTypes.has(entry.type));
-          totalLogs = logsCache.length;
-        }
-        if (typeFilter === 'mapping-report') {
-          logsCache = logsCache.filter((entry) => isReportLike(entry));
-          totalLogs = logsCache.length;
-        }
         renderLogs();
         if (notifySuccess) {
           showToast('Logi odświeżone.', 'ok', t1 - t0);
@@ -3828,6 +3841,69 @@
         const message = error?.message ? `Błąd pobierania logów: ${error.message}` : 'Błąd pobierania logów z workera.';
         showToast(message, 'warn');
       }
+    }
+
+    async function fetchLogPagesForAdmin({ type = '', maxPages = 30, pageSize = 200 } = {}) {
+      const allLogs = [];
+      let offset = 0;
+      let total = null;
+      let pageGuard = 0;
+      while (pageGuard < maxPages) {
+        const params = new URLSearchParams();
+        params.set('limit', String(pageSize));
+        params.set('offset', String(offset));
+        if (type) params.set('type', type);
+        const resp = await window.PN_MAPPINGS_API.request(`/logs?${params.toString()}`, { method: 'GET' });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status}${text ? `: ${text}` : ''}`);
+        }
+        const data = await resp.json();
+        const pageItems = Array.isArray(data.logs) ? data.logs.map(normalizeLogEntry) : [];
+        if (Number.isFinite(data.total)) total = data.total;
+        allLogs.push(...pageItems);
+        offset += pageItems.length;
+        pageGuard += 1;
+
+        if (!pageItems.length) break;
+        if (Number.isFinite(total) && offset >= total) break;
+        if (pageItems.length < pageSize) break;
+      }
+      return allLogs;
+    }
+
+    function logEntryMatchesType(entry, typeFilter) {
+      const filter = String(typeFilter || 'all');
+      if (filter === 'all') return true;
+      if (filter === 'mapping-report') return isReportLike(entry);
+      if (filter === 'backup-all' || filter === 'backup') {
+        return new Set(['backup', 'backup-full', 'backup-logs', 'restore-logs']).has(entry.type);
+      }
+      return entry.type === filter;
+    }
+
+    function logEntryMatchesQuery(entry, query) {
+      const needle = String(query || '').trim().toLowerCase();
+      if (!needle) return true;
+      const geo = safeObject(entry.geo);
+      const values = [
+        entry.type,
+        entry.ip,
+        entry.ua,
+        entry.ray,
+        entry.clientFp,
+        geo.city,
+        geo.region,
+        geo.country,
+        geo.asn,
+        geo.colo
+      ];
+      try {
+        values.push(JSON.stringify(entry.meta || {}));
+      } catch (_error) {
+        values.push(String(entry.meta || ''));
+      }
+      return values.some((value) => String(value || '').toLowerCase().includes(needle));
     }
 
     async function fetchReports() {
