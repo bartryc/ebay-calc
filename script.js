@@ -1574,10 +1574,7 @@ function setMarkupPercentFromSaleBrutto(saleBrutto) {
 
 function getSaleBruttoFromEbay() {
   const ebaySale = parseNumber(document.getElementById('ebayPrice')?.value);
-  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
-  const commissionRaw = getActiveCommissionRate();
-  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
-  return window.CalculatorCore.saleBruttoFromEbay(ebaySale, exchangeRate, commission);
+  return saleBruttoFromEbayCurrent(ebaySale);
 }
 
 function syncTargetSaleFromEbay(options = {}) {
@@ -1638,19 +1635,17 @@ function syncEbayPriceFromTargetSale(options = {}) {
   if (!ebayPriceInput || !currencyEl) return false;
 
   const saleBrutto = getSaleBruttoFromTargetSale();
-  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
-  const commissionRaw = getActiveCommissionRate();
-  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
-  if (!Number.isFinite(saleBrutto) || !Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
+  if (!Number.isFinite(saleBrutto)) {
     return false;
   }
 
-  const ebayPrice = window.CalculatorCore.ebayFromSaleBrutto(saleBrutto, exchangeRate, commission);
+  const ebayPrice = ebayFromSaleBruttoCurrent(saleBrutto);
+  if (!Number.isFinite(ebayPrice)) return false;
   ebayPriceInput.value = ebayPrice.toFixed(2);
   window.CalculatorUI.flashRecalculatedField(ebayPriceInput);
   originalEbayPrice = ebayPrice;
   originalCurrency = currencyEl.value;
-  originalExchangeRate = exchangeRate;
+  originalExchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
   markupPriceSource = 'targetSaleAmount';
   return true;
 }
@@ -1819,6 +1814,73 @@ function resetCommissionInputToDefault() {
   commissionEl.value = formatCommissionRate(getDefaultCommissionRate());
 }
 
+function isCurrentBasePricingEnabled() {
+  return !!document.getElementById('useCurrentBaseMultiplierToggle')?.checked;
+}
+
+function getCurrentBasePricingMultiplier() {
+  if (!isCurrentBasePricingEnabled()) return NaN;
+  const multiplier = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
+  return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : NaN;
+}
+
+function validatePricingInputs(exchangeRate, commission, vatRate, resultDiv) {
+  if (isCurrentBasePricingEnabled()) {
+    const multiplier = getCurrentBasePricingMultiplier();
+    if (!Number.isFinite(multiplier)) {
+      resultDiv.innerHTML = '<span class="error">Podaj poprawny aktualny mnożnik Base albo wyłącz wycenę po Base.</span>';
+      updateSummaryMetrics();
+      return false;
+    }
+    if (isNaN(vatRate) || vatRate < 0 || vatRate > 1) {
+      resultDiv.innerHTML = '<span class="error">Stawka VAT musi być w przedziale 0-100%.</span>';
+      updateSummaryMetrics();
+      return false;
+    }
+    return true;
+  }
+  return validateInputs(exchangeRate, commission, vatRate, resultDiv);
+}
+
+function calculatePrimaryFromCurrentPricing(source, primaryState, vatRateOverride = primaryState?.vatRate) {
+  if (isCurrentBasePricingEnabled()) {
+    return window.CalculatorCore.calculatePrimaryFromBaseSource(source, primaryState, getCurrentBasePricingMultiplier());
+  }
+  return window.CalculatorCore.calculatePrimaryFromSource(
+    source,
+    primaryState,
+    primaryState.exchangeRate,
+    vatRateOverride,
+    primaryState.commission
+  );
+}
+
+function ebayFromSaleBruttoCurrent(saleBrutto) {
+  if (isCurrentBasePricingEnabled()) {
+    const baseMultiplier = getCurrentBasePricingMultiplier();
+    return Number.isFinite(baseMultiplier)
+      ? window.CalculatorCore.ebayFromBaseBrutto(saleBrutto, baseMultiplier)
+      : NaN;
+  }
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
+  const commissionRaw = getActiveCommissionRate();
+  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+  return window.CalculatorCore.ebayFromSaleBrutto(saleBrutto, exchangeRate, commission);
+}
+
+function saleBruttoFromEbayCurrent(ebayPrice) {
+  if (isCurrentBasePricingEnabled()) {
+    const baseMultiplier = getCurrentBasePricingMultiplier();
+    return Number.isFinite(baseMultiplier)
+      ? window.CalculatorCore.bruttoFromBaseEbay(ebayPrice, baseMultiplier)
+      : NaN;
+  }
+  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
+  const commissionRaw = getActiveCommissionRate();
+  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
+  return window.CalculatorCore.saleBruttoFromEbay(ebayPrice, exchangeRate, commission);
+}
+
 function updateMinSaleByMarkup() {
   const purchaseEl = document.getElementById('purchaseAmount');
   const markupEl = document.getElementById('minMarkup');
@@ -1852,12 +1914,16 @@ function updateMinSaleByMarkup() {
 
   minSalePlnEl.textContent = `${saleBrutto.toFixed(2)} PLN`;
 
-  if (!Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0) {
+  if (!isCurrentBasePricingEnabled() && (!Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0)) {
     minSaleEbayEl.textContent = '—';
     return;
   }
 
-  const minSaleEbay = window.CalculatorCore.ebayFromSaleBrutto(saleBrutto, exchangeRate, commission);
+  const minSaleEbay = ebayFromSaleBruttoCurrent(saleBrutto);
+  if (!Number.isFinite(minSaleEbay)) {
+    minSaleEbayEl.textContent = '—';
+    return;
+  }
   minSaleEbayEl.textContent = `${minSaleEbay.toFixed(2)} ${currency}`;
 }
 
@@ -1895,16 +1961,16 @@ function updateMarkupFromSale() {
   }
 
   if (resultFromEbayEl) {
-    if (!Number.isFinite(state.ebayPrice) || state.ebayPrice < 0 || !Number.isFinite(state.exchangeRate) || state.exchangeRate <= 0 || !Number.isFinite(state.commission) || state.commission < 0) {
+    const ebaySaleBrutto = saleBruttoFromEbayCurrent(state.ebayPrice);
+    if (!Number.isFinite(state.ebayPrice) || state.ebayPrice < 0 || !Number.isFinite(ebaySaleBrutto)) {
       resultFromEbayEl.textContent = '—';
       if (netProfitFromEbayEl) netProfitFromEbayEl.textContent = '—';
     } else {
-      const ebaySummary = window.CalculatorCore.calculateMarkupFromEbay(
+      const ebaySummary = window.CalculatorCore.calculateMarkupFromSale(
         state.purchaseAmount,
-        state.ebayPrice,
+        ebaySaleBrutto,
         state.purchaseIsNet,
-        state.exchangeRate,
-        state.commission,
+        false,
         state.vatRate
       );
       resultFromEbayEl.textContent = Number.isFinite(ebaySummary.markupPercent) ? `${ebaySummary.markupPercent.toFixed(2)}%` : '—';
@@ -2756,6 +2822,10 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   resetCommissionInputToDefault();
   document.getElementById('purchaseAmount').value = '';
   document.getElementById('currentBaseMultiplier').value = '';
+  const useCurrentBaseMultiplierToggle = document.getElementById('useCurrentBaseMultiplierToggle');
+  if (useCurrentBaseMultiplierToggle) {
+    useCurrentBaseMultiplierToggle.checked = false;
+  }
   document.getElementById('calculatedCommissionFromBase').textContent = '—';
   autoLinkedFieldValues.purchaseAmount = '';
   const purchaseAmountNetToggle = document.getElementById('purchaseAmountNetToggle');
@@ -2839,9 +2909,9 @@ function syncFields(source) {
 
   if (source === 'netto' && Number.isFinite(nettoValue)) {
     rememberPrimarySource(source);
-    const { pricing } = window.CalculatorCore.calculatePrimaryFromSource(source, primaryState, exchangeRate, vatRate, commission);
+    const { pricing } = calculatePrimaryFromCurrentPricing(source, primaryState, vatRate);
     window.CalculatorUI.writePrimaryResult(document, pricing, { skip: ['netto', 'ebayPrice'] });
-    if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
+    if (validatePricingInputs(exchangeRate, commission, vatRate, resultDiv)) {
       const finalPrice = pricing.ebay;
       window.CalculatorUI.writePrimaryResult(document, pricing, { skip: ['netto', 'brutto'] });
       originalEbayPrice = finalPrice;
@@ -2850,9 +2920,9 @@ function syncFields(source) {
     }
   } else if (source === 'brutto' && Number.isFinite(bruttoValue)) {
     rememberPrimarySource(source);
-    const { pricing } = window.CalculatorCore.calculatePrimaryFromSource(source, primaryState, exchangeRate, vatRate, commission);
+    const { pricing } = calculatePrimaryFromCurrentPricing(source, primaryState, vatRate);
     window.CalculatorUI.writePrimaryResult(document, pricing, { skip: ['brutto', 'ebayPrice'] });
-    if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
+    if (validatePricingInputs(exchangeRate, commission, vatRate, resultDiv)) {
       const finalPrice = pricing.ebay;
       window.CalculatorUI.writePrimaryResult(document, pricing, { skip: ['netto', 'brutto'] });
       originalEbayPrice = finalPrice;
@@ -2861,8 +2931,8 @@ function syncFields(source) {
     }
   } else if (source === 'ebayPrice' && Number.isFinite(ebayValue)) {
     rememberPrimarySource(source);
-    if (validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
-      const { pricing } = window.CalculatorCore.calculatePrimaryFromSource(source, primaryState, exchangeRate, vatRate, commission);
+    if (validatePricingInputs(exchangeRate, commission, vatRate, resultDiv)) {
+      const { pricing } = calculatePrimaryFromCurrentPricing(source, primaryState, vatRate);
       window.CalculatorUI.writePrimaryResult(document, pricing, { skip: ['ebayPrice'] });
       originalEbayPrice = ebayValue;
       originalCurrency = document.getElementById('currency').value;
@@ -2873,7 +2943,7 @@ function syncFields(source) {
     const nextVatRate = vatRatePercent / 100;
     vatRateInput.value = vatRatePercent.toString();
     updateEbayCurrencyLabel();
-    if (validateInputs(exchangeRate, commission, nextVatRate, resultDiv)) {
+    if (validatePricingInputs(exchangeRate, commission, nextVatRate, resultDiv)) {
       const sourceToSync = window.CalculatorCore.resolvePricingSource({
         netto: nettoValue,
         brutto: bruttoValue,
@@ -2881,7 +2951,7 @@ function syncFields(source) {
         lastPrimarySource,
         activeSource: getActivePrimarySource()
       });
-      const { pricing, skip } = window.CalculatorCore.calculatePrimaryFromSource(sourceToSync, primaryState, exchangeRate, nextVatRate, commission);
+      const { pricing, skip } = calculatePrimaryFromCurrentPricing(sourceToSync, primaryState, nextVatRate);
       if (!pricing) {
         resultDiv.innerHTML = '<span class="error">Wpisz kwotę netto, brutto lub eBay, aby przeliczyć cenę z nową stawką VAT.</span>';
         updateBaseMultiplier();
@@ -2894,11 +2964,6 @@ function syncFields(source) {
       originalEbayPrice = Number.isFinite(pricing.ebay) ? pricing.ebay : ebayValue;
       originalCurrency = document.getElementById('currency').value;
       originalExchangeRate = exchangeRate;
-    } else {
-      resultDiv.innerHTML = '<span class="error">Wpisz poprawny kurs, prowizję i VAT, aby przeliczyć cenę.</span>';
-      updateBaseMultiplier();
-      updateSummaryMetrics();
-      return;
     }
   }
 
@@ -2929,7 +2994,7 @@ function calculatePrice() {
   const { netto, brutto, ebayPrice, exchangeRate, commission, vatRate } = primaryState;
   const resultDiv = document.getElementById('result');
 
-  if (!validateInputs(exchangeRate, commission, vatRate, resultDiv)) {
+  if (!validatePricingInputs(exchangeRate, commission, vatRate, resultDiv)) {
     return;
   }
 
@@ -3078,8 +3143,9 @@ function updateEbayPriceFromNettoOrBrutto() {
     lastChanged
   });
 
-  if ((source === 'netto' || source === 'brutto') && validateInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
-    const { pricing } = window.CalculatorCore.calculatePrimaryFromSource(source, primaryState, exchangeRate, vatRate, commission);
+  if ((source === 'netto' || source === 'brutto') && validatePricingInputs(exchangeRate, commission, vatRate, document.getElementById('result'))) {
+    const { pricing } = calculatePrimaryFromCurrentPricing(source, primaryState, vatRate);
+    if (!pricing) return;
     window.CalculatorUI.writePrimaryResult(document, pricing, { skip: ['netto', 'brutto'] });
     rememberPrimarySource(source);
     originalEbayPrice = Number.isFinite(pricing?.ebay) ? pricing.ebay : originalEbayPrice;
@@ -3641,17 +3707,29 @@ if (currentBaseMultiplierEl) {
   currentBaseMultiplierEl.addEventListener('input', () => {
     window.CalculatorUI.clearRecalculatedFields();
     updateCommissionFromBaseMultiplier();
+    if (isCurrentBasePricingEnabled()) {
+      hideSelfTestDetails();
+      resyncPricingFromCurrentSource();
+    }
     scheduleHistoryLog('currentBaseMultiplier');
   });
   currentBaseMultiplierEl.addEventListener('change', () => {
     window.CalculatorUI.clearRecalculatedFields();
     updateCommissionFromBaseMultiplier();
+    if (isCurrentBasePricingEnabled()) {
+      hideSelfTestDetails();
+      resyncPricingFromCurrentSource();
+    }
     flushHistoryLog('currentBaseMultiplier');
   });
   currentBaseMultiplierEl.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     window.CalculatorUI.clearRecalculatedFields();
     updateCommissionFromBaseMultiplier();
+    if (isCurrentBasePricingEnabled()) {
+      hideSelfTestDetails();
+      resyncPricingFromCurrentSource();
+    }
     flushHistoryLog('currentBaseMultiplier');
   });
   currentBaseMultiplierEl.addEventListener('focus', () => {
@@ -3659,6 +3737,15 @@ if (currentBaseMultiplierEl) {
   });
   currentBaseMultiplierEl.addEventListener('blur', () => {
     flushHistoryLog('currentBaseMultiplier');
+  });
+}
+
+const useCurrentBaseMultiplierToggle = document.getElementById('useCurrentBaseMultiplierToggle');
+if (useCurrentBaseMultiplierToggle) {
+  useCurrentBaseMultiplierToggle.addEventListener('change', () => {
+    window.CalculatorUI.clearRecalculatedFields();
+    hideSelfTestDetails();
+    resyncPricingFromCurrentSource();
   });
 }
 
@@ -4209,8 +4296,12 @@ if (partNumberInput) {
     const modeRaw = String(cfg?.directMode || '').trim().toLowerCase();
     const mode = ['off', 'auto', 'always'].includes(modeRaw) ? modeRaw : 'off';
     const canUseDirect = options.canUseDirect === true;
+    const preferSearch = options.preferSearch === true;
     const searchUrl = buildUrlFromTemplate(searchTemplate, templateValues);
     const directUrl = buildUrlFromTemplate(directTemplate, templateValues);
+    if (preferSearch && searchUrl) {
+      return { url: searchUrl, usedDirect: false };
+    }
     if (mode === 'always' && directUrl) {
       return { url: directUrl, usedDirect: true };
     }
@@ -4380,12 +4471,13 @@ if (partNumberInput) {
 
       const variant = getSourceVariantConfig(sourceId);
       sourceVariantsUsed[sourceId] = String(variant?.id || 'default');
+      const append = String(variant?.append || '');
       const resolved = resolveSourceUrl(cfg, templateValues, {
         fallbackSearchUrl,
-        canUseDirect: !!(vendorSlug && pnSlug)
+        canUseDirect: !!(vendorSlug && pnSlug),
+        preferSearch: !!append
       });
       let url = resolved.url || '';
-      const append = String(variant?.append || '');
       if (append) url = `${url}${append}`;
       calledUrls[sourceId] = {
         url,

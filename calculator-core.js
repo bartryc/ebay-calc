@@ -73,6 +73,66 @@
     };
   }
 
+  function ebayFromBaseBrutto(brutto, multiplier) {
+    const bruttoValue = parseNumber(brutto);
+    const base = parseNumber(multiplier);
+    if (!Number.isFinite(bruttoValue) || bruttoValue < 0 || !Number.isFinite(base) || base <= 0) return NaN;
+    return bruttoValue * base;
+  }
+
+  function bruttoFromBaseEbay(ebay, multiplier) {
+    const ebayValue = parseNumber(ebay);
+    const base = parseNumber(multiplier);
+    if (!Number.isFinite(ebayValue) || ebayValue < 0 || !Number.isFinite(base) || base <= 0) return NaN;
+    return ebayValue / base;
+  }
+
+  function calculatePrimaryFromBaseSource(source, values, multiplier) {
+    const base = parseNumber(multiplier);
+    if (!Number.isFinite(base) || base <= 0) {
+      return { pricing: null, skip: [] };
+    }
+    if (source === 'netto') {
+      const netto = parseNumber(values?.netto);
+      const brutto = toBruttoFromNetto(netto);
+      return {
+        pricing: {
+          netto,
+          brutto,
+          ebay: ebayFromBaseBrutto(brutto, base)
+        },
+        skip: ['netto']
+      };
+    }
+    if (source === 'brutto') {
+      const brutto = parseNumber(values?.brutto);
+      return {
+        pricing: {
+          netto: toNettoFromBrutto(brutto),
+          brutto,
+          ebay: ebayFromBaseBrutto(brutto, base)
+        },
+        skip: ['brutto']
+      };
+    }
+    if (source === 'ebayPrice') {
+      const ebayValue = parseNumber(values?.ebayPrice);
+      const brutto = bruttoFromBaseEbay(ebayValue, base);
+      return {
+        pricing: {
+          netto: toNettoFromBrutto(brutto),
+          brutto,
+          ebay: ebayValue
+        },
+        skip: ['ebayPrice']
+      };
+    }
+    return {
+      pricing: null,
+      skip: []
+    };
+  }
+
   function resolvePricingSource(options = {}) {
     const sourceOrder = ['ebayPrice', 'brutto', 'netto'];
     const fallbackOrder = ['brutto', 'netto', 'ebayPrice'];
@@ -279,6 +339,7 @@
     calculatePrimaryFromNetto,
     calculatePrimaryFromBrutto,
     calculatePrimaryFromEbay,
+    calculatePrimaryFromBaseSource,
     resolvePricingSource,
     resolvePlnPricingSource,
     calculatePrimaryFromSource,
@@ -290,6 +351,8 @@
     calculateMarkupFromSale,
     ebayFromSaleBrutto,
     saleBruttoFromEbay,
+    ebayFromBaseBrutto,
+    bruttoFromBaseEbay,
     calculateMarkupFromEbay,
     resolveMarkupSource,
     calculateSaleBruttoFromMarkupSource,

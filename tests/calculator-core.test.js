@@ -70,6 +70,18 @@
   approx(fromSource.pricing.netto, 100, 'primary from source netto');
   approx(fromSource.pricing.ebay, 35.3625, 'primary from source ebay');
   equal(fromSource.skip[0], 'brutto', 'primary from source skip');
+  approx(core.ebayFromBaseBrutto(123, 0.2875), 35.3625, 'base brutto -> ebay');
+  approx(core.bruttoFromBaseEbay(35.3625, 0.2875), 123, 'base ebay -> brutto');
+  const fromBaseBrutto = core.calculatePrimaryFromBaseSource('brutto', { brutto: 123 }, 0.2875);
+  approx(fromBaseBrutto.pricing.netto, 100, 'primary from base brutto netto');
+  approx(fromBaseBrutto.pricing.ebay, 35.3625, 'primary from base brutto ebay');
+  equal(fromBaseBrutto.skip[0], 'brutto', 'primary from base brutto skip');
+  const fromBaseEbay = core.calculatePrimaryFromBaseSource('ebayPrice', { ebayPrice: 35.3625 }, 0.2875);
+  approx(fromBaseEbay.pricing.brutto, 123, 'primary from base ebay brutto');
+  approx(fromBaseEbay.pricing.netto, 100, 'primary from base ebay netto');
+  equal(fromBaseEbay.skip[0], 'ebayPrice', 'primary from base ebay skip');
+  isNaNValue(core.ebayFromBaseBrutto(123, 0), 'base brutto invalid multiplier');
+  equal(core.calculatePrimaryFromBaseSource('brutto', { brutto: 123 }, 0).pricing, null, 'primary from base invalid multiplier');
 
   approx(core.amountToBrutto(100, false, 0.23), 100, 'brutto mode amount');
   approx(core.amountToBrutto(100, true, 0.23), 123, 'netto mode amount');

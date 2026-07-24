@@ -143,7 +143,7 @@
                   <span class="field-help inline-help" data-tooltip="Sprzedaż w PLN brutto przed prowizją eBay. To ta kwota jest porównywana z zakupem w zwykłym narzucie i zysku." aria-label="Pomoc">?</span>
                 </div>
                 <div><strong>Cena eBay (<span id="minSaleCurrencyLabel">EUR</span>):</strong> <span id="minSaleEbay">—</span>
-                  <span class="field-help inline-help" data-tooltip="Docelowa cena eBay z prowizją: sprzedaż_PLN_brutto × kurs × (1 + prowizja/100)." aria-label="Pomoc">?</span>
+                  <span class="field-help inline-help" data-tooltip="Docelowa cena eBay: standardowo sprzedaż_PLN_brutto × kurs × (1 + prowizja/100), a przy aktywnym Base sprzedaż_PLN_brutto × aktualny mnożnik Base." aria-label="Pomoc">?</span>
                 </div>
                 <div><strong>Narzut:</strong> <span id="calculatedMarkup">—</span>
                   <span class="field-help inline-help" data-tooltip="Wzór: (sprzedaż_brutto - zakup_brutto) / zakup_brutto × 100%." aria-label="Pomoc">?</span>
@@ -299,8 +299,15 @@
             </div>
             <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
             <div class="base-commission-tools">
+              <div class="toggle-row base-pricing-toggle-row">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="useCurrentBaseMultiplierToggle">
+                  <span class="slider"></span>
+                </label>
+                <span class="toggle-label">Użyj aktualnego mnożnika Base do wyceny</span>
+              </div>
               <label for="currentBaseMultiplier" class="field-label">Aktualny mnożnik Base
-                <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera, aby wyliczyć efektywną prowizję dla aktualnego kursu i VAT klienta." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera. Switch używa go do wyceny eBay i brutto ERP 1:1 z Base, a pole prowizji pokazuje tylko przeliczenie pomocnicze." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="currentBaseMultiplier" step="0.0001" min="0" placeholder="Np. 0.2654">
 
