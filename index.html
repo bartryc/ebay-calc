@@ -299,6 +299,10 @@
             </div>
             <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
             <div class="base-commission-tools">
+              <label for="currentBaseMultiplier" class="field-label">Aktualny mnożnik Base
+                <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera. Switch używa go do wyceny eBay i brutto ERP 1:1 z Base, a pole prowizji pokazuje tylko przeliczenie pomocnicze." aria-label="Pomoc">?</span>
+              </label>
+              <input type="number" id="currentBaseMultiplier" step="0.0001" min="0" placeholder="Np. 0.2654">
               <div class="toggle-row base-pricing-toggle-row">
                 <label class="toggle-switch">
                   <input type="checkbox" id="useCurrentBaseMultiplierToggle">
@@ -306,10 +310,6 @@
                 </label>
                 <span class="toggle-label">Użyj aktualnego mnożnika Base do wyceny</span>
               </div>
-              <label for="currentBaseMultiplier" class="field-label">Aktualny mnożnik Base
-                <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera. Switch używa go do wyceny eBay i brutto ERP 1:1 z Base, a pole prowizji pokazuje tylko przeliczenie pomocnicze." aria-label="Pomoc">?</span>
-              </label>
-              <input type="number" id="currentBaseMultiplier" step="0.0001" min="0" placeholder="Np. 0.2654">
 
               <div class="min-price-box" id="baseCommissionBox">
                 <div><strong>Wyliczona prowizja (%):</strong> <span id="calculatedCommissionFromBase">—</span>
