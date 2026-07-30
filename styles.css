@@ -1770,6 +1770,69 @@ body.dark-mode .admin-page-badge .top-menu-icon img {
   gap: 8px;
 }
 
+.admin-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.admin-identity.is-signed {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.07);
+}
+
+.admin-identity-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.admin-identity-copy span {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.admin-identity-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-identity-form input {
+  width: min(260px, 40vw);
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+}
+
+.admin-identity-form button {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-identity-form button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+body.dark-mode .admin-identity {
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .admin-tab-description {
   margin-top: -4px;
   color: var(--muted);
@@ -3236,6 +3299,51 @@ body.dark-mode.builder-page #patternApplyBtn {
   gap: 10px;
 }
 
+.admin-log-item .log-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-log-item .log-assign-actor {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.78em;
+  font-weight: 600;
+}
+
+.admin-log-item .log-assign-actor:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.admin-log-item .log-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-log-item .log-actor {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--muted);
+  font-size: 0.78em;
+  font-weight: 600;
+}
+
+.admin-log-item .log-actor.is-signed {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16803b;
+}
+
 .admin-log-item .log-sub {
   display: flex;
   flex-wrap: wrap;
@@ -3260,6 +3368,16 @@ body.dark-mode.builder-page #patternApplyBtn {
 }
 
 @media (max-width: 900px) {
+  .admin-identity,
+  .admin-identity-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-identity-form input {
+    width: 100%;
+  }
+
   .admin-log-controls {
     grid-template-columns: 1fr;
   }

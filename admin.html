@@ -55,6 +55,18 @@
         </span>
         <span>Panel admina</span>
       </div>
+      <div class="admin-identity" id="adminIdentity">
+        <div class="admin-identity-copy">
+          <strong>Podpis logów</strong>
+          <span id="adminIdentityStatus">Nie jesteś podpisany — nowe logi będą anonimowe.</span>
+        </div>
+        <form class="admin-identity-form" id="adminIdentityForm">
+          <label class="sr-only" for="adminIdentityInput">Imię lub podpis administratora</label>
+          <input type="text" id="adminIdentityInput" maxlength="60" autocomplete="name" placeholder="Wpisz imię lub podpis">
+          <button type="submit" id="adminIdentitySaveBtn">Podpisz się</button>
+          <button type="button" id="adminIdentityClearBtn" hidden>Wyloguj podpis</button>
+        </form>
+      </div>
       <div class="admin-tabs" role="tablist" aria-label="Sekcje panelu admina">
         <button type="button" class="admin-tab-btn is-active" data-admin-tab-btn="logs" role="tab" aria-selected="true">Logi</button>
         <button type="button" class="admin-tab-btn" data-admin-tab-btn="system" role="tab" aria-selected="false">System</button>
@@ -372,7 +384,7 @@
               <span>Historia operacji</span>
               <span class="report-count" id="logCount">0</span>
             </summary>
-            <p>Lista ostatnich działań na backupach i zapisach (IP + data).</p>
+            <p>Lista ostatnich działań na backupach i zapisach (autor + data; IP pozostaje informacją pomocniczą).</p>
             <div class="admin-log-controls">
               <div class="admin-log-field">
                 <label for="logTypeFilter">Typ</label>
@@ -383,6 +395,7 @@
                   <option value="backup-full">Backup pełny</option>
                   <option value="backup-logs">Backup logów</option>
                   <option value="restore-logs">Przywrócenie logów</option>
+                  <option value="admin">Podpis administratora</option>
                   <option value="update">Update</option>
                   <option value="mapping">Mapowania</option>
                   <option value="mapping-report">Zgłoszenia</option>
@@ -392,7 +405,7 @@
               </div>
               <div class="admin-log-field admin-log-field-wide">
                 <label for="logQuery">Szukaj w logach</label>
-                <input type="text" id="logQuery" placeholder="IP, FP, UA, miasto, PN, vendor, reason, meta">
+                <input type="text" id="logQuery" placeholder="Autor, IP, FP, UA, miasto, PN, vendor, reason, meta">
               </div>
               <div class="admin-log-field">
                 <label for="logPageSize">Na stronę</label>
@@ -656,6 +669,11 @@
     });
 
     const toastStack = document.getElementById('mappingToastStack');
+    const adminIdentity = document.getElementById('adminIdentity');
+    const adminIdentityForm = document.getElementById('adminIdentityForm');
+    const adminIdentityInput = document.getElementById('adminIdentityInput');
+    const adminIdentityStatus = document.getElementById('adminIdentityStatus');
+    const adminIdentityClearBtn = document.getElementById('adminIdentityClearBtn');
     const downloadBackupBtn = document.getElementById('downloadBackupBtn');
     const downloadFullBackupBtn = document.getElementById('downloadFullBackupBtn');
     const restoreBackupBtn = document.getElementById('restoreBackupBtn');
@@ -815,6 +833,7 @@
     const CURRENCIES_CONFIG_NOTE_ID = 'currencies-config-v1';
     const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
     const HD_WHITELIST_NOTE_ID = 'hd-network-whitelist-v1';
+    const LOG_ACTOR_ALIASES_NOTE_ID = 'log-actor-aliases-v1';
     const DEFAULT_COMMISSION_RATE = 15;
     const DEFAULT_HD_WHITELIST = [];
     const PUBLIC_IP_ENDPOINTS = [
@@ -903,6 +922,153 @@
     let totalLogs = null;
     let logPage = 1;
     let logsBackupCache = null;
+    let logActorAliasesConfig = { version: 1, aliases: [] };
+
+    function renderAdminIdentity() {
+      const actor = window.PN_MAPPINGS_API?.getAdminLogActor?.() || '';
+      if (adminIdentityInput) adminIdentityInput.value = actor;
+      if (adminIdentityStatus) {
+        adminIdentityStatus.textContent = actor
+          ? `Podpisujesz nowe logi jako: ${actor}`
+          : 'Nie jesteś podpisany — nowe logi będą anonimowe.';
+      }
+      if (adminIdentity) adminIdentity.classList.toggle('is-signed', !!actor);
+      if (adminIdentityClearBtn) adminIdentityClearBtn.hidden = !actor;
+    }
+
+    if (adminIdentityForm) {
+      adminIdentityForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const actor = window.PN_MAPPINGS_API?.setAdminLogActor?.(adminIdentityInput?.value || '') || '';
+        if (!actor) {
+          showToast('Wpisz imię lub podpis.', 'warn');
+          adminIdentityInput?.focus();
+          return;
+        }
+        renderAdminIdentity();
+        window.PN_MAPPINGS_API?.log?.('admin', { action: 'sign-in' });
+        showToast(`Podpisano jako: ${actor}.`, 'ok');
+      });
+    }
+
+    if (adminIdentityClearBtn) {
+      adminIdentityClearBtn.addEventListener('click', () => {
+        const actor = window.PN_MAPPINGS_API?.getAdminLogActor?.() || '';
+        if (actor) window.PN_MAPPINGS_API?.log?.('admin', { action: 'sign-out' });
+        window.PN_MAPPINGS_API?.setAdminLogActor?.('');
+        renderAdminIdentity();
+        showToast('Podpis został wylogowany.', 'ok');
+      });
+    }
+
+    renderAdminIdentity();
+
+    function normalizeLogActorAlias(value) {
+      return String(value || '')
+        .replace(/[\u0000-\u001f\u007f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 60);
+    }
+
+    function normalizeLogActorAliasesConfig(value) {
+      const incoming = safeObject(value);
+      const seen = new Set();
+      const aliases = (Array.isArray(incoming.aliases) ? incoming.aliases : [])
+        .map((item) => {
+          const clientKey = String(item?.clientKey || item?.clientFp || '').trim().slice(0, 160);
+          const actor = normalizeLogActorAlias(item?.actor);
+          const updatedAt = typeof item?.updatedAt === 'string' ? item.updatedAt : '';
+          return { clientKey, actor, updatedAt };
+        })
+        .filter((item) => item.clientKey && item.clientKey !== 'unknown' && item.actor)
+        .filter((item) => {
+          if (seen.has(item.clientKey)) return false;
+          seen.add(item.clientKey);
+          return true;
+        });
+      return { version: 1, aliases };
+    }
+
+    function getLogIdentityKeys(entry) {
+      const keys = [
+        String(entry?.meta?.clientId || '').trim(),
+        String(entry?.clientFp || '').trim()
+      ];
+      return Array.from(new Set(keys.filter((key) => key && key !== 'unknown')));
+    }
+
+    function getAssignedLogActor(entry) {
+      const keys = getLogIdentityKeys(entry);
+      if (!keys.length) return '';
+      return logActorAliasesConfig.aliases.find((item) => keys.includes(item.clientKey))?.actor || '';
+    }
+
+    function getEffectiveLogActor(entry) {
+      return getAssignedLogActor(entry)
+        || normalizeLogActorAlias(entry?.meta?.actor);
+    }
+
+    async function loadLogActorAliases({ strict = false } = {}) {
+      if (!window.PN_MAPPINGS_API?.request) return logActorAliasesConfig;
+      try {
+        const response = await window.PN_MAPPINGS_API.request(
+          `/notes?id=${encodeURIComponent(LOG_ACTOR_ALIASES_NOTE_ID)}`,
+          { method: 'GET' }
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const parsed = payload?.note ? JSON.parse(payload.note) : {};
+        logActorAliasesConfig = normalizeLogActorAliasesConfig(parsed);
+      } catch (error) {
+        if (strict) throw error;
+        logActorAliasesConfig = { version: 1, aliases: [] };
+      }
+      return logActorAliasesConfig;
+    }
+
+    async function saveLogActorAliases() {
+      const response = await window.PN_MAPPINGS_API.request(
+        `/notes?id=${encodeURIComponent(LOG_ACTOR_ALIASES_NOTE_ID)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: JSON.stringify(logActorAliasesConfig) })
+        }
+      );
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+    }
+
+    async function assignActorToLog(entry, actor) {
+      const clientKeys = getLogIdentityKeys(entry);
+      const normalizedActor = normalizeLogActorAlias(actor);
+      if (!clientKeys.length) {
+        throw new Error('Ten log nie ma identyfikatora przeglądarki.');
+      }
+
+      await loadLogActorAliases({ strict: true });
+      logActorAliasesConfig.aliases = logActorAliasesConfig.aliases
+        .filter((item) => !clientKeys.includes(item.clientKey));
+      if (normalizedActor) {
+        const updatedAt = new Date().toISOString();
+        clientKeys.forEach((clientKey) => logActorAliasesConfig.aliases.push({
+          clientKey,
+          actor: normalizedActor,
+          updatedAt
+        }));
+      }
+      await saveLogActorAliases();
+      window.PN_MAPPINGS_API?.log?.('admin', {
+        action: normalizedActor ? 'assign-log-actor' : 'remove-log-actor',
+        targetClientKeys: clientKeys,
+        assignedActor: normalizedActor
+      });
+      renderLogs();
+      return normalizedActor;
+    }
 
     function normalizePn(value) {
       return String(value || '').replace(/\s+/g, '').toUpperCase();
@@ -3233,6 +3399,7 @@
     setupAdminTabs();
     setupAdminEditScopes();
     setupSourcesEditor();
+    const logActorAliasesReady = loadLogActorAliases();
     loadSourcesConfig();
     loadCurrenciesConfig();
     loadCalculatorPresetsConfig();
@@ -3433,6 +3600,7 @@
           localStorage.setItem(ADMIN_LAST_SYNC_KEY, stamp);
           if (lastSyncValue) lastSyncValue.textContent = stamp;
           showToast('Baza danych załadowana.', 'ok', dbLoadEnd - dbLoadStart);
+          await logActorAliasesReady;
           await Promise.allSettled([fetchLogs(), fetchReports()]);
           renderReports();
           loadGlobalLayoutPresets();
@@ -3888,6 +4056,8 @@
       const geo = safeObject(entry.geo);
       const values = [
         entry.type,
+        getEffectiveLogActor(entry),
+        entry.meta?.actor,
         entry.ip,
         entry.ua,
         entry.ray,
@@ -3986,10 +4156,13 @@
           const ts = entry.ts ? new Date(entry.ts).toLocaleString('pl-PL') : '—';
           const ua = entry.ua || 'unknown';
           const fp = entry.clientFp || 'unknown';
+          const clientId = String(entry.meta?.clientId || '').trim();
           const geo = entry.geo || {};
           const place = [geo.city, geo.region, geo.country].filter(Boolean).join(', ') || 'unknown';
           const asn = geo.asn ? `AS${geo.asn}` : 'unknown';
           const ray = entry.ray || '—';
+          const actor = getEffectiveLogActor(entry);
+          const canAssignActor = getLogIdentityKeys(entry).length > 0;
           const hasMeta = entry.meta && Object.keys(entry.meta).length > 0;
           const entryIndex = localIndex;
           const metaId = `meta-${logPage}-${localIndex}`;
@@ -3997,18 +4170,23 @@
           return `
             <div class="admin-log-item">
               <div class="log-main">
-                <strong>${type}</strong>
+                <div class="log-title">
+                  <strong>${escapeHtml(type)}</strong>
+                  <span class="log-actor ${actor ? 'is-signed' : ''}">${actor ? `Autor: ${escapeHtml(actor)}` : 'Bez podpisu'}</span>
+                </div>
                 <div class="log-actions">
                   <span>${ts}</span>
+                  ${canAssignActor ? `<button type="button" class="log-assign-actor" data-log-index="${entryIndex}">${actor ? 'Zmień podpis' : 'Podpisz użytkownika'}</button>` : ''}
                   ${hasMeta ? `<button type="button" class="log-pretty" data-log-index="${entryIndex}">Prettify</button>` : ''}
                 </div>
               </div>
               <div class="log-sub">
-                <span>IP: ${ip}</span>
-                <span>FP: ${fp}</span>
-                <span>${place}</span>
-                <span>${asn}</span>
-                <span>Ray: ${ray}</span>
+                <span>IP: ${escapeHtml(ip)}</span>
+                ${clientId ? `<span>Cookie ID: ${escapeHtml(clientId)}</span>` : ''}
+                <span>FP: ${escapeHtml(fp)}</span>
+                <span>${escapeHtml(place)}</span>
+                <span>${escapeHtml(asn)}</span>
+                <span>Ray: ${escapeHtml(ray)}</span>
               </div>
               ${hasMeta ? `
                 <div class="log-meta">
@@ -4016,7 +4194,7 @@
                   <pre class="log-pretty-content" id="${metaId}" hidden></pre>
                 </div>
               ` : ''}
-              <div class="log-ua">${ua}</div>
+              <div class="log-ua">${escapeHtml(ua)}</div>
             </div>
           `;
         }).join('');
@@ -4735,7 +4913,8 @@
       });
     });
     if (logRefreshBtn) {
-      logRefreshBtn.addEventListener('click', () => {
+      logRefreshBtn.addEventListener('click', async () => {
+        await loadLogActorAliases();
         fetchLogs({ notifySuccess: true });
         fetchReports();
         fetchLogsBackupStatus();
@@ -4765,6 +4944,34 @@
       adminLogList.addEventListener('click', (event) => {
         const target = event.target;
         if (!target) return;
+        const assignActorBtn = target.closest('.log-assign-actor');
+        if (assignActorBtn) {
+          const idx = Number(assignActorBtn.getAttribute('data-log-index'));
+          if (Number.isNaN(idx)) return;
+          const entry = logsCache[idx];
+          if (!entry) return;
+          const currentActor = getEffectiveLogActor(entry);
+          const nextActor = prompt(
+            'Podaj podpis dla wszystkich logów z tej przeglądarki. Pozostaw puste, aby usunąć przypisanie.',
+            currentActor
+          );
+          if (nextActor === null) return;
+          assignActorBtn.disabled = true;
+          assignActorToLog(entry, nextActor)
+            .then((savedActor) => {
+              showToast(
+                savedActor
+                  ? `Wszystkie logi tej przeglądarki podpisano jako: ${savedActor}.`
+                  : 'Usunięto przypisany podpis użytkownika.',
+                'ok'
+              );
+            })
+            .catch((error) => {
+              showToast(`Nie udało się zapisać podpisu: ${error.message || 'unknown'}`, 'warn');
+              assignActorBtn.disabled = false;
+            });
+          return;
+        }
         const prettyBtn = target.closest('.log-pretty');
         if (!prettyBtn) return;
         const idx = Number(prettyBtn.getAttribute('data-log-index'));
@@ -5185,8 +5392,9 @@
     }
 
     const ADMIN_AUTO_REFRESH_MS = 5 * 60 * 1000;
-    setInterval(() => {
+    setInterval(async () => {
       if (document.hidden) return;
+      await loadLogActorAliases();
       fetchLogs();
       fetchReports();
     }, ADMIN_AUTO_REFRESH_MS);

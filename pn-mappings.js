@@ -22,11 +22,114 @@ const LOG_MAX_META_CHARS = 3500;
 const LOG_MAX_STRING_CHARS = 1200;
 const LOG_MAX_ARRAY_ITEMS = 20;
 const LOG_MAX_OBJECT_KEYS = 40;
+const ADMIN_LOG_ACTOR_COOKIE_KEY = 'adminLogActorV1';
+const ADMIN_LOG_ACTOR_MAX_LENGTH = 60;
+const ADMIN_LOG_ACTOR_COOKIE_DAYS = 180;
+const CLIENT_LOG_ID_COOKIE_KEY = 'logClientIdV1';
+const CLIENT_LOG_ID_STORAGE_KEY = 'logClientIdV1';
+const CLIENT_LOG_ID_COOKIE_DAYS = 400;
 let preferDirectLog = false;
 let isLogFlushInProgress = false;
 const recentLogMap = new Map();
 const BACKFILL_MAX_LOG_PAGES = 20;
 const BACKFILL_PAGE_SIZE = 200;
+
+function normalizeAdminLogActor(value) {
+  return String(value || '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, ADMIN_LOG_ACTOR_MAX_LENGTH);
+}
+
+function getCookieValue(name) {
+  if (typeof document === 'undefined') return '';
+  const prefix = `${name}=`;
+  const part = String(document.cookie || '')
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(prefix));
+  if (!part) return '';
+  try {
+    return decodeURIComponent(part.slice(prefix.length));
+  } catch (error) {
+    return '';
+  }
+}
+
+function getAdminLogActor() {
+  return normalizeAdminLogActor(getCookieValue(ADMIN_LOG_ACTOR_COOKIE_KEY));
+}
+
+function setAdminLogActor(value) {
+  const actor = normalizeAdminLogActor(value);
+  if (typeof document === 'undefined') return actor;
+  if (!actor) {
+    document.cookie = `${ADMIN_LOG_ACTOR_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+    return '';
+  }
+  const expiresAt = new Date(Date.now() + (ADMIN_LOG_ACTOR_COOKIE_DAYS * 24 * 60 * 60 * 1000));
+  const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${ADMIN_LOG_ACTOR_COOKIE_KEY}=${encodeURIComponent(actor)}; expires=${expiresAt.toUTCString()}; path=/; SameSite=Lax${secure}`;
+  return actor;
+}
+
+function normalizeClientLogId(value) {
+  const candidate = String(value || '').trim().toLowerCase();
+  return /^cid-[a-z0-9-]{16,80}$/.test(candidate) ? candidate : '';
+}
+
+function createClientLogId() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `cid-${crypto.randomUUID()}`;
+    }
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return `cid-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+    }
+  } catch (_error) {
+    // Use the non-cryptographic fallback only when Web Crypto is unavailable.
+  }
+  return `cid-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function persistClientLogId(value) {
+  const clientId = normalizeClientLogId(value);
+  if (!clientId || typeof document === 'undefined') return clientId;
+  const expiresAt = new Date(Date.now() + (CLIENT_LOG_ID_COOKIE_DAYS * 24 * 60 * 60 * 1000));
+  const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${CLIENT_LOG_ID_COOKIE_KEY}=${encodeURIComponent(clientId)}; expires=${expiresAt.toUTCString()}; path=/; SameSite=Lax${secure}`;
+  try {
+    localStorage.setItem(CLIENT_LOG_ID_STORAGE_KEY, clientId);
+  } catch (_error) {
+    // Cookie remains the primary identifier.
+  }
+  return clientId;
+}
+
+function getOrCreateClientLogId() {
+  const cookieId = normalizeClientLogId(getCookieValue(CLIENT_LOG_ID_COOKIE_KEY));
+  let storedId = '';
+  try {
+    storedId = normalizeClientLogId(localStorage.getItem(CLIENT_LOG_ID_STORAGE_KEY));
+  } catch (_error) {
+    storedId = '';
+  }
+  return persistClientLogId(cookieId || storedId || createClientLogId());
+}
+
+const CLIENT_LOG_ID = getOrCreateClientLogId();
+
+function addClientIdentityToMeta(meta = {}) {
+  const actor = getAdminLogActor();
+  return {
+    ...meta,
+    clientId: CLIENT_LOG_ID,
+    ...(actor ? { actor } : {})
+  };
+}
 
 function getClientFingerprint() {
   try {
@@ -169,7 +272,7 @@ function buildLogFingerprint(type, meta) {
 }
 
 function enqueueLog(type, meta = {}) {
-  const safeMeta = sanitizeLogMeta(meta);
+  const safeMeta = sanitizeLogMeta(addClientIdentityToMeta(meta));
   const fingerprint = buildLogFingerprint(type, safeMeta);
   const now = Date.now();
   const lastTs = recentLogMap.get(fingerprint) || 0;
@@ -189,6 +292,22 @@ function enqueueLog(type, meta = {}) {
   scheduleLogFlush();
   if (LOG_QUEUE.length >= LOG_MAX_BATCH) {
     flushLogQueue();
+  }
+}
+
+function addAdminActorToLogRequest(path, options = {}) {
+  if (path !== '/log' || typeof options.body !== 'string') return options;
+  try {
+    const payload = JSON.parse(options.body);
+    if (!payload || typeof payload !== 'object') return options;
+    payload.meta = addClientIdentityToMeta(
+      payload.meta && typeof payload.meta === 'object' && !Array.isArray(payload.meta)
+        ? payload.meta
+        : {}
+    );
+    return { ...options, body: JSON.stringify(payload) };
+  } catch (error) {
+    return options;
   }
 }
 
@@ -547,8 +666,11 @@ window.PN_MAPPINGS_API = {
   normalizeCreatedAt,
   load: loadPnData,
   log: enqueueLog,
+  getAdminLogActor,
+  setAdminLogActor,
   request: (path, options = {}) => {
-    const headers = buildHeaders(options.headers || {});
-    return fetch(`${PN_MAPPINGS_API_URL}${path}`, { ...options, headers });
+    const signedOptions = addAdminActorToLogRequest(path, options);
+    const headers = buildHeaders(signedOptions.headers || {});
+    return fetch(`${PN_MAPPINGS_API_URL}${path}`, { ...signedOptions, headers });
   }
 };
