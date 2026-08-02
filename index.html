@@ -73,7 +73,7 @@
 
             <div class="layout-item" data-layout-item="calc-ebay">
               <label for="ebayPrice" class="field-label"><span class="field-label-main">Docelowa cena na eBay w <span id="ebayCurrencyLabel">EUR (z VAT 23%)</span></span>
-                <span class="field-help" data-tooltip="Cena końcowa eBay w wybranej walucie, z doliczoną prowizją. Gdy wpiszesz ją ręcznie, kalkulator liczy wstecz ERP brutto/netto oraz narzut." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Cena końcowa eBay w wybranej walucie, z doliczonym narzutem eBay. Gdy wpiszesz ją ręcznie, kalkulator liczy wstecz ERP brutto/netto oraz narzut." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="ebayPrice" step="0.01" min="0" placeholder="Wprowadź docelową cenę na eBay">
             </div>
@@ -132,7 +132,7 @@
                 <div class="field-label-row">
                   <label for="targetSaleAmount" class="field-label">Cena sprzedaży PLN</label>
                   <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupSaleNetToggle" aria-pressed="false" title="Przełącz tryb ceny sprzedaży"><span data-mode-label="markupSaleNetToggle">brutto</span></button></span>
-                  <span class="field-help" data-tooltip="Cena sprzedaży w PLN przed doliczeniem prowizji eBay. Edycja tego pola przelicza narzut, zysk i docelową cenę eBay." aria-label="Pomoc">?</span>
+                  <span class="field-help" data-tooltip="Cena sprzedaży w PLN przed doliczeniem narzutu eBay. Edycja tego pola przelicza narzut, zysk i docelową cenę eBay." aria-label="Pomoc">?</span>
                 </div>
                 <input type="number" id="targetSaleAmount" step="0.01" min="0" placeholder="Np. 1590.00">
                 <input type="checkbox" id="markupSaleNetToggle" class="sr-only" aria-hidden="true">
@@ -140,10 +140,10 @@
 
               <div class="min-price-box" id="markupFromSaleBox">
                 <div><strong>Cena sprzedaży brutto:</strong> <span id="minSalePln">—</span>
-                  <span class="field-help inline-help" data-tooltip="Sprzedaż w PLN brutto przed prowizją eBay. To ta kwota jest porównywana z zakupem w zwykłym narzucie i zysku." aria-label="Pomoc">?</span>
+                  <span class="field-help inline-help" data-tooltip="Sprzedaż w PLN brutto przed narzutem eBay. To ta kwota jest porównywana z zakupem w zwykłym narzucie i zysku." aria-label="Pomoc">?</span>
                 </div>
                 <div><strong>Cena eBay (<span id="minSaleCurrencyLabel">EUR</span>):</strong> <span id="minSaleEbay">—</span>
-                  <span class="field-help inline-help" data-tooltip="Docelowa cena eBay: standardowo sprzedaż_PLN_brutto × kurs × (1 + prowizja/100), a przy aktywnym Base sprzedaż_PLN_brutto × aktualny mnożnik Base." aria-label="Pomoc">?</span>
+                  <span class="field-help inline-help" data-tooltip="Docelowa cena eBay: standardowo sprzedaż_PLN_brutto × kurs × (1 + narzut_eBay/100), a przy aktywnym Base sprzedaż_PLN_brutto × aktualny mnożnik Base." aria-label="Pomoc">?</span>
                 </div>
                 <div><strong>Narzut:</strong> <span id="calculatedMarkup">—</span>
                   <span class="field-help inline-help" data-tooltip="Wzór: (sprzedaż_brutto - zakup_brutto) / zakup_brutto × 100%." aria-label="Pomoc">?</span>
@@ -151,11 +151,11 @@
                 <div><strong>Zysk:</strong> <span id="calculatedNetProfit">—</span>
                   <span class="field-help inline-help" data-tooltip="Zysk w PLN: cena sprzedaży brutto - kwota zakupu brutto. Wpisy netto są najpierw przeliczane do brutto wg VAT klienta." aria-label="Pomoc">?</span>
                 </div>
-                <div><strong>Narzut z eBay (z prowizją):</strong> <span id="calculatedMarkupFromEbay">—</span>
-                  <span class="field-help inline-help" data-tooltip="Wzór: ((eBay / kurs) - zakup_brutto) / zakup_brutto × 100%. Cena eBay zawiera prowizję z opcji zaawansowanych." aria-label="Pomoc">?</span>
+                <div><strong>Narzut z ceny eBay:</strong> <span id="calculatedMarkupFromEbay">—</span>
+                  <span class="field-help inline-help" data-tooltip="Wzór: ((eBay / kurs) - zakup_brutto) / zakup_brutto × 100%. Cena eBay zawiera narzut eBay ustawiony w opcjach zaawansowanych." aria-label="Pomoc">?</span>
                 </div>
-                <div><strong>Różnica z eBay (z prowizją):</strong> <span id="calculatedNetProfitFromEbay">—</span>
-                  <span class="field-help inline-help" data-tooltip="Kwotowa różnica poziomu ceny eBay: (eBay / kurs) - zakup_brutto. To nie jest zysk po odjęciu prowizji." aria-label="Pomoc">?</span>
+                <div><strong>Różnica z ceny eBay:</strong> <span id="calculatedNetProfitFromEbay">—</span>
+                  <span class="field-help inline-help" data-tooltip="Kwotowa różnica poziomu ceny eBay: (eBay / kurs) - zakup_brutto. To nie jest zysk po odjęciu rzeczywistych opłat eBay." aria-label="Pomoc">?</span>
                 </div>
               </div>
             </div>
@@ -170,8 +170,8 @@
               </div>
 
               <div id="advancedOptions" class="advanced-options" style="display: none;">
-                <label for="commission" class="field-label">Prowizja (%)
-                  <span class="field-help" data-tooltip="Prowizja eBay doliczana do ceny końcowej. Dla wyceny ERP: eBay = ERP_netto × (1 + VAT klienta) × kurs × (1 + prowizja/100). Dla narzutu: eBay = sprzedaż_PLN_brutto × kurs × (1 + prowizja/100)." aria-label="Pomoc">?</span>
+                <label for="commission" class="field-label">Narzut eBay (%)
+                  <span class="field-help" data-tooltip="Orientacyjny procent doliczany do ceny sklepowej na pokrycie prowizji eBay, reklam i pozostałych kosztów sprzedaży. Wyświetloną wartość (standardowo 15%) możesz zmienić ręcznie. Wzór: cena eBay = cena bazowa × kurs × (1 + narzut eBay/100)." aria-label="Pomoc">?</span>
                 </label>
                 <input type="number" id="commission" value="15" step="0.1" min="0" max="100" required>
 
@@ -300,7 +300,7 @@
             <p class="highlight-note">Wprowadź kwotę netto lub brutto w ERP i pomnóż przez mnożnik, aby uzyskać cenę na eBay.</p>
             <div class="base-commission-tools">
               <label for="currentBaseMultiplier" class="field-label">Aktualny mnożnik Base
-                <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera. Switch używa go do wyceny eBay i brutto ERP 1:1 z Base, a pole prowizji pokazuje tylko przeliczenie pomocnicze." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera. Switch używa go do wyceny eBay i brutto ERP 1:1 z Base, a pole narzutu eBay pokazuje tylko przeliczenie pomocnicze." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="currentBaseMultiplier" step="0.0001" min="0" placeholder="Np. 0.2654">
               <div class="toggle-row base-pricing-toggle-row">
@@ -312,8 +312,8 @@
               </div>
 
               <div class="min-price-box" id="baseCommissionBox">
-                <div><strong>Wyliczona prowizja (%):</strong> <span id="calculatedCommissionFromBase">—</span>
-                  <span class="field-help inline-help" data-tooltip="Wzór odwrotny: prowizja = (mnożnik × 1.23 / ((1 + VAT klienta) × kurs)) - 1." aria-label="Pomoc">?</span>
+                <div><strong>Wyliczony narzut eBay (%):</strong> <span id="calculatedCommissionFromBase">—</span>
+                  <span class="field-help inline-help" data-tooltip="Wzór odwrotny: narzut eBay = (mnożnik × 1.23 / ((1 + VAT klienta) × kurs)) - 1." aria-label="Pomoc">?</span>
                 </div>
               </div>
             </div>

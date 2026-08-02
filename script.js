@@ -2609,9 +2609,9 @@ function addHistoryEntry(source) {
     vatRate: 'VAT',
     currency: 'Waluta',
     exchangeRate: 'Kurs',
-    commission: 'Prowizja',
+    commission: 'Narzut eBay',
     purchaseAmount: 'Kwota zakupu',
-    currentBaseMultiplier: 'Mnożnik Base → Prowizja',
+    currentBaseMultiplier: 'Mnożnik Base → narzut eBay',
     purchaseAmountMode: 'Tryb zakupu',
     minMarkup: 'Narzut',
     targetSaleAmount: 'Cena sprzedaży',
@@ -2628,7 +2628,7 @@ function addHistoryEntry(source) {
   ].join(' <span class="history-dot">•</span> ');
   const defaultMeta = [
     `VAT ${Number.isFinite(vatRateRaw) ? vatRateRaw.toFixed(1) : '-'}%`,
-    `Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}%`,
+    `Narzut eBay ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}%`,
     `Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency}`
   ].join(' <span class="history-dot">•</span> ');
 
@@ -2651,7 +2651,7 @@ function addHistoryEntry(source) {
       `Narzut <span class="history-value">${Number.isFinite(minMarkupPercent) ? minMarkupPercent.toFixed(2) : '-'}</span>%`,
       `Sprzedaż <span class="history-value">${minSalePlnText}</span>`
     ].join(' <span class="history-dot">•</span> ');
-    meta = `eBay ${minSaleEbayText} <span class="history-dot">•</span> Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> Prowizja ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}% <span class="history-dot">•</span> Tryb netto → brutto liczony wg VAT klienta`;
+    meta = `eBay ${minSaleEbayText} <span class="history-dot">•</span> Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> Narzut eBay ${Number.isFinite(commissionRaw) ? commissionRaw.toFixed(1) : '-'}% <span class="history-dot">•</span> Tryb netto → brutto liczony wg VAT klienta`;
   } else if (isSaleMarkupSource) {
     const calculatedMarkupText = document.getElementById('calculatedMarkup')?.textContent?.trim() || '—';
     const calculatedNetProfitText = document.getElementById('calculatedNetProfit')?.textContent?.trim() || '—';
@@ -2671,7 +2671,7 @@ function addHistoryEntry(source) {
   } else if (isBaseCommissionSource) {
     details = [
       `Mnożnik Base <span class="history-value">${Number.isFinite(currentBaseMultiplier) ? currentBaseMultiplier.toFixed(4) : '-'}</span>`,
-      `Wyliczona prowizja <span class="history-value">${calculatedCommissionFromBaseText}</span>`
+      `Wyliczony narzut eBay <span class="history-value">${calculatedCommissionFromBaseText}</span>`
     ].join(' <span class="history-dot">•</span> ');
     meta = `Kurs 1 PLN = ${Number.isFinite(exchangeRate) ? exchangeRate.toFixed(4) : '-'} ${currency} <span class="history-dot">•</span> VAT klienta ${Number.isFinite(vatRateRaw) ? vatRateRaw.toFixed(1) : '-'}%`;
   }
@@ -2977,7 +2977,7 @@ function validateInputs(exchangeRate, commission, vatRate, resultDiv) {
     return false;
   }
   if (isNaN(commission) || commission < 0) {
-    resultDiv.innerHTML = '<span class="error">Prowizja nie może być ujemna.</span>';
+    resultDiv.innerHTML = '<span class="error">Narzut eBay nie może być ujemny.</span>';
     updateSummaryMetrics();
     return false;
   }

@@ -102,7 +102,7 @@
 
         <div class="admin-card" data-admin-tab="system">
           <h3>Domyślne ustawienia kalkulatora</h3>
-          <p>Ustaw domyślne źródło kursu i prowizję używaną po wejściu na kalkulator oraz po zamknięciu opcji zaawansowanych.</p>
+          <p>Ustaw domyślne źródło kursu i narzut eBay używany po wejściu na kalkulator oraz po zamknięciu opcji zaawansowanych.</p>
           <div class="default-calculator-settings">
             <div class="default-setting-row">
               <label class="default-setting-label" for="defaultRateProviderSelect">Domyślne źródło</label>
@@ -113,13 +113,13 @@
             </div>
             <div class="admin-meta">Aktualnie zapisane: <span id="defaultRateProviderValue">—</span></div>
             <div class="default-setting-row">
-              <label class="default-setting-label" for="defaultCommissionInput">Domyślna prowizja (%)</label>
+              <label class="default-setting-label" for="defaultCommissionInput">Domyślny narzut eBay (%)</label>
               <div class="default-setting-control-row">
                 <input type="number" id="defaultCommissionInput" min="0" max="100" step="0.1" placeholder="15">
-                <button type="button" id="defaultCommissionSaveBtn">Zapisz prowizję</button>
+                <button type="button" id="defaultCommissionSaveBtn">Zapisz narzut eBay</button>
               </div>
             </div>
-            <div class="admin-meta">Aktualna prowizja domyślna: <span id="defaultCommissionValue">15%</span></div>
+            <div class="admin-meta">Aktualny domyślny narzut eBay: <span id="defaultCommissionValue">15%</span></div>
           </div>
         </div>
 
@@ -254,7 +254,7 @@
             <summary class="report-summary">
               <span>Presety kalkulatora</span>
             </summary>
-            <p>Zdefiniuj szybkie presety widoczne nad kalkulatorem. Aktywne presety ustawiają walutę, VAT oraz opcjonalnie prowizję i narzut.</p>
+            <p>Zdefiniuj szybkie presety widoczne nad kalkulatorem. Aktywne presety ustawiają walutę, VAT oraz opcjonalnie narzut eBay i narzut sprzedaży.</p>
             <div class="admin-log-controls calculator-preset-controls">
               <div class="admin-log-field">
                 <label for="calculatorPresetSelect">Istniejące</label>
@@ -275,7 +275,7 @@
                 <input type="number" id="calculatorPresetVat" min="0" max="100" step="0.1" placeholder="23">
               </div>
               <div class="admin-log-field">
-                <label for="calculatorPresetCommission">Prowizja (%)</label>
+                <label for="calculatorPresetCommission">Narzut eBay (%)</label>
                 <input type="number" id="calculatorPresetCommission" min="0" max="100" step="0.1" placeholder="Opcjonalnie">
               </div>
               <div class="admin-log-field">
@@ -2140,7 +2140,7 @@
         <button type="button" class="calculator-preset-row ${item.enabled === false ? 'is-disabled' : ''}" data-preset-id="${item.id}">
           <strong>${escapeHtml(item.label)}</strong>
           <span>${escapeHtml(item.currency)} • VAT ${formatOptionalPercentValue(item.vat)}%</span>
-          <small>${item.commission == null ? 'Prowizja domyślna' : `Prowizja ${formatOptionalPercentValue(item.commission)}%`} • ${item.markup == null ? 'Narzut bez zmian' : `Narzut ${formatOptionalPercentValue(item.markup)}%`}</small>
+          <small>${item.commission == null ? 'Domyślny narzut eBay' : `Narzut eBay ${formatOptionalPercentValue(item.commission)}%`} • ${item.markup == null ? 'Narzut sprzedaży bez zmian' : `Narzut sprzedaży ${formatOptionalPercentValue(item.markup)}%`}</small>
         </button>
       `).join('');
     }
@@ -2656,7 +2656,7 @@
         throw new Error(text || `HTTP ${response.status}`);
       }
       if (defaultCommissionValue) defaultCommissionValue.textContent = formatCommissionDefault(value);
-      showToast('Domyślna prowizja zapisana.', 'ok', performance.now() - t0);
+      showToast('Domyślny narzut eBay zapisany.', 'ok', performance.now() - t0);
     }
 
     function setupSourcesEditor() {
@@ -3531,7 +3531,7 @@
       try {
         await saveDefaultCommissionSetting();
       } catch (error) {
-        showToast(`Błąd zapisu domyślnej prowizji: ${error.message || 'unknown'}`, 'warn');
+        showToast(`Błąd zapisu domyślnego narzutu eBay: ${error.message || 'unknown'}`, 'warn');
       }
     });
 
