@@ -3623,6 +3623,56 @@ body.dark-mode .admin-kpi {
   box-shadow: 0 0 0 2px rgba(255, 176, 32, 0.16), 0 14px 34px rgba(121, 78, 0, 0.14);
 }
 
+.report-item.is-resolved {
+  background:
+    linear-gradient(90deg, rgba(31, 157, 85, 0.12), rgba(31, 157, 85, 0.04)),
+    var(--card-2);
+  border-color: rgba(31, 157, 85, 0.45);
+}
+
+.report-status-badge {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.report-status-badge.is-on-hold {
+  border-color: rgba(255, 176, 32, 0.65);
+  background: rgba(255, 176, 32, 0.16);
+  color: #8a5200;
+}
+
+.report-status-badge.is-resolved {
+  border-color: rgba(31, 157, 85, 0.5);
+  background: rgba(31, 157, 85, 0.14);
+  color: #16753f;
+}
+
+.report-readonly-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.report-resolution {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 9px 11px;
+  border: 1px solid rgba(31, 157, 85, 0.3);
+  border-radius: 10px;
+  background: rgba(31, 157, 85, 0.08);
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.report-resolution strong {
+  color: var(--ink);
+}
+
 .report-item.is-on-hold .report-kind {
   background: rgba(255, 176, 32, 0.2);
   border-color: rgba(255, 176, 32, 0.65);
@@ -3667,6 +3717,7 @@ body.dark-mode .report-item.is-on-hold .report-kind {
 .report-filter {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin: 10px 0 16px;
 }

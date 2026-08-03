@@ -373,6 +373,13 @@
                 <option value="mapping">Tylko mapowania</option>
                 <option value="ui">Tylko błędy strony</option>
               </select>
+              <label for="reportStatusFilter">Status</label>
+              <select id="reportStatusFilter">
+                <option value="active" selected>Aktywne</option>
+                <option value="in-progress">W trakcie</option>
+                <option value="on-hold">On hold</option>
+                <option value="resolved">Resolved</option>
+              </select>
             </div>
             <div id="reportList" class="report-list">Brak zgłoszeń.</div>
           </details>
@@ -696,6 +703,7 @@
     const reportList = document.getElementById('reportList');
     const reportCount = document.getElementById('reportCount');
     const reportFilter = document.getElementById('reportFilter');
+    const reportStatusFilter = document.getElementById('reportStatusFilter');
     const logCount = document.getElementById('logCount');
     const reportConfirmModal = document.getElementById('reportConfirmModal');
     const reportConfirmClose = document.getElementById('reportConfirmClose');
@@ -4395,6 +4403,8 @@
     const REPORT_STATUS_LEGACY_KEY = 'adminReportStatus';
     const VALID_REPORT_STATUSES = new Set(['on-hold', 'resolved', 'dismissed']);
     const reportStatusCache = new Map();
+    const reportStatusByKeyCache = new Map();
+    const reportStatusActionCache = new Map();
 
     try {
       localStorage.removeItem(REPORT_STATUS_LEGACY_KEY);
@@ -4422,9 +4432,28 @@
       }
     }
 
+    function getEffectiveReportStatus(entry) {
+      const reportId = buildReportId(entry);
+      const byId = getReportStatus(reportId);
+      if (byId) return byId;
+      const key = buildReportKey(entry);
+      return key ? (reportStatusByKeyCache.get(key) || '') : '';
+    }
+
+    function getReportStatusAction(entry) {
+      const reportId = buildReportId(entry);
+      if (reportId && reportStatusActionCache.has(`id:${reportId}`)) {
+        return reportStatusActionCache.get(`id:${reportId}`);
+      }
+      const key = buildReportKey(entry);
+      return key ? (reportStatusActionCache.get(`key:${key}`) || null) : null;
+    }
+
     function syncReportStateFromLogs(entries) {
       reportKindCache.clear();
       reportStatusCache.clear();
+      reportStatusByKeyCache.clear();
+      reportStatusActionCache.clear();
       entries
         .filter((entry) => isReportLike(entry) && entry?.meta?.action)
         .slice()
@@ -4438,9 +4467,23 @@
           if (!reportId) return;
           const action = entry?.meta?.action || '';
           const status = normalizeReportStatus(action);
-          if (status) reportStatusCache.set(reportId, status);
+          if (status) {
+            reportStatusCache.set(reportId, status);
+            reportStatusActionCache.set(`id:${reportId}`, entry);
+            const reportKey = buildReportKey(entry);
+            if (reportKey) {
+              reportStatusByKeyCache.set(reportKey, status);
+              reportStatusActionCache.set(`key:${reportKey}`, entry);
+            }
+          }
           if (action === 'retype') {
             reportStatusCache.delete(reportId);
+            reportStatusActionCache.delete(`id:${reportId}`);
+            const reportKey = buildReportKey(entry);
+            if (reportKey) {
+              reportStatusByKeyCache.delete(reportKey);
+              reportStatusActionCache.delete(`key:${reportKey}`);
+            }
             const nextKind = entry?.meta?.newKind;
             if (nextKind === 'ui' || nextKind === 'mapping') {
               reportKindCache.set(reportId, nextKind);
@@ -4484,68 +4527,53 @@
           const right = b?.ts ? Date.parse(b.ts) : 0;
           return right - left;
         });
-      const mappingReports = [];
-      const uiReports = [];
-      reports.forEach((entry) => {
-        const kind = getReportKind(entry);
-        if (kind === 'ui') uiReports.push(entry);
-        else mappingReports.push(entry);
-      });
-      const resolvedKeys = new Set();
-      reportsCache.forEach((entry) => {
-        if (!isReportLike(entry)) return;
-        const action = entry?.meta?.action;
-        if (!action || action === 'on-hold' || action === 'retype') return;
-        const key = buildReportKey(entry);
-        if (key) resolvedKeys.add(key);
-      });
-      const visibleReports = reports.filter((entry) => {
-        const key = buildReportKey(entry);
-        const status = getReportStatus(buildReportId(entry));
-        if (status === 'resolved' || status === 'dismissed') return false;
-        if (dismissedReports.has(key)) return false;
-        if (resolvedKeys.has(key)) return false;
-        return true;
-      });
-      const visibleMapping = visibleReports.filter((entry) => getReportKind(entry) !== 'ui');
-      const visibleUi = visibleReports.filter((entry) => getReportKind(entry) === 'ui');
-      if (reportCount) {
-        reportCount.textContent = String(visibleReports.length);
-        reportCount.classList.toggle('is-bad', visibleReports.length > 0);
-      }
-      if (!visibleReports.length) {
-        reportList.textContent = 'Brak zgłoszeń.';
-        return;
-      }
-      const sectionTemplate = (title, entries) => {
-        if (!entries.length) return '';
-        return `
-          <div class="report-section">
-            <div class="report-section-title">${title}</div>
-            ${entries.map((entry, index) => renderReportItem(entry, index)).join('')}
-          </div>
-        `;
-      };
+        const statusFilterValue = reportStatusFilter?.value || 'active';
+        const visibleReports = reports.filter((entry) => {
+          const status = getEffectiveReportStatus(entry);
+          if (statusFilterValue === 'resolved') return status === 'resolved';
+          if (statusFilterValue === 'on-hold') return status === 'on-hold';
+          if (statusFilterValue === 'in-progress') return !status;
+          return status !== 'resolved' && status !== 'dismissed';
+        });
+        const visibleMapping = visibleReports.filter((entry) => getReportKind(entry) !== 'ui');
+        const visibleUi = visibleReports.filter((entry) => getReportKind(entry) === 'ui');
+        const sectionTemplate = (title, entries) => {
+          if (!entries.length) return '';
+          return `
+            <div class="report-section">
+              <div class="report-section-title">${title}</div>
+              ${entries.map((entry, index) => renderReportItem(entry, index)).join('')}
+            </div>
+          `;
+        };
 
-      const filterValue = reportFilter?.value || 'all';
-      let sections = [];
-      if (filterValue === 'mapping') {
-        sections = [sectionTemplate('Zgłoszenia mapowań', visibleMapping)];
-      } else if (filterValue === 'ui') {
-        sections = [sectionTemplate('Błędy działania strony', visibleUi)];
-      } else {
-        sections = [
-          sectionTemplate('Zgłoszenia mapowań', visibleMapping),
-          sectionTemplate('Błędy działania strony', visibleUi)
-        ];
-      }
+        const filterValue = reportFilter?.value || 'all';
+        let sections = [];
+        let displayedCount = visibleReports.length;
+        if (filterValue === 'mapping') {
+          sections = [sectionTemplate('Zgłoszenia mapowań', visibleMapping)];
+          displayedCount = visibleMapping.length;
+        } else if (filterValue === 'ui') {
+          sections = [sectionTemplate('Błędy działania strony', visibleUi)];
+          displayedCount = visibleUi.length;
+        } else {
+          sections = [
+            sectionTemplate('Zgłoszenia mapowań', visibleMapping),
+            sectionTemplate('Błędy działania strony', visibleUi)
+          ];
+        }
 
-      reportList.innerHTML = sections.join('');
-      hydrateAdminNotes();
+        if (reportCount) {
+          reportCount.textContent = String(displayedCount);
+          reportCount.classList.toggle('is-bad', statusFilterValue !== 'resolved' && displayedCount > 0);
+        }
 
-      if (!reportList.innerHTML.trim()) {
-        reportList.textContent = 'Brak zgłoszeń.';
-      }
+        reportList.innerHTML = sections.join('');
+        hydrateAdminNotes();
+
+        if (!reportList.innerHTML.trim()) {
+          reportList.textContent = 'Brak zgłoszeń.';
+        }
       } catch (error) {
         reportList.textContent = 'Brak zgłoszeń.';
         showToast('Wykryto uszkodzony wpis zgłoszenia. Pomiń lub zrób migrację logów.', 'warn');
@@ -4566,28 +4594,53 @@
       const reportId = buildReportId(entry);
       const reportIdEscaped = escapeHtml(reportId);
       const storedNote = getAdminNote(reportId);
-      const reportStatus = getReportStatus(reportId);
+      const reportStatus = getEffectiveReportStatus(entry);
+      const isResolved = reportStatus === 'resolved';
+      const statusClass = reportStatus === 'on-hold' ? 'is-on-hold' : (isResolved ? 'is-resolved' : '');
+      const statusBadge = reportStatus === 'on-hold'
+        ? '<span class="report-status-badge is-on-hold">On hold</span>'
+        : (isResolved ? '<span class="report-status-badge is-resolved">Resolved</span>' : '<span class="report-status-badge">W trakcie</span>');
+      const statusAction = isResolved ? getReportStatusAction(entry) : null;
+      const resolutionMeta = safeObject(statusAction?.meta?.mapping);
+      const resolvedAt = statusAction?.ts ? new Date(statusAction.ts).toLocaleString('pl-PL') : '';
+      const resolvedActor = statusAction ? getEffectiveLogActor(statusAction) : '';
+      const resolutionKey = String(resolutionMeta.key || '').trim();
+      const resolutionVendor = String(resolutionMeta.vendor || '').trim();
+      const resolutionType = String(resolutionMeta.type || '').trim();
+      const resolutionNote = String(resolutionMeta.note || '').trim();
+      const hasMappingResolution = resolutionKey && resolutionKey !== 'nie dotyczy';
+      const resolutionSummary = isResolved ? `
+        <div class="report-resolution">
+          <div><strong>Rozwiązano:</strong> ${escapeHtml(resolvedAt || 'brak daty')}${resolvedActor ? ` · ${escapeHtml(resolvedActor)}` : ''}</div>
+          ${hasMappingResolution ? `<div><strong>Wynik:</strong> ${escapeHtml(resolutionKey)} → ${escapeHtml(resolutionVendor || '—')}${resolutionType ? ` · ${escapeHtml(resolutionType)}` : ''}</div>` : ''}
+          ${resolutionNote && resolutionNote !== 'nie dotyczy' ? `<div><strong>Notatka:</strong> ${escapeHtml(resolutionNote)}</div>` : ''}
+        </div>
+      ` : '';
       if (kind === 'ui') {
         return `
-          <div class="report-item report-${kind} ${reportStatus === 'on-hold' ? 'is-on-hold' : ''}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}">
+          <div class="report-item report-${kind} ${statusClass}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}" data-report-status="${reportStatus}">
             <div class="report-header">
               <strong>ID: ${reportIdEscaped}</strong>
               <div class="report-header-meta">
                 <span class="report-ts">${ts}</span>
                 <div class="report-meta-row">
                   <span class="report-kind">${kindLabel}</span>
-                  <button type="button" class="report-kind-toggle" aria-label="Zmień typ zgłoszenia">↔</button>
+                  ${statusBadge}
+                  ${isResolved ? '' : '<button type="button" class="report-kind-toggle" aria-label="Zmień typ zgłoszenia">↔</button>'}
                 </div>
               </div>
             </div>
             ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować treść uwagi"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
+            ${resolutionSummary}
             <div class="report-form">
-              <textarea class="report-note" rows="2" placeholder="Notatki admina (opcjonalne)" data-saved-note="${escapeHtml(storedNote)}">${escapeHtml(storedNote)}</textarea>
+              <textarea class="report-note" rows="2" placeholder="Notatki admina (opcjonalne)" data-saved-note="${escapeHtml(storedNote)}" ${isResolved ? 'readonly' : ''}>${escapeHtml(storedNote)}</textarea>
               <div class="report-actions">
-                <button type="button" class="report-save-note" hidden>Zapisz notatkę</button>
-                <button type="button" class="report-resolve">Resolved</button>
-                <button type="button" class="report-hold">On hold</button>
-                <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
+                ${isResolved ? '<span class="report-readonly-note">Zgłoszenie zamknięte — tylko do odczytu</span>' : `
+                  <button type="button" class="report-save-note" hidden>Zapisz notatkę</button>
+                  <button type="button" class="report-resolve">Resolved</button>
+                  <button type="button" class="report-hold">On hold</button>
+                  <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
+                `}
               </div>
               ${(source || detail) ? `<div class="report-extra">// ${source ? `Źródło: ${source}` : ''}${detail ? ` · Wzorzec: ${detail}` : ''}</div>` : ''}
             </div>
@@ -4595,14 +4648,15 @@
         `;
       }
       return `
-          <div class="report-item report-${kind} ${reportStatus === 'on-hold' ? 'is-on-hold' : ''}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}">
+          <div class="report-item report-${kind} ${statusClass}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}" data-report-status="${reportStatus}">
             <div class="report-header">
               <strong>${query || '—'}</strong>
               <div class="report-header-meta">
                 <span class="report-ts">${ts}</span>
                 <div class="report-meta-row">
                   <span class="report-kind">${kindLabel}</span>
-                  <button type="button" class="report-kind-toggle" aria-label="Zmień typ zgłoszenia">↔</button>
+                  ${statusBadge}
+                  ${isResolved ? '' : '<button type="button" class="report-kind-toggle" aria-label="Zmień typ zgłoszenia">↔</button>'}
                   <span class="report-id">ID: ${reportIdEscaped}</span>
                 </div>
               </div>
@@ -4613,12 +4667,13 @@
               ${detail ? `<span>Wzorzec: ${detail}</span>` : ''}
             </div>
             ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować treść uwagi"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
+            ${resolutionSummary}
             <div class="report-form">
-              <input type="text" class="report-key" placeholder="PN lub wzorzec" value="${query}">
-              <input type="text" class="report-vendor" placeholder="Producent (np. Dell)" value="${suggestedVendor}">
+              <input type="text" class="report-key" placeholder="PN lub wzorzec" value="${query}" ${isResolved ? 'disabled' : ''}>
+              <input type="text" class="report-vendor" placeholder="Producent (np. Dell)" value="${suggestedVendor}" ${isResolved ? 'disabled' : ''}>
               <div class="report-mode">
                 <label>Typ wpisu</label>
-                <select class="report-type">
+                <select class="report-type" ${isResolved ? 'disabled' : ''}>
                   <option value="auto" selected>Auto (PN lub wzorzec)</option>
                   <option value="exact">PN exact</option>
                   <option value="pattern">Wzorzec</option>
@@ -4626,8 +4681,10 @@
               </div>
               <textarea class="report-note" rows="2" placeholder="Uwagi admina / powód korekty" disabled>${reason}</textarea>
               <div class="report-actions">
-                <button type="button" class="report-apply">Dodaj / popraw mapowanie</button>
-                <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
+                ${isResolved ? '<span class="report-readonly-note">Zgłoszenie zamknięte — tylko do odczytu</span>' : `
+                  <button type="button" class="report-apply">Dodaj / popraw mapowanie</button>
+                  <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
+                `}
               </div>
             </div>
           </div>
@@ -4934,6 +4991,14 @@
     }
     if (reportFilter) {
       reportFilter.addEventListener('change', () => {
+        if (!Array.isArray(reportsCache) || !reportsCache.length) {
+          fetchReports();
+        }
+        renderReports();
+      });
+    }
+    if (reportStatusFilter) {
+      reportStatusFilter.addEventListener('change', () => {
         if (!Array.isArray(reportsCache) || !reportsCache.length) {
           fetchReports();
         }
