@@ -1490,6 +1490,18 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function clearResultMessage(resultDiv = document.getElementById('result')) {
+  if (!resultDiv) return;
+  resultDiv.innerHTML = '';
+  resultDiv.classList.remove('is-visible');
+}
+
+function showResultError(resultDiv, message) {
+  if (!resultDiv) return;
+  resultDiv.innerHTML = `<span class="error">${escapeHtml(message)}</span>`;
+  resultDiv.classList.add('is-visible');
+}
+
 function hideSelfTestDetails() {}
 
 function formatCurrency(value) {
@@ -1828,12 +1840,12 @@ function validatePricingInputs(exchangeRate, commission, vatRate, resultDiv) {
   if (isCurrentBasePricingEnabled()) {
     const multiplier = getCurrentBasePricingMultiplier();
     if (!Number.isFinite(multiplier)) {
-      resultDiv.innerHTML = '<span class="error">Podaj poprawny aktualny mnożnik Base albo wyłącz wycenę po Base.</span>';
+      showResultError(resultDiv, 'Podaj poprawny aktualny mnożnik Base albo wyłącz wycenę po Base.');
       updateSummaryMetrics();
       return false;
     }
     if (isNaN(vatRate) || vatRate < 0 || vatRate > 1) {
-      resultDiv.innerHTML = '<span class="error">Stawka VAT musi być w przedziale 0-100%.</span>';
+      showResultError(resultDiv, 'Stawka VAT musi być w przedziale 0-100%.');
       updateSummaryMetrics();
       return false;
     }
@@ -2871,8 +2883,7 @@ function syncFields(source) {
   const vatRateInput = document.getElementById('vatRate');
   const resultDiv = document.getElementById('result');
   if (clearPrimaryPricingFields(source)) {
-    resultDiv.innerHTML = '<span class="error">Wprowadź kwotę netto, brutto lub cenę na eBay, aby zobaczyć cenę końcową.</span>';
-    resultDiv.classList.add('is-visible');
+    clearResultMessage(resultDiv);
     return;
   }
   const primaryState = window.CalculatorUI.readPrimaryState(document, getActiveCommissionRate);
@@ -2886,22 +2897,22 @@ function syncFields(source) {
 
   // Validate negative inputs
   if (source === 'netto' && Number.isFinite(nettoValue) && nettoValue < 0) {
-    resultDiv.innerHTML = '<span class="error">Kwota netto nie może być ujemna.</span>';
+    showResultError(resultDiv, 'Kwota netto nie może być ujemna.');
     updateSummaryMetrics();
     return;
   }
   if (source === 'brutto' && Number.isFinite(bruttoValue) && bruttoValue < 0) {
-    resultDiv.innerHTML = '<span class="error">Kwota brutto nie może być ujemna.</span>';
+    showResultError(resultDiv, 'Kwota brutto nie może być ujemna.');
     updateSummaryMetrics();
     return;
   }
   if (source === 'ebayPrice' && Number.isFinite(ebayValue) && ebayValue < 0) {
-    resultDiv.innerHTML = '<span class="error">Cena na eBay nie może być ujemna.</span>';
+    showResultError(resultDiv, 'Cena na eBay nie może być ujemna.');
     updateSummaryMetrics();
     return;
   }
   if (source === 'vatRate' && Number.isFinite(vatInputValue) && vatInputValue < 0) {
-    resultDiv.innerHTML = '<span class="error">Stawka VAT nie może być ujemna.</span>';
+    showResultError(resultDiv, 'Stawka VAT nie może być ujemna.');
     updateBaseMultiplier();
     updateSummaryMetrics();
     return;
@@ -2953,7 +2964,7 @@ function syncFields(source) {
       });
       const { pricing, skip } = calculatePrimaryFromCurrentPricing(sourceToSync, primaryState, nextVatRate);
       if (!pricing) {
-        resultDiv.innerHTML = '<span class="error">Wpisz kwotę netto, brutto lub eBay, aby przeliczyć cenę z nową stawką VAT.</span>';
+        showResultError(resultDiv, 'Wpisz kwotę netto, brutto lub eBay, aby przeliczyć cenę z nową stawką VAT.');
         updateBaseMultiplier();
         updateMarkupCalculations({ syncFields: false });
         updateSummaryMetrics();
@@ -2972,17 +2983,17 @@ function syncFields(source) {
 
 function validateInputs(exchangeRate, commission, vatRate, resultDiv) {
   if (isNaN(exchangeRate) || exchangeRate <= 0) {
-    resultDiv.innerHTML = '<span class="error">Kurs waluty musi być dodatni.</span>';
+    showResultError(resultDiv, 'Kurs waluty musi być dodatni.');
     updateSummaryMetrics();
     return false;
   }
   if (isNaN(commission) || commission < 0) {
-    resultDiv.innerHTML = '<span class="error">Narzut eBay nie może być ujemny.</span>';
+    showResultError(resultDiv, 'Narzut eBay nie może być ujemny.');
     updateSummaryMetrics();
     return false;
   }
   if (isNaN(vatRate) || vatRate < 0 || vatRate > 1) {
-    resultDiv.innerHTML = '<span class="error">Stawka VAT musi być w przedziale 0-100%.</span>';
+    showResultError(resultDiv, 'Stawka VAT musi być w przedziale 0-100%.');
     updateSummaryMetrics();
     return false;
   }
@@ -2994,6 +3005,12 @@ function calculatePrice() {
   const { netto, brutto, ebayPrice, exchangeRate, commission, vatRate } = primaryState;
   const resultDiv = document.getElementById('result');
 
+  if (isNaN(netto) && isNaN(brutto) && isNaN(ebayPrice)) {
+    clearResultMessage(resultDiv);
+    updateSummaryMetrics();
+    return;
+  }
+
   if (!validatePricingInputs(exchangeRate, commission, vatRate, resultDiv)) {
     return;
   }
@@ -3004,13 +3021,6 @@ function calculatePrice() {
   updateSummaryMetrics();
 
   let resultHTML = ``;
-
-  if (isNaN(netto) && isNaN(brutto) && isNaN(ebayPrice)) {
-    resultDiv.innerHTML = `<span class="error">Wprowadź kwotę netto, brutto lub cenę na eBay, aby zobaczyć cenę końcową.</span>`;
-    resultDiv.classList.add('is-visible');
-    updateSummaryMetrics();
-    return;
-  }
 
   resultDiv.innerHTML = resultHTML;
   resultDiv.classList.toggle('is-visible', resultHTML.trim().length > 0);
@@ -3510,7 +3520,7 @@ function openStockFromInput() {
     window.open(url, '_blank', 'noopener,noreferrer');
     productInput.value = '';
   } else {
-    document.getElementById('result').innerHTML = '<span class="error">ID produktu musi być liczbą od 1 do 6 cyfr.</span>';
+    showResultError(document.getElementById('result'), 'ID produktu musi być liczbą od 1 do 6 cyfr.');
   }
 }
 

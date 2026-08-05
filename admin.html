@@ -391,7 +391,7 @@
               <span>Historia operacji</span>
               <span class="report-count" id="logCount">0</span>
             </summary>
-            <p>Lista ostatnich działań na backupach i zapisach (autor + data; IP pozostaje informacją pomocniczą).</p>
+            <p>Lista aktywności aplikacji. Użyj „Prettify”, aby zobaczyć czytelny opis zdarzenia, najważniejsze dane i możliwą interpretację zachowania.</p>
             <div class="admin-log-controls">
               <div class="admin-log-field">
                 <label for="logTypeFilter">Typ</label>
@@ -4199,7 +4199,7 @@
               ${hasMeta ? `
                 <div class="log-meta">
                   <div class="log-meta-raw">${rawMeta}</div>
-                  <pre class="log-pretty-content" id="${metaId}" hidden></pre>
+                  <div class="log-pretty-content" id="${metaId}" hidden></div>
                 </div>
               ` : ''}
               <div class="log-ua">${escapeHtml(ua)}</div>
@@ -4254,85 +4254,281 @@
       );
     }
 
-    function formatMetaPretty(entry) {
-      const meta = safeObject(entry.meta);
-      const lines = [];
-      const usedKeys = new Set();
-      if (entry.type) lines.push(`Typ: ${entry.type}`);
-      if (meta.action) {
-        lines.push(`Akcja: ${meta.action}`);
-        usedKeys.add('action');
-      }
-      if (entry.type === 'mapping-report') {
-        const reportObject = safeObject(meta.report);
-        const report = Object.keys(reportObject).length ? reportObject : {
-          query: meta.query,
-          suggestedVendor: meta.suggestedVendor,
-          source: meta.source,
-          detail: meta.detail,
-          reason: meta.reason
-        };
-        if (report && (report.query || report.suggestedVendor || report.source || report.detail || report.reason)) {
-          if (report.query) lines.push(`Zgłoszenie PN: ${report.query}`);
-          if (report.suggestedVendor) lines.push(`Zgłoszony producent: ${report.suggestedVendor}`);
-          if (report.reason) lines.push(`Powód: ${report.reason}`);
-          usedKeys.add('report.query');
-          usedKeys.add('report.suggestedVendor');
-          usedKeys.add('report.reason');
-        }
-        if (meta.mapping) {
-          const m = safeObject(meta.mapping);
-          if (m.key) lines.push(`Mapa -> PN/wzorzec: ${m.key}`);
-          if (m.vendor) lines.push(`Mapa -> producent: ${m.vendor}`);
-          if (m.type) lines.push(`Typ wpisu: ${m.type}`);
-          if (m.note) lines.push(`Uwagi admina: ${m.note}`);
-          usedKeys.add('mapping.key');
-          usedKeys.add('mapping.vendor');
-          usedKeys.add('mapping.type');
-          usedKeys.add('mapping.note');
-        }
-        if (report && (report.source || report.detail)) {
-          lines.push('');
-          const parts = [];
-          if (report.source) parts.push(`Źródło: ${report.source}`);
-          if (report.detail) parts.push(`Wzorzec: ${report.detail}`);
-          lines.push(`// ${parts.join(' · ')}`);
-          usedKeys.add('report.source');
-          usedKeys.add('report.detail');
-        }
-        const flatAll = flattenMeta(meta);
-        const allKeys = Object.keys(flatAll).filter((key) => !usedKeys.has(key));
-        if (allKeys.length) {
-          lines.push('');
-          lines.push('--- Pozostałe pola ---');
-          allKeys.sort().forEach((key) => {
-            lines.push(`${key}: ${flatAll[key]}`);
-          });
-        }
-      } else {
-        const flat = flattenMeta(meta);
-        const keys = Object.keys(flat);
-        if (keys.length) {
-          keys.sort().forEach((key) => {
-            lines.push(`${key}: ${flat[key]}`);
-          });
-        }
-      }
-      if (!lines.length) return JSON.stringify(meta, null, 2);
-      return lines.join('\n');
+    const LOG_TYPE_LABELS = {
+      calc: 'Przeliczenie ceny',
+      search: 'Wyszukiwanie oferty',
+      'layout-edit': 'Zmiana układu',
+      mapping: 'Zmiana mapowania',
+      'mapping-report': 'Obsługa zgłoszenia',
+      'stock-open': 'Otwarcie produktu w STOCK',
+      backup: 'Operacja backupu',
+      'backup-full': 'Pełny backup',
+      'backup-logs': 'Backup logów',
+      'restore-logs': 'Przywrócenie logów',
+      admin: 'Sesja administratora',
+      update: 'Aktualizacja'
+    };
+
+    const LOG_ACTION_LABELS = {
+      enter: 'wejście w tryb edycji',
+      save: 'zapis zmian',
+      restore: 'przywrócenie danych',
+      'sign-in': 'logowanie administratora',
+      'sign-out': 'wylogowanie administratora',
+      'add-pattern': 'dodanie wzorca',
+      'add-exact': 'dodanie dokładnego PN',
+      'delete-pattern': 'usunięcie wzorca',
+      'delete-exact': 'usunięcie dokładnego PN',
+      edit: 'edycja mapowania',
+      'creator-pattern': 'utworzenie wzorca w kreatorze',
+      'creator-exact': 'utworzenie mapowania PN w kreatorze',
+      'apply-report-pattern': 'zastosowanie zgłoszenia jako wzorzec',
+      'apply-report-exact': 'zastosowanie zgłoszenia jako dokładny PN',
+      resolved: 'zamknięcie zgłoszenia',
+      'on-hold': 'wstrzymanie zgłoszenia',
+      dismissed: 'usunięcie zgłoszenia',
+      retype: 'zmiana typu zgłoszenia'
+    };
+
+    function getLogTypeLabel(type) {
+      return LOG_TYPE_LABELS[type] || String(type || 'Nieznane zdarzenie');
     }
 
-    function flattenMeta(obj, prefix = '', out = {}) {
-      if (!obj || typeof obj !== 'object') return out;
-      for (const [key, value] of Object.entries(obj)) {
-        const nextKey = prefix ? `${prefix}.${key}` : key;
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          flattenMeta(value, nextKey, out);
-        } else {
-          out[nextKey] = Array.isArray(value) ? value.join(', ') : String(value);
+    function getLogActionLabel(action) {
+      return LOG_ACTION_LABELS[action] || String(action || '').replace(/[-_]+/g, ' ');
+    }
+
+    function formatLogDisplayValue(value) {
+      if (value === null || value === undefined || value === '') return '—';
+      if (Array.isArray(value)) {
+        return value.map((item) => {
+          if (!item || typeof item !== 'object') return String(item);
+          try {
+            return JSON.stringify(item);
+          } catch (_error) {
+            return String(item);
+          }
+        }).join(', ') || '—';
+      }
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value);
+        } catch (_error) {
+          return String(value);
         }
       }
-      return out;
+      return String(value);
+    }
+
+    function describeLogEntry(entry) {
+      const meta = safeObject(entry.meta);
+      const action = getLogActionLabel(meta.action);
+      if (entry.type === 'calc') {
+        const source = meta.source ? ` po zmianie pola „${meta.source}”` : '';
+        const price = meta.ebay && meta.currency ? ` Wynik eBay: ${meta.ebay} ${meta.currency}.` : '';
+        return `Użytkownik przeliczył wycenę${source}.${price}`;
+      }
+      if (entry.type === 'search') {
+        const sources = Array.isArray(meta.sources) ? meta.sources : [];
+        const sourceText = sources.length ? ` w ${sources.length} źródłach (${sources.join(', ')})` : '';
+        return `Użytkownik wyszukał ofertę dla „${meta.query || 'brak zapytania'}”${sourceText}.`;
+      }
+      if (entry.type === 'layout-edit') {
+        return `Użytkownik wykonał operację: ${action || 'zmiana układu kalkulatora'}.`;
+      }
+      if (entry.type === 'mapping') {
+        const key = meta.key || meta.pattern || '';
+        const target = key ? ` dla „${key}”` : '';
+        const vendor = meta.vendor ? ` → ${meta.vendor}` : '';
+        return `Mapowanie: ${action || 'zmiana'}${target}${vendor}.`;
+      }
+      if (entry.type === 'mapping-report') {
+        const report = Object.keys(safeObject(meta.report)).length ? safeObject(meta.report) : meta;
+        const query = report.query ? ` „${report.query}”` : '';
+        return meta.action
+          ? `Administrator wykonał: ${action}${query}.`
+          : `Użytkownik wysłał zgłoszenie${query}${report.reason ? `: ${report.reason}` : '.'}`;
+      }
+      if (entry.type === 'stock-open') {
+        return `Użytkownik otworzył produkt ${meta.productId || 'bez ID'} w systemie STOCK.`;
+      }
+      if (entry.type === 'admin') {
+        return `Sesja administratora: ${action || 'aktywność administracyjna'}.`;
+      }
+      if (entry.type === 'backup' || entry.type.startsWith('backup') || entry.type === 'restore-logs') {
+        return `Operacja danych: ${action || getLogTypeLabel(entry.type).toLowerCase()}.`;
+      }
+      return `${getLogTypeLabel(entry.type)}${action ? ` — ${action}` : ''}.`;
+    }
+
+    function getLogFactRows(entry) {
+      const meta = safeObject(entry.meta);
+      const report = Object.keys(safeObject(meta.report)).length ? safeObject(meta.report) : meta;
+      const mapping = safeObject(meta.mapping);
+      const rows = [];
+      const seen = new Set();
+      const add = (label, value) => {
+        const formatted = formatLogDisplayValue(value);
+        if (formatted === '—' || seen.has(label)) return;
+        seen.add(label);
+        rows.push({ label, value: formatted });
+      };
+
+      add('Akcja', meta.action ? getLogActionLabel(meta.action) : '');
+      if (entry.type === 'calc') {
+        add('Zmienione pole', meta.source);
+        add('ERP netto', meta.netto ? `${meta.netto} PLN` : '');
+        add('ERP brutto', meta.brutto ? `${meta.brutto} PLN` : '');
+        add('Cena eBay', meta.ebay && meta.currency ? `${meta.ebay} ${meta.currency}` : meta.ebay);
+        add('Zakup', meta.purchaseAmount ? `${meta.purchaseAmount} PLN (${meta.purchaseAmountMode || 'tryb nieznany'})` : '');
+        add('Cena sprzedaży', meta.targetSaleAmount ? `${meta.targetSaleAmount} PLN` : '');
+        add('Narzut sprzedaży', meta.minMarkup ? `${meta.minMarkup}%` : '');
+        add('Narzut eBay', meta.commission ? `${meta.commission}%` : '');
+        add('VAT klienta', meta.vat ? `${meta.vat}%` : '');
+        add('Kurs', meta.rate && meta.currency ? `1 PLN = ${meta.rate} ${meta.currency}` : meta.rate);
+      } else if (entry.type === 'search') {
+        add('Zapytanie', meta.query);
+        add('Źródła', meta.sources);
+        add('Warianty', meta.variants);
+        add('Liczba otwartych adresów', Array.isArray(meta.calledUrls) ? meta.calledUrls.length : '');
+      } else if (entry.type === 'mapping-report') {
+        add('ID zgłoszenia', report.reportId || meta.reportId);
+        add('PN / zapytanie', report.query);
+        add('Producent', report.suggestedVendor);
+        add('Rodzaj', report.kind);
+        add('Powód', report.reason);
+        add('Źródło', report.source);
+        add('Wzorzec', report.detail);
+        add('Wynik mapowania', mapping.key && mapping.vendor ? `${mapping.key} → ${mapping.vendor}` : mapping.key);
+        add('Typ wpisu', mapping.type);
+        add('Notatka admina', mapping.note);
+      } else if (entry.type === 'mapping') {
+        add('PN', meta.key);
+        add('Wzorzec', meta.pattern);
+        add('Producent', meta.vendor);
+        add('Typ mapowania', meta.mappingType);
+        add('Notatka', meta.note);
+      } else if (entry.type === 'layout-edit') {
+        add('Preset', meta.preset);
+        add('Liczba zmian', Array.isArray(meta.changes) ? meta.changes.length : '');
+        add('Szerokość kolumn', meta.columnWidth || meta.after?.columnWidth);
+      } else {
+        add('Źródło', meta.source);
+        add('Produkt', meta.productId);
+        add('Wersja aplikacji', meta.appVersion);
+      }
+      return rows;
+    }
+
+    function getLogContextKey(entry) {
+      const clientId = String(entry?.meta?.clientId || '').trim();
+      if (clientId) return `client:${clientId}`;
+      const fp = String(entry?.clientFp || '').trim();
+      if (fp && fp !== 'unknown') return `fp:${fp}`;
+      const actor = getEffectiveLogActor(entry);
+      return actor ? `actor:${actor}` : '';
+    }
+
+    function getLogBehaviorInsights(entry) {
+      const meta = safeObject(entry.meta);
+      const insights = [];
+      if (entry.type === 'calc') {
+        if (meta.purchaseAmount && (meta.minMarkup || meta.targetSaleAmount)) {
+          insights.push('Wygląda na analizę opłacalności: podano zakup oraz narzut lub cenę sprzedaży.');
+        }
+        if (String(meta.source || '').toLowerCase().includes('ebay')) {
+          insights.push('Cena eBay była punktem wejścia, więc kalkulator został użyty do przeliczenia wartości wstecz.');
+        }
+      }
+      if (entry.type === 'search' && Array.isArray(meta.sources) && meta.sources.length > 1) {
+        insights.push(`Oferta była porównywana równolegle w ${meta.sources.length} źródłach.`);
+      }
+      if (entry.type === 'mapping-report' && meta.action === 'on-hold') {
+        insights.push('Zgłoszenie wymagało dalszej weryfikacji i nie zostało jeszcze zamknięte.');
+      }
+
+      const contextKey = getLogContextKey(entry);
+      if (contextKey) {
+        const related = logsCache
+          .map(normalizeLogEntry)
+          .filter((candidate) => getLogContextKey(candidate) === contextKey);
+        const counts = related.reduce((acc, item) => {
+          acc[item.type] = (acc[item.type] || 0) + 1;
+          return acc;
+        }, {});
+        if (related.length > 1) {
+          const orderedTypes = related
+            .slice()
+            .sort((a, b) => Date.parse(a.ts || 0) - Date.parse(b.ts || 0))
+            .map((item) => getLogTypeLabel(item.type));
+          const compressed = orderedTypes.reduce((acc, label) => {
+            const last = acc[acc.length - 1];
+            if (last?.label === label) last.count += 1;
+            else acc.push({ label, count: 1 });
+            return acc;
+          }, []);
+          const sequence = compressed
+            .slice(-6)
+            .map((item) => `${item.label}${item.count > 1 ? ` ×${item.count}` : ''}`)
+            .join(' → ');
+          if (sequence) insights.push(`Sekwencja widoczna dla tego klienta: ${sequence}.`);
+        }
+        if ((counts.calc || 0) > 1) {
+          insights.push(`W bieżącym widoku ten sam identyfikator klienta ma ${counts.calc} przeliczenia — prawdopodobnie korygowano parametry wyceny.`);
+        }
+        if ((counts.calc || 0) > 0 && (counts.search || 0) > 0) {
+          insights.push('W bieżącym widoku widać zarówno wycenę, jak i wyszukiwanie ofert — możliwy pełny proces od kalkulacji do porównania rynku.');
+        }
+      }
+      return Array.from(new Set(insights));
+    }
+
+    function buildLogPrettyHtml(entry) {
+      const normalized = normalizeLogEntry(entry);
+      const actor = getEffectiveLogActor(normalized);
+      const title = getLogTypeLabel(normalized.type);
+      const summary = describeLogEntry(normalized);
+      const rows = getLogFactRows(normalized);
+      const insights = getLogBehaviorInsights(normalized);
+      const ts = normalized.ts ? new Date(normalized.ts).toLocaleString('pl-PL') : '—';
+      let rawJson = '{}';
+      try {
+        rawJson = JSON.stringify(normalized.meta || {}, null, 2);
+      } catch (_error) {
+        rawJson = String(normalized.meta || '');
+      }
+      return `
+        <section class="log-pretty-card">
+          <div class="log-pretty-heading">
+            <div>
+              <span class="log-pretty-eyebrow">${escapeHtml(normalized.type)}</span>
+              <h4>${escapeHtml(title)}</h4>
+            </div>
+            <span class="log-pretty-time">${escapeHtml(ts)}</span>
+          </div>
+          <p class="log-pretty-summary">${escapeHtml(summary)}</p>
+          <div class="log-pretty-tags">
+            <span>${actor ? `Autor: ${escapeHtml(actor)}` : 'Autor nierozpoznany'}</span>
+            <span>${escapeHtml(normalized.geo?.city || 'unknown')}, ${escapeHtml(normalized.geo?.country || 'unknown')}</span>
+          </div>
+          ${insights.length ? `
+            <div class="log-insight">
+              <strong>Interpretacja zachowania</strong>
+              <ul>${insights.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+              <small>Wnioski są heurystyczne i opierają się wyłącznie na logach widocznych na tej stronie.</small>
+            </div>
+          ` : ''}
+          ${rows.length ? `
+            <dl class="log-pretty-facts">
+              ${rows.map((row) => `<div><dt>${escapeHtml(row.label)}</dt><dd>${escapeHtml(row.value)}</dd></div>`).join('')}
+            </dl>
+          ` : '<p class="log-pretty-empty">Brak dodatkowych danych opisowych.</p>'}
+          <details class="log-pretty-raw">
+            <summary>Pełne dane techniczne</summary>
+            <pre>${escapeHtml(rawJson)}</pre>
+          </details>
+        </section>
+      `;
     }
 
     const DISMISSED_REPORTS_KEY = 'adminDismissedReports';
@@ -5047,10 +5243,10 @@
         if (!pre || !entry?.meta) return;
         const raw = pre.closest('.log-meta')?.querySelector('.log-meta-raw');
         if (pre.hasAttribute('hidden')) {
-          pre.textContent = formatMetaPretty(entry);
+          pre.innerHTML = buildLogPrettyHtml(entry);
           pre.removeAttribute('hidden');
           if (raw) raw.setAttribute('hidden', 'hidden');
-          prettyBtn.textContent = 'Ukryj';
+          prettyBtn.textContent = 'Ukryj opis';
         } else {
           pre.setAttribute('hidden', 'hidden');
           if (raw) raw.removeAttribute('hidden');
