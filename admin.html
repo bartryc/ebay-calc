@@ -298,6 +298,42 @@
             <div id="calculatorPresetList" class="calculator-preset-list"></div>
           </details>
 
+          <details id="baseMultiplierPresetSection" open>
+            <summary class="report-summary">
+              <span>Presety mnożnika Base</span>
+            </summary>
+            <p>Zdefiniuj szybkie mnożniki widoczne w karcie Base na stronie kalkulatora.</p>
+            <div class="admin-log-controls calculator-preset-controls">
+              <div class="admin-log-field">
+                <label for="baseMultiplierPresetSelect">Istniejące</label>
+                <select id="baseMultiplierPresetSelect">
+                  <option value="">Nowy preset</option>
+                </select>
+              </div>
+              <div class="admin-log-field admin-log-field-wide">
+                <label for="baseMultiplierPresetLabel">Nazwa przycisku</label>
+                <input type="text" id="baseMultiplierPresetLabel" maxlength="40" placeholder="Np. eBay DE">
+              </div>
+              <div class="admin-log-field">
+                <label for="baseMultiplierPresetValue">Mnożnik Base</label>
+                <input type="number" id="baseMultiplierPresetValue" min="0.000001" step="0.0001" placeholder="Np. 0.2654">
+              </div>
+              <div class="admin-log-field">
+                <label class="source-dual-icon-toggle calculator-preset-enabled">
+                  <input type="checkbox" id="baseMultiplierPresetEnabled" checked>
+                  <span>Włączony</span>
+                </label>
+              </div>
+            </div>
+            <div class="admin-actions source-actions">
+              <button type="button" id="baseMultiplierPresetNewBtn">Nowy preset</button>
+              <button type="button" id="baseMultiplierPresetSaveBtn">Zapisz preset</button>
+              <button type="button" id="baseMultiplierPresetDeleteBtn">Usuń preset</button>
+            </div>
+            <div id="baseMultiplierPresetHint" class="admin-meta">Aktywne presety pojawią się w karcie Base.</div>
+            <div id="baseMultiplierPresetList" class="calculator-preset-list"></div>
+          </details>
+
           <details id="layoutPresetSection" open>
             <summary class="report-summary">
               <span>Kreator presetów układu</span>
@@ -309,9 +345,10 @@
                 <input type="text" id="layoutPresetName" maxlength="40" placeholder="Np. eBay kompakt">
               </div>
               <div class="admin-log-field">
-                <label for="layoutPresetSelect">Istniejące</label>
+                <label for="layoutPresetSelect">Edytowany układ</label>
                 <select id="layoutPresetSelect">
-                  <option value="">---</option>
+                  <option value="__default__">Domyślny globalny</option>
+                  <option value="">Nowy preset</option>
                 </select>
               </div>
               <div class="admin-log-field">
@@ -334,7 +371,7 @@
                 <button type="button" id="layoutPresetDeleteBtn">Usuń preset</button>
               </div>
             </div>
-            <div class="admin-meta">Uwaga: to tylko definicje globalne presetów. Użytkownik nadal zapisuje swój aktualny układ lokalnie.</div>
+            <div class="admin-meta">Wybierz „Domyślny globalny”, ustaw układ i zapisz. Będzie automatycznie używany przez osoby bez własnej lokalnej personalizacji.</div>
             <div id="layoutPresetItems" class="layout-preset-items"></div>
           </details>
         </div>
@@ -759,6 +796,15 @@
     const calculatorPresetDeleteBtn = document.getElementById('calculatorPresetDeleteBtn');
     const calculatorPresetHint = document.getElementById('calculatorPresetHint');
     const calculatorPresetList = document.getElementById('calculatorPresetList');
+    const baseMultiplierPresetSelect = document.getElementById('baseMultiplierPresetSelect');
+    const baseMultiplierPresetLabel = document.getElementById('baseMultiplierPresetLabel');
+    const baseMultiplierPresetValue = document.getElementById('baseMultiplierPresetValue');
+    const baseMultiplierPresetEnabled = document.getElementById('baseMultiplierPresetEnabled');
+    const baseMultiplierPresetNewBtn = document.getElementById('baseMultiplierPresetNewBtn');
+    const baseMultiplierPresetSaveBtn = document.getElementById('baseMultiplierPresetSaveBtn');
+    const baseMultiplierPresetDeleteBtn = document.getElementById('baseMultiplierPresetDeleteBtn');
+    const baseMultiplierPresetHint = document.getElementById('baseMultiplierPresetHint');
+    const baseMultiplierPresetList = document.getElementById('baseMultiplierPresetList');
     const LAYOUT_PRESET_DEFAULT_COLUMN_WIDTH = 62;
     const LAYOUT_PRESET_MIN_COLUMN_WIDTH = 35;
     const LAYOUT_PRESET_MAX_COLUMN_WIDTH = 80;
@@ -834,7 +880,10 @@
     const hdWhitelistList = document.getElementById('hdWhitelistList');
     const adminTabDescription = document.getElementById('adminTabDescription');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
+    const LAYOUT_DEFAULT_PRESET_SELECT_VALUE = '__default__';
+    const LAYOUT_DEFAULT_PRESET_ID = 'global-default-layout';
     const CALCULATOR_PRESETS_NOTE_ID = 'calculator-presets-v1';
+    const BASE_MULTIPLIER_PRESETS_NOTE_ID = 'base-multiplier-presets-v1';
     const SEARCH_SOURCES_CONFIG_NOTE_ID = 'search-sources-config-v1';
     const RATE_PROVIDER_DEFAULT_NOTE_ID = 'rate-provider-default-v1';
     const RATE_PROVIDERS_CONFIG_NOTE_ID = 'rate-providers-config-v1';
@@ -875,6 +924,7 @@
     let customRateProvidersConfig = { version: 1, providers: [] };
     let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES };
     let calculatorPresetsConfig = { version: 1, presets: [] };
+    let baseMultiplierPresetsConfig = { version: 1, presets: [] };
     let hdWhitelistConfig = { version: 1, ips: [] };
     let currentHdPublicIp = '';
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
@@ -1883,6 +1933,12 @@
         actions: '#calculatorPresetNewBtn, #calculatorPresetSaveBtn, #calculatorPresetDeleteBtn'
       },
       {
+        id: 'base-multiplier-presets',
+        root: '#baseMultiplierPresetSection',
+        controls: '#baseMultiplierPresetLabel, #baseMultiplierPresetValue, #baseMultiplierPresetEnabled',
+        actions: '#baseMultiplierPresetNewBtn, #baseMultiplierPresetSaveBtn, #baseMultiplierPresetDeleteBtn'
+      },
+      {
         id: 'layout-presets',
         root: '#layoutPresetSection',
         controls: '#layoutPresetName, #layoutPresetColumnWidth, #layoutPresetColumnMode, .layout-preset-row button, .layout-preset-row select, .layout-preset-row input',
@@ -2261,6 +2317,170 @@
       await saveCalculatorPresetsConfig();
       renderCalculatorPresetsEditor();
       showToast(`Usunięto preset: ${existing?.label || selectedId}.`, 'ok', performance.now() - t0);
+    }
+
+    function formatBaseMultiplierPresetValue(value) {
+      const parsed = parseFloat(String(value ?? '').replace(',', '.'));
+      if (!Number.isFinite(parsed)) return '';
+      return parsed.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+    }
+
+    function normalizeBaseMultiplierPreset(item, index = 0) {
+      const multiplier = parseFloat(String(item?.multiplier ?? '').replace(',', '.'));
+      if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
+      const id = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || `base-${index + 1}`;
+      const fallbackLabel = `Base ${formatBaseMultiplierPresetValue(multiplier)}`;
+      const label = String(item?.label || item?.name || fallbackLabel).trim().slice(0, 40);
+      return {
+        id,
+        label: label || fallbackLabel,
+        multiplier,
+        enabled: item?.enabled !== false
+      };
+    }
+
+    function normalizeBaseMultiplierPresetsConfig(raw) {
+      const incoming = raw && typeof raw === 'object' ? raw : {};
+      const source = Array.isArray(incoming.presets) ? incoming.presets : [];
+      const seen = new Set();
+      const presets = source
+        .map(normalizeBaseMultiplierPreset)
+        .filter(Boolean)
+        .map((item, index) => {
+          let id = item.id;
+          if (seen.has(id)) id = `${id}-${index + 1}`;
+          seen.add(id);
+          return { ...item, id };
+        });
+      return {
+        version: Number(incoming.version) || 1,
+        presets
+      };
+    }
+
+    function renderBaseMultiplierPresetSelect() {
+      if (!baseMultiplierPresetSelect) return;
+      const current = baseMultiplierPresetSelect.value || '';
+      baseMultiplierPresetSelect.innerHTML = '<option value="">Nowy preset</option>' + baseMultiplierPresetsConfig.presets
+        .map((item) => `<option value="${item.id}">${escapeHtml(item.label)}${item.enabled === false ? ' (wyłączony)' : ''}</option>`)
+        .join('');
+      baseMultiplierPresetSelect.value = baseMultiplierPresetsConfig.presets.some((item) => item.id === current) ? current : '';
+    }
+
+    function renderBaseMultiplierPresetList() {
+      if (!baseMultiplierPresetList) return;
+      const activeCount = baseMultiplierPresetsConfig.presets.filter((item) => item.enabled !== false).length;
+      if (baseMultiplierPresetHint) {
+        baseMultiplierPresetHint.textContent = `Aktywne presety: ${activeCount}/${baseMultiplierPresetsConfig.presets.length}.`;
+      }
+      baseMultiplierPresetList.innerHTML = baseMultiplierPresetsConfig.presets.map((item) => `
+        <button type="button" class="calculator-preset-row ${item.enabled === false ? 'is-disabled' : ''}" data-base-preset-id="${item.id}">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>Mnożnik Base: ${escapeHtml(formatBaseMultiplierPresetValue(item.multiplier))}</span>
+          <small>${item.enabled === false ? 'Ukryty w kalkulatorze' : 'Widoczny w kalkulatorze'}</small>
+        </button>
+      `).join('');
+    }
+
+    function fillBaseMultiplierPresetEditor(preset) {
+      if (baseMultiplierPresetSelect) baseMultiplierPresetSelect.value = preset?.id || '';
+      if (baseMultiplierPresetLabel) baseMultiplierPresetLabel.value = preset?.label || '';
+      if (baseMultiplierPresetValue) baseMultiplierPresetValue.value = preset ? formatBaseMultiplierPresetValue(preset.multiplier) : '';
+      if (baseMultiplierPresetEnabled) baseMultiplierPresetEnabled.checked = preset?.enabled !== false;
+    }
+
+    function renderBaseMultiplierPresetsEditor() {
+      renderBaseMultiplierPresetSelect();
+      renderBaseMultiplierPresetList();
+      if (!baseMultiplierPresetSelect?.value) fillBaseMultiplierPresetEditor(null);
+    }
+
+    function collectBaseMultiplierPresetFromEditor() {
+      return normalizeBaseMultiplierPreset({
+        id: baseMultiplierPresetSelect?.value || undefined,
+        label: baseMultiplierPresetLabel?.value,
+        multiplier: baseMultiplierPresetValue?.value,
+        enabled: baseMultiplierPresetEnabled?.checked
+      });
+    }
+
+    async function saveBaseMultiplierPresetsConfig() {
+      if (!window.PN_MAPPINGS_API?.request) throw new Error('Brak API zapisu');
+      const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(BASE_MULTIPLIER_PRESETS_NOTE_ID)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: JSON.stringify(baseMultiplierPresetsConfig) })
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+    }
+
+    async function loadBaseMultiplierPresetsConfig() {
+      if (!window.PN_MAPPINGS_API?.request) {
+        baseMultiplierPresetsConfig = normalizeBaseMultiplierPresetsConfig(null);
+        renderBaseMultiplierPresetsEditor();
+        return;
+      }
+      try {
+        const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(BASE_MULTIPLIER_PRESETS_NOTE_ID)}`, { method: 'GET' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        baseMultiplierPresetsConfig = normalizeBaseMultiplierPresetsConfig(payload?.note ? JSON.parse(payload.note) : null);
+      } catch (_error) {
+        baseMultiplierPresetsConfig = normalizeBaseMultiplierPresetsConfig(null);
+      }
+      renderBaseMultiplierPresetsEditor();
+    }
+
+    async function handleSaveBaseMultiplierPreset() {
+      const item = collectBaseMultiplierPresetFromEditor();
+      if (!item || !String(baseMultiplierPresetLabel?.value || '').trim()) {
+        showToast('Uzupełnij nazwę i dodatni mnożnik Base.', 'warn');
+        return;
+      }
+      const selectedId = baseMultiplierPresetSelect?.value || '';
+      let savedId = selectedId;
+      if (selectedId) {
+        baseMultiplierPresetsConfig.presets = baseMultiplierPresetsConfig.presets.map((preset) => (
+          preset.id === selectedId ? { ...item, id: selectedId } : preset
+        ));
+      } else {
+        const fallbackId = `base-${baseMultiplierPresetsConfig.presets.length + 1}`;
+        const baseId = item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || fallbackId;
+        let nextId = baseId;
+        let counter = 2;
+        while (baseMultiplierPresetsConfig.presets.some((preset) => preset.id === nextId)) {
+          nextId = `${baseId}-${counter}`;
+          counter += 1;
+        }
+        savedId = nextId;
+        baseMultiplierPresetsConfig.presets.push({ ...item, id: nextId });
+      }
+      baseMultiplierPresetsConfig = normalizeBaseMultiplierPresetsConfig(baseMultiplierPresetsConfig);
+      const t0 = performance.now();
+      await saveBaseMultiplierPresetsConfig();
+      renderBaseMultiplierPresetsEditor();
+      const saved = baseMultiplierPresetsConfig.presets.find((preset) => preset.id === savedId);
+      if (baseMultiplierPresetSelect && saved) baseMultiplierPresetSelect.value = saved.id;
+      if (saved) fillBaseMultiplierPresetEditor(saved);
+      showToast('Preset mnożnika Base zapisany.', 'ok', performance.now() - t0);
+    }
+
+    async function handleDeleteBaseMultiplierPreset() {
+      const selectedId = baseMultiplierPresetSelect?.value || '';
+      if (!selectedId) {
+        showToast('Wybierz preset mnożnika do usunięcia.', 'warn');
+        return;
+      }
+      const existing = baseMultiplierPresetsConfig.presets.find((item) => item.id === selectedId);
+      baseMultiplierPresetsConfig.presets = baseMultiplierPresetsConfig.presets.filter((item) => item.id !== selectedId);
+      baseMultiplierPresetsConfig = normalizeBaseMultiplierPresetsConfig(baseMultiplierPresetsConfig);
+      const t0 = performance.now();
+      await saveBaseMultiplierPresetsConfig();
+      renderBaseMultiplierPresetsEditor();
+      showToast(`Usunięto preset mnożnika: ${existing?.label || selectedId}.`, 'ok', performance.now() - t0);
     }
 
     function normalizeRateProvidersConfig(raw) {
@@ -3363,6 +3583,53 @@
       });
     }
 
+    if (baseMultiplierPresetSelect) {
+      baseMultiplierPresetSelect.addEventListener('change', () => {
+        const preset = baseMultiplierPresetsConfig.presets.find((item) => item.id === baseMultiplierPresetSelect.value);
+        fillBaseMultiplierPresetEditor(preset || null);
+      });
+    }
+
+    if (baseMultiplierPresetNewBtn) {
+      baseMultiplierPresetNewBtn.addEventListener('click', () => {
+        if (baseMultiplierPresetSelect) baseMultiplierPresetSelect.value = '';
+        fillBaseMultiplierPresetEditor(null);
+        baseMultiplierPresetLabel?.focus();
+      });
+    }
+
+    if (baseMultiplierPresetSaveBtn) {
+      baseMultiplierPresetSaveBtn.addEventListener('click', async () => {
+        try {
+          await handleSaveBaseMultiplierPreset();
+        } catch (error) {
+          showToast(`Nie udało się zapisać presetu mnożnika: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+    }
+
+    if (baseMultiplierPresetDeleteBtn) {
+      baseMultiplierPresetDeleteBtn.addEventListener('click', async () => {
+        try {
+          await handleDeleteBaseMultiplierPreset();
+        } catch (error) {
+          showToast(`Nie udało się usunąć presetu mnożnika: ${error.message || 'unknown'}`, 'warn');
+        }
+      });
+    }
+
+    if (baseMultiplierPresetList) {
+      baseMultiplierPresetList.addEventListener('click', (event) => {
+        const row = event.target.closest('[data-base-preset-id]');
+        if (!row) return;
+        const presetId = row.getAttribute('data-base-preset-id') || '';
+        const preset = baseMultiplierPresetsConfig.presets.find((item) => item.id === presetId);
+        if (!preset) return;
+        if (baseMultiplierPresetSelect) baseMultiplierPresetSelect.value = preset.id;
+        fillBaseMultiplierPresetEditor(preset);
+      });
+    }
+
     if (layoutPresetItems) {
       layoutPresetItems.addEventListener('click', (event) => {
         const row = event.target.closest('.layout-preset-row');
@@ -3401,7 +3668,7 @@
     }
 
     if (!layoutPresetRows.length) {
-      loadLayoutPresetIntoEditor('');
+      loadLayoutPresetIntoEditor(layoutPresetSelect?.value || LAYOUT_DEFAULT_PRESET_SELECT_VALUE);
     }
 
     setupAdminTabs();
@@ -3411,6 +3678,7 @@
     loadSourcesConfig();
     loadCurrenciesConfig();
     loadCalculatorPresetsConfig();
+    loadBaseMultiplierPresetsConfig();
     loadRateProvidersConfig().then(loadDefaultRateProviderSetting);
     loadDefaultCommissionSetting();
     loadHdWhitelistConfig()
@@ -3704,6 +3972,7 @@
       return {
         id,
         name,
+        isDefault: entry.isDefault === true,
         order,
         visibility,
         spans: normalizeLayoutPresetSpans(entry.spans || {}),
@@ -3719,6 +3988,9 @@
         const next = normalizeLayoutPresetEntry(item);
         if (!next || ids.has(next.id)) return;
         ids.add(next.id);
+        if (next.isDefault && normalized.some((preset) => preset.isDefault)) {
+          next.isDefault = false;
+        }
         normalized.push(next);
       });
       return normalized;
@@ -3734,7 +4006,7 @@
       }));
     }
 
-    function rowsToLayoutPreset(rows, name, id) {
+    function rowsToLayoutPreset(rows, name, id, options = {}) {
       const order = { calc: [], info: [], extra: [] };
       const visibility = {};
       const spans = {};
@@ -3765,6 +4037,7 @@
       return {
         id: id || `gp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
         name: String(name || '').trim(),
+        isDefault: options.isDefault === true,
         order,
         visibility,
         spans: normalizeLayoutPresetSpans(spans),
@@ -3804,11 +4077,15 @@
     function renderLayoutPresetSelect() {
       if (!layoutPresetSelect) return;
       const current = layoutPresetSelect.value;
+      const regularPresets = globalLayoutPresets.filter((preset) => !preset.isDefault);
       layoutPresetSelect.innerHTML = `
-        <option value="">---</option>
-        ${globalLayoutPresets.map((preset) => `<option value="${preset.id}">${preset.name}</option>`).join('')}
+        <option value="${LAYOUT_DEFAULT_PRESET_SELECT_VALUE}">Domyślny globalny</option>
+        <option value="">Nowy preset</option>
+        ${regularPresets.map((preset) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name)}</option>`).join('')}
       `;
-      if (current && globalLayoutPresets.some((p) => p.id === current)) {
+      if (current === LAYOUT_DEFAULT_PRESET_SELECT_VALUE) {
+        layoutPresetSelect.value = LAYOUT_DEFAULT_PRESET_SELECT_VALUE;
+      } else if (current && regularPresets.some((p) => p.id === current)) {
         layoutPresetSelect.value = current;
       }
     }
@@ -3840,6 +4117,24 @@
     }
 
     function loadLayoutPresetIntoEditor(presetId) {
+      if (presetId === LAYOUT_DEFAULT_PRESET_SELECT_VALUE) {
+        const defaultPreset = globalLayoutPresets.find((item) => item.isDefault);
+        layoutPresetRows = defaultPreset ? presetToRows(defaultPreset) : getDefaultLayoutRows();
+        if (layoutPresetName) {
+          layoutPresetName.value = 'Domyślny';
+          layoutPresetName.readOnly = true;
+        }
+        const columnProfile = normalizeLayoutPresetColumnProfile(defaultPreset?.columnWidth || DEFAULT_LAYOUT_COLUMN_PROFILE);
+        if (layoutPresetColumnWidth) layoutPresetColumnWidth.value = String(Math.round(columnProfile.widths.calc));
+        if (layoutPresetColumnMode) layoutPresetColumnMode.value = columnProfile.count === 3 ? '3' : '2';
+        if (layoutPresetDeleteBtn) layoutPresetDeleteBtn.disabled = true;
+        if (layoutPresetSaveBtn) layoutPresetSaveBtn.textContent = 'Zapisz układ domyślny';
+        renderLayoutPresetRows();
+        return;
+      }
+      if (layoutPresetName) layoutPresetName.readOnly = false;
+      if (layoutPresetDeleteBtn) layoutPresetDeleteBtn.disabled = !presetId;
+      if (layoutPresetSaveBtn) layoutPresetSaveBtn.textContent = 'Zapisz preset';
       if (!presetId) {
         layoutPresetRows = getDefaultLayoutRows();
         if (layoutPresetName) layoutPresetName.value = '';
@@ -3871,11 +4166,7 @@
         globalLayoutPresets = [];
       }
       renderLayoutPresetSelect();
-      if (!layoutPresetRows.length) {
-        loadLayoutPresetIntoEditor(layoutPresetSelect?.value || '');
-      } else {
-        renderLayoutPresetRows();
-      }
+      loadLayoutPresetIntoEditor(layoutPresetSelect?.value || LAYOUT_DEFAULT_PRESET_SELECT_VALUE);
     }
 
     async function saveGlobalLayoutPresets() {
@@ -3891,18 +4182,28 @@
     }
 
     async function handleSaveLayoutPreset() {
-      const name = String(layoutPresetName?.value || '').trim();
+      const selectedValue = String(layoutPresetSelect?.value || '').trim();
+      const isDefaultEditor = selectedValue === LAYOUT_DEFAULT_PRESET_SELECT_VALUE;
+      const name = isDefaultEditor ? 'Domyślny' : String(layoutPresetName?.value || '').trim();
       if (!name) {
         showToast('Podaj nazwę presetu.', 'warn');
         return;
       }
-      const presetId = String(layoutPresetSelect?.value || '').trim();
-      const nextPreset = rowsToLayoutPreset(layoutPresetRows, name, presetId || undefined);
+      const existingDefault = globalLayoutPresets.find((item) => item.isDefault);
+      const presetId = isDefaultEditor
+        ? (existingDefault?.id || LAYOUT_DEFAULT_PRESET_ID)
+        : selectedValue;
+      const nextPreset = rowsToLayoutPreset(layoutPresetRows, name, presetId || undefined, {
+        isDefault: isDefaultEditor
+      });
       if (!nextPreset.name) {
         showToast('Podaj poprawną nazwę presetu.', 'warn');
         return;
       }
-      if (presetId) {
+      if (isDefaultEditor) {
+        globalLayoutPresets = globalLayoutPresets.map((item) => ({ ...item, isDefault: false }));
+      }
+      if (globalLayoutPresets.some((item) => item.id === presetId)) {
         globalLayoutPresets = globalLayoutPresets.map((item) => (item.id === presetId ? nextPreset : item));
       } else {
         globalLayoutPresets.push(nextPreset);
@@ -3910,13 +4211,19 @@
       const t0 = performance.now();
       await saveGlobalLayoutPresets();
       renderLayoutPresetSelect();
-      if (layoutPresetSelect) layoutPresetSelect.value = nextPreset.id;
-      showToast('Preset globalny zapisany.', 'ok', performance.now() - t0);
+      if (layoutPresetSelect) {
+        layoutPresetSelect.value = isDefaultEditor ? LAYOUT_DEFAULT_PRESET_SELECT_VALUE : nextPreset.id;
+      }
+      showToast(
+        nextPreset.isDefault ? 'Zapisano globalny układ domyślny.' : 'Preset globalny zapisany.',
+        'ok',
+        performance.now() - t0
+      );
     }
 
     async function handleDeleteLayoutPreset() {
       const presetId = String(layoutPresetSelect?.value || '').trim();
-      if (!presetId) {
+      if (!presetId || presetId === LAYOUT_DEFAULT_PRESET_SELECT_VALUE) {
         showToast('Wybierz preset do usunięcia.', 'warn');
         return;
       }

@@ -15,6 +15,54 @@
     return root.CalculatorCore.toFraction(getElement(doc, id)?.value);
   }
 
+  function setClientVatForSaleMode(doc, isNet) {
+    const vatEl = getElement(doc, 'vatRate');
+    if (!vatEl) return false;
+    const nextVat = isNet ? 0 : 23;
+    const currentVat = root.CalculatorCore.parseNumber(vatEl.value);
+    vatEl.value = String(nextVat);
+    return currentVat !== nextVat;
+  }
+
+  function formatBaseMultiplierPresetValue(value) {
+    const parsed = root.CalculatorCore.parseNumber(value);
+    if (!Number.isFinite(parsed)) return '';
+    return parsed.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  function normalizeBaseMultiplierPreset(item, index = 0) {
+    const multiplier = root.CalculatorCore.parseNumber(item?.multiplier);
+    if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
+    const rawId = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const fallbackLabel = `Base ${formatBaseMultiplierPresetValue(multiplier)}`;
+    const label = String(item?.label || item?.name || fallbackLabel).trim().slice(0, 40);
+    return {
+      id: rawId || `base-${index + 1}`,
+      label: label || fallbackLabel,
+      multiplier,
+      enabled: item?.enabled !== false
+    };
+  }
+
+  function normalizeBaseMultiplierPresetsConfig(raw) {
+    const incoming = raw && typeof raw === 'object' ? raw : {};
+    const source = Array.isArray(incoming.presets) ? incoming.presets : [];
+    const seen = new Set();
+    const presets = source
+      .map(normalizeBaseMultiplierPreset)
+      .filter(Boolean)
+      .map((item, index) => {
+        let id = item.id;
+        if (seen.has(id)) id = `${id}-${index + 1}`;
+        seen.add(id);
+        return { ...item, id };
+      });
+    return {
+      version: Number(incoming.version) || 1,
+      presets
+    };
+  }
+
   function readPrimaryState(doc, getCommissionRate) {
     const commissionRaw = typeof getCommissionRate === 'function' ? getCommissionRate() : NaN;
     return {
@@ -109,6 +157,10 @@
     getElement,
     readNumber,
     readPercentFraction,
+    setClientVatForSaleMode,
+    formatBaseMultiplierPresetValue,
+    normalizeBaseMultiplierPreset,
+    normalizeBaseMultiplierPresetsConfig,
     readPrimaryState,
     clearRecalculatedFields,
     flashRecalculatedField,

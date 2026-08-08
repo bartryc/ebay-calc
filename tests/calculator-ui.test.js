@@ -56,6 +56,12 @@
   approx(primary.commission, 0.15, 'primary commission');
   equal(primary.currency, 'EUR', 'primary currency');
 
+  equal(ui.setClientVatForSaleMode(doc, true), true, 'net sale mode changes VAT');
+  equal(doc.elements.vatRate.value, '0', 'net sale mode sets VAT to 0%');
+  equal(ui.setClientVatForSaleMode(doc, true), false, 'unchanged net sale mode leaves VAT at 0%');
+  equal(ui.setClientVatForSaleMode(doc, false), true, 'gross sale mode changes VAT');
+  equal(doc.elements.vatRate.value, '23', 'gross sale mode sets VAT to 23%');
+
   ui.writePrimaryResult(doc, { netto: 200, brutto: 246, ebay: 66.6 }, { skip: ['netto'] });
   equal(doc.elements.plnNetto.value, '100,50', 'write skips netto');
   equal(doc.elements.plnBrutto.value, '246.00', 'write brutto');
@@ -80,6 +86,23 @@
   approx(base.exchangeRate, 0.2357, 'base exchange');
   approx(base.vatRate, 0.23, 'base VAT');
   approx(base.commission, 0.15, 'base commission');
+
+  equal(ui.formatBaseMultiplierPresetValue('0,265400'), '0.2654', 'format Base multiplier preset');
+  const basePreset = ui.normalizeBaseMultiplierPreset({ id: 'EBAY-DE!', label: 'eBay DE', multiplier: '0,2654' });
+  equal(basePreset.id, 'ebay-de', 'normalize Base preset id');
+  equal(basePreset.label, 'eBay DE', 'normalize Base preset label');
+  approx(basePreset.multiplier, 0.2654, 'normalize Base preset multiplier');
+  equal(ui.normalizeBaseMultiplierPreset({ multiplier: 0 }), null, 'reject zero Base multiplier');
+  const basePresets = ui.normalizeBaseMultiplierPresetsConfig({
+    presets: [
+      { id: 'de', label: 'DE', multiplier: 0.2654 },
+      { id: 'de', label: 'DE zapas', multiplier: 0.2711, enabled: false },
+      { id: 'bad', label: 'Błędny', multiplier: -1 }
+    ]
+  });
+  equal(basePresets.presets.length, 2, 'filter invalid Base presets');
+  equal(basePresets.presets[1].id, 'de-2', 'deduplicate Base preset ids');
+  equal(basePresets.presets[1].enabled, false, 'keep disabled Base preset');
 
   root.__calculatorUiTestResult = 'ok';
 })(typeof globalThis !== 'undefined' ? globalThis : window);

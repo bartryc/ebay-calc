@@ -37,6 +37,8 @@ const CURRENCIES_CONFIG_CACHE_KEY = 'currenciesConfigV1';
 const COMMISSION_DEFAULT_NOTE_ID = 'commission-default-v1';
 const CALCULATOR_PRESETS_NOTE_ID = 'calculator-presets-v1';
 const CALCULATOR_PRESETS_CACHE_KEY = 'calculatorPresetsV1';
+const BASE_MULTIPLIER_PRESETS_NOTE_ID = 'base-multiplier-presets-v1';
+const BASE_MULTIPLIER_PRESETS_CACHE_KEY = 'baseMultiplierPresetsV1';
 const DEFAULT_COMMISSION_RATE = 15;
 let defaultCommissionRate = DEFAULT_COMMISSION_RATE;
 const DEFAULT_CURRENCIES = [
@@ -46,6 +48,7 @@ const DEFAULT_CURRENCIES = [
 ];
 let currenciesConfig = { version: 1, currencies: DEFAULT_CURRENCIES };
 let calculatorPresetsConfig = { version: 1, presets: [] };
+let baseMultiplierPresetsConfig = { version: 1, presets: [] };
 const DEFAULT_RATE_PROVIDERS = window.RateService?.DEFAULT_RATE_PROVIDERS || [
   {
     id: 'erapi',
@@ -799,6 +802,7 @@ function normalizeGlobalLayoutPreset(rawPreset) {
   return {
     id,
     name,
+    isDefault: rawPreset.isDefault === true,
     order: normalizeLayoutOrder(rawPreset.order || {}),
     visibility: normalizeLayoutVisibility(rawPreset.visibility || {}),
     spans: normalizeLayoutSpans(rawPreset.spans || {}),
@@ -814,7 +818,13 @@ async function loadGlobalLayoutPresets() {
     const payload = await response.json();
     const parsed = payload?.note ? JSON.parse(payload.note) : [];
     const list = Array.isArray(parsed) ? parsed : [];
-    return list.map(normalizeGlobalLayoutPreset).filter(Boolean);
+    let hasDefault = false;
+    return list.map(normalizeGlobalLayoutPreset).filter(Boolean).map((preset) => {
+      if (!preset.isDefault) return preset;
+      if (hasDefault) return { ...preset, isDefault: false };
+      hasDefault = true;
+      return preset;
+    });
   } catch (error) {
     return null;
   }
@@ -828,7 +838,7 @@ function renderGlobalLayoutPresetButtons() {
     return;
   }
   layoutGlobalPresetsEl.innerHTML = globalLayoutPresets
-    .map((preset) => `<button type="button" class="layout-global-preset-btn" data-preset-id="${preset.id}">${preset.name}</button>`)
+    .map((preset) => `<button type="button" class="layout-global-preset-btn ${preset.isDefault ? 'is-default' : ''}" data-preset-id="${escapeHtml(preset.id)}" title="${escapeHtml(preset.isDefault ? 'Domyślny układ globalny' : `Preset: ${preset.name}`)}">${preset.isDefault ? '★ ' : ''}${escapeHtml(preset.name)}</button>`)
     .join('');
   requestAnimationFrame(updateLayoutEditBarSpace);
 }
@@ -1775,6 +1785,9 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
   }
 
   if (toggleId === 'markupSaleNetToggle') {
+    const vatChanged = options.syncClientVat === true
+      ? window.CalculatorUI.setClientVatForSaleMode(document, !!toNetMode)
+      : false;
     updateMarkupAmountModeUI();
     const targetSaleValue = parseNumber(document.getElementById('targetSaleAmount')?.value);
     if (Number.isFinite(targetSaleValue) && !canAutoUpdateField('targetSaleAmount')) {
@@ -1782,6 +1795,16 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
       markupPriceSource = 'targetSaleAmount';
     }
     updateSaleMarkupOnly();
+    if (vatChanged) {
+      lastChanged = 'vatRate';
+      updateEbayCurrencyLabel();
+      if (getSourceForPricingParamChange()) {
+        syncFields('vatRate');
+      }
+      updateBaseMultiplier();
+      updateMarkupCalculations({ syncFields: false });
+      window.CalculatorUI.flashRecalculatedField(vatRateInputEl);
+    }
     if (options.history !== false) addHistoryEntry('markupAmountMode');
     return true;
   }
@@ -2000,6 +2023,12 @@ function updateMarkupCalculations(options = {}) {
   updateMinSaleByMarkup();
   updateMarkupFromSale();
   updateSummaryMetrics();
+}
+
+function updateMarkupAfterFieldEdit(inputId, inputEl) {
+  const markupIsTemporarilyEmpty = inputId === 'minMarkup'
+    && String(inputEl?.value || '').trim() === '';
+  updateMarkupCalculations({ syncFields: !markupIsTemporarilyEmpty });
 }
 
 function updateSaleMarkupOnly() {
@@ -2354,6 +2383,11 @@ loadGlobalLayoutPresets()
       if (applied) {
         saveLayoutToLocal(getCurrentLayoutOrder(), getCurrentLayoutVisibility(), getCurrentLayoutColors(), getCurrentLayoutColumnWidth(), getCurrentLayoutSpans());
       }
+    } else if (!savedLocalLayout) {
+      const defaultGlobalPreset = globalLayoutPresets.find((preset) => preset.isDefault);
+      if (defaultGlobalPreset) {
+        applyGlobalPresetById(defaultGlobalPreset.id);
+      }
     }
     applyPresetSelectionVisual();
   })
@@ -2455,14 +2489,20 @@ if (layoutResetBtn) {
     const confirmed = await askLayoutResetConfirmation();
     if (!confirmed) return;
     if (!defaultLayoutOrder) return;
-    applyLayoutOrder(defaultLayoutOrder);
-    applyLayoutVisibility(defaultLayoutVisibility || {});
-    applyLayoutColors(defaultLayoutColors || {});
-    applyLayoutSpans(defaultLayoutSpans || {});
-    applyLayoutColumnWidth(defaultLayoutColumnWidth);
     clearSavedLayoutLocal();
-    selectedLayoutPresetKey = 'custom';
-    localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
+    const defaultGlobalPreset = globalLayoutPresets.find((preset) => preset.isDefault);
+    if (defaultGlobalPreset) {
+      applyGlobalPresetById(defaultGlobalPreset.id);
+      localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, 'custom');
+    } else {
+      applyLayoutOrder(defaultLayoutOrder);
+      applyLayoutVisibility(defaultLayoutVisibility || {});
+      applyLayoutColors(defaultLayoutColors || {});
+      applyLayoutSpans(defaultLayoutSpans || {});
+      applyLayoutColumnWidth(defaultLayoutColumnWidth);
+      selectedLayoutPresetKey = 'custom';
+      localStorage.setItem(INDEX_LAYOUT_ACTIVE_PRESET_KEY, selectedLayoutPresetKey);
+    }
     preEditLayoutOrder = getCurrentLayoutOrder();
     preEditLayoutVisibility = getCurrentLayoutVisibility();
     preEditLayoutColors = getCurrentLayoutColors();
@@ -3063,6 +3103,62 @@ function normalizeCalculatorPresetsConfig(raw) {
     version: Number(incoming.version) || 1,
     presets
   };
+}
+
+function formatBaseMultiplierPresetValue(value) {
+  return window.CalculatorUI.formatBaseMultiplierPresetValue(value);
+}
+
+function normalizeBaseMultiplierPreset(item, index = 0) {
+  return window.CalculatorUI.normalizeBaseMultiplierPreset(item, index);
+}
+
+function normalizeBaseMultiplierPresetsConfig(raw) {
+  return window.CalculatorUI.normalizeBaseMultiplierPresetsConfig(raw);
+}
+
+function renderBaseMultiplierPresetButtons() {
+  const container = document.getElementById('baseMultiplierPresetButtons');
+  if (!container) return;
+  const currentMultiplier = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
+  const presets = baseMultiplierPresetsConfig.presets.filter((item) => item.enabled !== false);
+  if (!presets.length) {
+    container.innerHTML = '<span class="preset-empty">Brak skonfigurowanych presetów</span>';
+    return;
+  }
+  container.innerHTML = presets.map((item) => {
+    const isActive = Number.isFinite(currentMultiplier) && Math.abs(currentMultiplier - item.multiplier) < 0.0000001;
+    const multiplierText = formatBaseMultiplierPresetValue(item.multiplier);
+    return `<button type="button" class="${isActive ? 'is-active' : ''}" data-base-multiplier-preset-id="${escapeHtml(item.id)}" aria-pressed="${isActive ? 'true' : 'false'}" title="Ustaw mnożnik Base ${escapeHtml(multiplierText)}"><span>${escapeHtml(item.label)}</span><small>${escapeHtml(multiplierText)}</small></button>`;
+  }).join('');
+}
+
+async function loadBaseMultiplierPresetsConfig() {
+  const fromLocal = localStorage.getItem(BASE_MULTIPLIER_PRESETS_CACHE_KEY);
+  if (fromLocal) {
+    try {
+      baseMultiplierPresetsConfig = normalizeBaseMultiplierPresetsConfig(JSON.parse(fromLocal));
+      renderBaseMultiplierPresetButtons();
+    } catch (_error) {
+      // ignore local parse error
+    }
+  } else {
+    baseMultiplierPresetsConfig = normalizeBaseMultiplierPresetsConfig(null);
+    renderBaseMultiplierPresetButtons();
+  }
+  if (!window.PN_MAPPINGS_API?.request) return;
+  try {
+    const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(BASE_MULTIPLIER_PRESETS_NOTE_ID)}`, { method: 'GET' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const parsed = payload?.note ? JSON.parse(payload.note) : null;
+    if (!parsed) return;
+    baseMultiplierPresetsConfig = normalizeBaseMultiplierPresetsConfig(parsed);
+    localStorage.setItem(BASE_MULTIPLIER_PRESETS_CACHE_KEY, JSON.stringify(baseMultiplierPresetsConfig));
+    renderBaseMultiplierPresetButtons();
+  } catch (_error) {
+    // fallback to locally cached presets
+  }
 }
 
 function renderCalculatorPresetButtons() {
@@ -3681,7 +3777,7 @@ currencySelectEl.addEventListener('change', () => {
     if (id === 'minMarkup') {
       rememberMarkupSource('minMarkup');
     }
-    updateMarkupCalculations();
+    updateMarkupAfterFieldEdit(id, el);
     scheduleHistoryLog(id, { force: true });
   });
   el.addEventListener('change', () => {
@@ -3690,7 +3786,7 @@ currencySelectEl.addEventListener('change', () => {
     if (id === 'minMarkup') {
       rememberMarkupSource('minMarkup');
     }
-    updateMarkupCalculations();
+    updateMarkupAfterFieldEdit(id, el);
     flushHistoryLog(id, { force: true });
   });
   el.addEventListener('keydown', (event) => {
@@ -3700,7 +3796,7 @@ currencySelectEl.addEventListener('change', () => {
     if (id === 'minMarkup') {
       rememberMarkupSource('minMarkup');
     }
-    updateMarkupCalculations();
+    updateMarkupAfterFieldEdit(id, el);
     flushHistoryLog(id, { force: true });
   });
   el.addEventListener('focus', () => {
@@ -3713,33 +3809,28 @@ currencySelectEl.addEventListener('change', () => {
 });
 
 const currentBaseMultiplierEl = document.getElementById('currentBaseMultiplier');
+function refreshCurrentBaseMultiplierPricing() {
+  window.CalculatorUI.clearRecalculatedFields();
+  updateCommissionFromBaseMultiplier();
+  renderBaseMultiplierPresetButtons();
+  if (isCurrentBasePricingEnabled()) {
+    hideSelfTestDetails();
+    resyncPricingFromCurrentSource();
+  }
+}
+
 if (currentBaseMultiplierEl) {
   currentBaseMultiplierEl.addEventListener('input', () => {
-    window.CalculatorUI.clearRecalculatedFields();
-    updateCommissionFromBaseMultiplier();
-    if (isCurrentBasePricingEnabled()) {
-      hideSelfTestDetails();
-      resyncPricingFromCurrentSource();
-    }
+    refreshCurrentBaseMultiplierPricing();
     scheduleHistoryLog('currentBaseMultiplier');
   });
   currentBaseMultiplierEl.addEventListener('change', () => {
-    window.CalculatorUI.clearRecalculatedFields();
-    updateCommissionFromBaseMultiplier();
-    if (isCurrentBasePricingEnabled()) {
-      hideSelfTestDetails();
-      resyncPricingFromCurrentSource();
-    }
+    refreshCurrentBaseMultiplierPricing();
     flushHistoryLog('currentBaseMultiplier');
   });
   currentBaseMultiplierEl.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
-    window.CalculatorUI.clearRecalculatedFields();
-    updateCommissionFromBaseMultiplier();
-    if (isCurrentBasePricingEnabled()) {
-      hideSelfTestDetails();
-      resyncPricingFromCurrentSource();
-    }
+    refreshCurrentBaseMultiplierPricing();
     flushHistoryLog('currentBaseMultiplier');
   });
   currentBaseMultiplierEl.addEventListener('focus', () => {
@@ -3747,6 +3838,22 @@ if (currentBaseMultiplierEl) {
   });
   currentBaseMultiplierEl.addEventListener('blur', () => {
     flushHistoryLog('currentBaseMultiplier');
+  });
+}
+
+const baseMultiplierPresetButtons = document.getElementById('baseMultiplierPresetButtons');
+if (baseMultiplierPresetButtons) {
+  baseMultiplierPresetButtons.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-base-multiplier-preset-id]');
+    if (!button || !currentBaseMultiplierEl) return;
+    const presetId = button.getAttribute('data-base-multiplier-preset-id') || '';
+    const preset = baseMultiplierPresetsConfig.presets.find((item) => item.id === presetId && item.enabled !== false);
+    if (!preset) return;
+    currentBaseMultiplierEl.value = formatBaseMultiplierPresetValue(preset.multiplier);
+    refreshCurrentBaseMultiplierPricing();
+    window.CalculatorUI.flashRecalculatedField(currentBaseMultiplierEl);
+    addHistoryEntry('currentBaseMultiplier');
+    showMainToast(`Ustawiono mnożnik Base: ${preset.label}.`, 'success');
   });
 }
 
@@ -3769,7 +3876,7 @@ if (purchaseAmountNetToggle) {
 const markupSaleNetToggle = document.getElementById('markupSaleNetToggle');
 if (markupSaleNetToggle) {
   markupSaleNetToggle.addEventListener('change', () => {
-    applyAmountModeChange('markupSaleNetToggle', markupSaleNetToggle.checked);
+    applyAmountModeChange('markupSaleNetToggle', markupSaleNetToggle.checked, { syncClientVat: true });
   });
 }
 
@@ -3785,7 +3892,9 @@ document.addEventListener('click', (event) => {
   ) return;
   const toggleEl = document.getElementById(toggleId);
   if (!toggleEl) return;
-  applyAmountModeChange(toggleId, !toggleEl.checked);
+  applyAmountModeChange(toggleId, !toggleEl.checked, {
+    syncClientVat: toggleId === 'markupSaleNetToggle'
+  });
 });
 
 ['targetSaleAmount'].forEach((id) => {
@@ -3871,6 +3980,7 @@ if (calculatorPresetButtons) {
   await loadCurrenciesConfig();
   await loadCustomRateProviders();
   await loadCalculatorPresetsConfig();
+  await loadBaseMultiplierPresetsConfig();
   await loadDefaultRateProviderSelection();
   await loadDefaultCommissionRate();
   const currency = document.getElementById('currency').value;

@@ -1,5 +1,5 @@
 window.AppVersionInfo = {
-  version: '1.99.7',
+  version: '1.99.8',
   projectLabel: '@bartryc',
   projectUrl: 'https://github.com/bartryc',
   author: 'Codex 5.5'

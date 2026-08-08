@@ -547,6 +547,11 @@ body.layout-edit-mode .page::after {
   color: #fff !important;
 }
 
+.layout-global-preset-btn.is-default:not(.is-active) {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: rgba(253, 224, 71, 0.16) !important;
+}
+
 .layout-edit-actions button {
   padding: 6px 12px;
   border-radius: 999px;
@@ -1081,6 +1086,53 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
   margin-top: 10px;
   display: grid;
   gap: 6px;
+}
+
+.base-multiplier-presets-wrap {
+  display: grid;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.base-multiplier-preset-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+}
+
+.base-multiplier-preset-buttons button {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.base-multiplier-preset-buttons button:hover,
+.base-multiplier-preset-buttons button.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.base-multiplier-preset-buttons button.is-active {
+  background: color-mix(in srgb, var(--accent) 10%, var(--card));
+}
+
+.base-multiplier-preset-buttons span,
+.base-multiplier-preset-buttons small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.base-multiplier-preset-buttons small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .search-card {
@@ -3186,7 +3238,7 @@ body.dark-mode.builder-page #patternApplyBtn {
 }
 
 .layout-preset-controls {
-  grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 0.9fr) minmax(120px, 0.45fr) auto auto;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 0.9fr) minmax(120px, 0.45fr) minmax(120px, 0.45fr);
   align-items: end;
 }
 
@@ -3210,6 +3262,7 @@ body.dark-mode.builder-page #patternApplyBtn {
 .layout-preset-controls .layout-preset-action label {
   visibility: hidden;
 }
+
 
 .admin-log-field {
   display: flex;
@@ -3398,6 +3451,7 @@ body.dark-mode.builder-page #patternApplyBtn {
   .layout-preset-controls .admin-log-field button {
     width: 100%;
   }
+
 }
 
 body.dark-mode .admin-kpi {

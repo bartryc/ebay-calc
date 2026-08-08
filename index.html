@@ -131,8 +131,8 @@
               <div class="calc-field-pair">
                 <div class="field-label-row">
                   <label for="targetSaleAmount" class="field-label">Cena sprzedaży PLN</label>
-                  <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupSaleNetToggle" aria-pressed="false" title="Przełącz tryb ceny sprzedaży"><span data-mode-label="markupSaleNetToggle">brutto</span></button></span>
-                  <span class="field-help" data-tooltip="Cena sprzedaży w PLN przed doliczeniem narzutu eBay. Edycja tego pola przelicza narzut, zysk i docelową cenę eBay." aria-label="Pomoc">?</span>
+                  <span class="field-mode">tryb: <button type="button" class="mode-inline-toggle" data-toggle="markupSaleNetToggle" aria-pressed="false" title="Przełącz tryb ceny sprzedaży i ustaw VAT klienta na 0% lub 23%"><span data-mode-label="markupSaleNetToggle">brutto</span></button></span>
+                  <span class="field-help" data-tooltip="Cena sprzedaży w PLN przed doliczeniem narzutu eBay. Kliknięcie trybu netto ustawia VAT klienta na 0%, a powrót do brutto na 23%. Bez przełączania używana jest wartość wpisana w polu VAT." aria-label="Pomoc">?</span>
                 </div>
                 <input type="number" id="targetSaleAmount" step="0.01" min="0" placeholder="Np. 1590.00">
                 <input type="checkbox" id="markupSaleNetToggle" class="sr-only" aria-hidden="true">
@@ -303,6 +303,10 @@
                 <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera. Switch używa go do wyceny eBay i brutto ERP 1:1 z Base, a pole narzutu eBay pokazuje tylko przeliczenie pomocnicze." aria-label="Pomoc">?</span>
               </label>
               <input type="number" id="currentBaseMultiplier" step="0.0001" min="0" placeholder="Np. 0.2654">
+              <div class="base-multiplier-presets-wrap">
+                <span class="field-label">Presety mnożnika</span>
+                <div id="baseMultiplierPresetButtons" class="base-multiplier-preset-buttons" aria-label="Presety mnożnika Base"></div>
+              </div>
               <div class="toggle-row base-pricing-toggle-row">
                 <label class="toggle-switch">
                   <input type="checkbox" id="useCurrentBaseMultiplierToggle">
