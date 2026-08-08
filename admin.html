@@ -49,11 +49,17 @@
     </header>
 
     <section class="app-card admin-shell">
-      <div class="admin-page-badge" aria-label="Panel admina">
-        <span class="top-menu-icon" aria-hidden="true">
-          <img src="resources/icon-admin.svg" alt="">
-        </span>
-        <span>Panel admina</span>
+      <div class="admin-titlebar">
+        <div class="admin-page-badge" aria-label="Panel admina">
+          <span class="top-menu-icon" aria-hidden="true">
+            <img src="resources/icon-admin.svg" alt="">
+          </span>
+          <span>Panel admina</span>
+        </div>
+        <div class="admin-title-copy">
+          <h1>Centrum zarządzania</h1>
+          <p>Konfiguracja kalkulatora, integracji i narzędzi utrzymaniowych w jednym miejscu.</p>
+        </div>
       </div>
       <div class="admin-identity" id="adminIdentity">
         <div class="admin-identity-copy">
@@ -67,19 +73,63 @@
           <button type="button" id="adminIdentityClearBtn" hidden>Wyloguj podpis</button>
         </form>
       </div>
-      <div class="admin-tabs" role="tablist" aria-label="Sekcje panelu admina">
-        <button type="button" class="admin-tab-btn is-active" data-admin-tab-btn="logs" role="tab" aria-selected="true">Logi</button>
-        <button type="button" class="admin-tab-btn" data-admin-tab-btn="system" role="tab" aria-selected="false">System</button>
-        <button type="button" class="admin-tab-btn" data-admin-tab-btn="reports" role="tab" aria-selected="false">Zgłoszenia</button>
-        <button type="button" class="admin-tab-btn" data-admin-tab-btn="mappings" role="tab" aria-selected="false">Mapowania</button>
-        <button type="button" class="admin-tab-btn" data-admin-tab-btn="apis" role="tab" aria-selected="false">API kursów</button>
-        <button type="button" class="admin-tab-btn" data-admin-tab-btn="sources" role="tab" aria-selected="false">Źródła</button>
-        <button type="button" class="admin-tab-btn" data-admin-tab-btn="presets" role="tab" aria-selected="false">Presety</button>
-      </div>
-      <div id="adminTabDescription" class="admin-tab-description"></div>
+      <div class="admin-workspace">
+        <aside class="admin-sidebar" aria-label="Sekcje panelu admina">
+          <nav class="admin-tabs">
+            <div class="admin-nav-group">
+              <span class="admin-nav-group-title">Monitoring</span>
+              <button type="button" class="admin-tab-btn is-active" data-admin-tab-btn="logs" aria-current="page">
+                <span>Logi</span><small>Historia operacji</small>
+              </button>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="reports">
+                <span>Zgłoszenia</span><small>Aktywne i rozwiązane</small>
+              </button>
+            </div>
+            <div class="admin-nav-group">
+              <span class="admin-nav-group-title">Kalkulator</span>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="calculator-settings">
+                <span>Ustawienia domyślne</span><small>Kurs i narzut eBay</small>
+              </button>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="calculator-presets">
+                <span>Presety wyceny</span><small>Waluta, VAT i narzuty</small>
+              </button>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="base-presets">
+                <span>Presety Base</span><small>Mnożniki BaseLinkera</small>
+              </button>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="layout-presets">
+                <span>Układ strony</span><small>Widoczność i kolumny</small>
+              </button>
+            </div>
+            <div class="admin-nav-group">
+              <span class="admin-nav-group-title">Integracje i dane</span>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="apis">
+                <span>Waluty i API</span><small>Kursy oraz providery</small>
+              </button>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="sources">
+                <span>Źródła wyszukiwania</span><small>Adresy, ikony i warianty</small>
+              </button>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="mappings">
+                <span>Mapowania PN</span><small>Status bazy mapowań</small>
+              </button>
+            </div>
+            <div class="admin-nav-group">
+              <span class="admin-nav-group-title">Administracja</span>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="maintenance">
+                <span>Utrzymanie i dostęp</span><small>Backupy, HD i migracje</small>
+              </button>
+            </div>
+          </nav>
+        </aside>
 
-      <div class="admin-grid">
-        <div class="admin-card" data-admin-tab="system">
+        <main class="admin-content">
+          <header class="admin-section-header">
+            <span id="adminTabEyebrow" class="admin-section-eyebrow">Monitoring</span>
+            <h2 id="adminTabTitle">Logi</h2>
+            <p id="adminTabDescription" class="admin-tab-description"></p>
+          </header>
+
+          <div class="admin-grid">
+        <div class="admin-card" data-admin-tab="maintenance">
           <h3>Backup mapowań</h3>
           <p>Zapisz bieżące mapowania do pliku JSON. Przyda się przed większymi zmianami.</p>
           <div class="admin-actions">
@@ -89,7 +139,7 @@
           <div class="admin-meta">Ostatni backup: <span id="lastBackupValue">brak</span></div>
         </div>
 
-        <div class="admin-card" data-admin-tab="system">
+        <div class="admin-card" data-admin-tab="maintenance">
           <h3>Backup logów</h3>
           <p>Bezpieczna kopia historii działań w KV. Pozwala szybko odtworzyć logi.</p>
           <div class="backup-status">Status: <strong id="logsBackupStatus">Sprawdzam…</strong></div>
@@ -100,7 +150,7 @@
           <div class="admin-meta">Ostatni backup logów: <span id="logsBackupTs">brak</span></div>
         </div>
 
-        <div class="admin-card" data-admin-tab="system">
+        <div class="admin-card admin-card-wide" data-admin-tab="calculator-settings">
           <h3>Domyślne ustawienia kalkulatora</h3>
           <p>Ustaw domyślne źródło kursu i narzut eBay używany po wejściu na kalkulator oraz po zamknięciu opcji zaawansowanych.</p>
           <div class="default-calculator-settings">
@@ -123,7 +173,7 @@
           </div>
         </div>
 
-        <div class="admin-card admin-card-wide hd-access-card" data-admin-tab="system">
+        <div class="admin-card admin-card-wide hd-access-card" data-admin-tab="maintenance">
           <h3>Dostęp HD</h3>
           <p>Kontrola dostępu do opcji Base i STOCK na kalkulatorze.</p>
           <div class="hd-access-overview">
@@ -148,7 +198,7 @@
           <div id="hdWhitelistList" class="hd-whitelist-list"></div>
         </div>
 
-        <div class="admin-card" data-admin-tab="system">
+        <div class="admin-card" data-admin-tab="maintenance">
           <h3>Przywracanie</h3>
           <p>Wczytaj plik JSON i nadpisz mapowania w bazie.</p>
           <div class="admin-actions">
@@ -157,7 +207,7 @@
           <div class="admin-meta warn">Uwaga: przywrócenie backupu nadpisuje bieżące mapowania.</div>
         </div>
 
-        <div class="admin-card" data-admin-tab="system">
+        <div class="admin-card" data-admin-tab="maintenance">
           <h3>Aktualizacja logów</h3>
           <p>Podnieś starsze zgłoszenia do nowego formatu (kind/reportId).</p>
           <div class="admin-actions">
@@ -249,7 +299,7 @@
           </div>
         </div>
 
-        <div class="admin-card admin-card-wide" data-admin-tab="presets">
+        <div class="admin-card admin-card-wide" data-admin-tab="calculator-presets">
           <details id="calculatorPresetSection" open>
             <summary class="report-summary">
               <span>Presety kalkulatora</span>
@@ -297,7 +347,9 @@
             <div id="calculatorPresetHint" class="admin-meta">Aktywne presety pojawią się na stronie kalkulatora.</div>
             <div id="calculatorPresetList" class="calculator-preset-list"></div>
           </details>
+        </div>
 
+        <div class="admin-card admin-card-wide" data-admin-tab="base-presets">
           <details id="baseMultiplierPresetSection" open>
             <summary class="report-summary">
               <span>Presety mnożnika Base</span>
@@ -333,7 +385,9 @@
             <div id="baseMultiplierPresetHint" class="admin-meta">Aktywne presety pojawią się w karcie Base.</div>
             <div id="baseMultiplierPresetList" class="calculator-preset-list"></div>
           </details>
+        </div>
 
+        <div class="admin-card admin-card-wide" data-admin-tab="layout-presets">
           <details id="layoutPresetSection" open>
             <summary class="report-summary">
               <span>Kreator presetów układu</span>
@@ -611,6 +665,8 @@
           <div class="admin-meta">Zmiany zapisują się globalnie i są czytane przez kalkulator.</div>
         </div>
       </div>
+        </main>
+      </div>
 
       <input type="file" id="backupFileInput" accept="application/json" style="display: none;">
     </section>
@@ -810,6 +866,8 @@
     const LAYOUT_PRESET_MAX_COLUMN_WIDTH = 80;
     const adminTabButtons = Array.from(document.querySelectorAll('[data-admin-tab-btn]'));
     const adminTabCards = Array.from(document.querySelectorAll('[data-admin-tab]'));
+    const adminTabEyebrow = document.getElementById('adminTabEyebrow');
+    const adminTabTitle = document.getElementById('adminTabTitle');
     const sourceConfigSelect = document.getElementById('sourceConfigSelect');
     const sourceConfigName = document.getElementById('sourceConfigName');
     const sourceConfigIcon = document.getElementById('sourceConfigIcon');
@@ -928,14 +986,17 @@
     let hdWhitelistConfig = { version: 1, ips: [] };
     let currentHdPublicIp = '';
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
-    const ADMIN_TAB_DESCRIPTIONS = {
-      logs: 'Pełna historia operacji zapisywana przez worker.',
-      system: 'Backupy, domyślne ustawienia, dostęp HD i narzędzia utrzymaniowe.',
-      reports: 'Obsługa zgłoszeń mapowań oraz błędów działania strony.',
-      mappings: 'Szybki podgląd liczby wpisów exact/wzorce.',
-      apis: 'Konfiguracja API kursów walut używanych przez kalkulator.',
-      sources: 'Konfiguracja URL-i wyszukiwania, ikon i wariantów źródeł.',
-      presets: 'Globalne presety kalkulatora i układu widoczne dla użytkowników.'
+    const ADMIN_TAB_META = {
+      logs: { group: 'Monitoring', title: 'Logi', description: 'Pełna historia operacji zapisywana przez worker, z wyszukiwaniem i czytelnym podglądem zdarzeń.' },
+      reports: { group: 'Monitoring', title: 'Zgłoszenia', description: 'Obsługa aktywnych, wstrzymanych i rozwiązanych zgłoszeń mapowań oraz błędów strony.' },
+      'calculator-settings': { group: 'Kalkulator', title: 'Ustawienia domyślne', description: 'Domyślne źródło kursu i narzut eBay używane przez kalkulator.' },
+      'calculator-presets': { group: 'Kalkulator', title: 'Presety wyceny', description: 'Szybkie zestawy waluty, VAT-u, narzutu eBay i narzutu sprzedaży.' },
+      'base-presets': { group: 'Kalkulator', title: 'Presety Base', description: 'Lista aktualnych mnożników Base dostępnych bezpośrednio w kalkulatorze.' },
+      'layout-presets': { group: 'Kalkulator', title: 'Układ strony', description: 'Globalny układ sekcji, kolumn, szerokości i widoczności elementów kalkulatora.' },
+      apis: { group: 'Integracje i dane', title: 'Waluty i API', description: 'Waluty, kursy awaryjne oraz konfiguracja providerów kursów.' },
+      sources: { group: 'Integracje i dane', title: 'Źródła wyszukiwania', description: 'Adresy URL, ikony, znaczniki i warianty źródeł wyszukiwania ofert.' },
+      mappings: { group: 'Integracje i dane', title: 'Mapowania PN', description: 'Szybki podgląd stanu bazy wpisów exact i wzorców.' },
+      maintenance: { group: 'Administracja', title: 'Utrzymanie i dostęp', description: 'Backupy, przywracanie danych, dostęp HD oraz migracje techniczne.' }
     };
     const LAYOUT_SECTION_SCHEMA = [
       { id: 'calc-presets', label: 'Presety waluta/VAT', column: 'calc' },
@@ -1883,14 +1944,17 @@
         const isActive = btn.getAttribute('data-admin-tab-btn') === validTab;
         btn.classList.toggle('is-active', isActive);
         btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        if (isActive) btn.setAttribute('aria-current', 'page');
+        else btn.removeAttribute('aria-current');
       });
       adminTabCards.forEach((card) => {
         const cardTab = card.getAttribute('data-admin-tab') || 'logs';
         card.style.display = cardTab === validTab ? '' : 'none';
       });
-      if (adminTabDescription) {
-        adminTabDescription.textContent = ADMIN_TAB_DESCRIPTIONS[validTab] || '';
-      }
+      const meta = ADMIN_TAB_META[validTab] || ADMIN_TAB_META.logs;
+      if (adminTabEyebrow) adminTabEyebrow.textContent = meta.group;
+      if (adminTabTitle) adminTabTitle.textContent = meta.title;
+      if (adminTabDescription) adminTabDescription.textContent = meta.description;
       localStorage.setItem(ADMIN_ACTIVE_TAB_KEY, validTab);
     }
 
@@ -1903,7 +1967,8 @@
         });
       });
       const savedRaw = localStorage.getItem(ADMIN_ACTIVE_TAB_KEY) || 'logs';
-      const saved = savedRaw === 'operations' ? 'logs' : savedRaw;
+      const legacyTabs = { operations: 'logs', system: 'maintenance', presets: 'calculator-presets' };
+      const saved = legacyTabs[savedRaw] || savedRaw;
       applyAdminTab(saved);
     }
 
