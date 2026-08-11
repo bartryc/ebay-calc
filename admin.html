@@ -1240,7 +1240,9 @@
 
     function showWorkerUsageUnavailable(message, { online = false, limited = false } = {}) {
       const snapshot = readWorkerUsageSnapshot();
-      renderWorkerUsageMetrics(snapshot?.hasTelemetry ? snapshot : null, { stale: !!snapshot?.hasTelemetry });
+      const hasSnapshot = !!snapshot?.hasTelemetry;
+      const displayUsage = hasSnapshot ? snapshot : normalizeWorkerUsage({ plan: 'free' });
+      renderWorkerUsageMetrics(displayUsage, { stale: hasSnapshot });
       if (workerUsageNotice) workerUsageNotice.textContent = message;
       if (limited) setWorkerUsageState('Możliwy limit', 'critical');
       else if (online) setWorkerUsageState('Worker online · brak telemetryki', 'neutral');
@@ -1259,10 +1261,20 @@
           cache: 'no-store'
         });
         const responseText = await response.text().catch(() => '');
+        let errorPayload = null;
+        try {
+          errorPayload = responseText ? JSON.parse(responseText) : null;
+        } catch (_error) {
+          errorPayload = null;
+        }
         const isLimitError = response.status === 429 || /(?:error\s*1027|daily request limit|limit.*exceed)/i.test(responseText);
         if (!response.ok) {
           if (isLimitError) {
             showWorkerUsageUnavailable('Worker zwrócił informację o limicie lub zbyt wielu żądaniach. Aplikacja może przestać zapisywać dane do czasu resetu.', { limited: true });
+          } else if (errorPayload?.code === 'USAGE_NOT_CONFIGURED') {
+            showWorkerUsageUnavailable(`Worker ma endpoint telemetryczny, ale brakuje konfiguracji Cloudflare Analytics. ${errorPayload.error || ''}`.trim(), { online: true });
+          } else if (errorPayload?.code === 'USAGE_ANALYTICS_ERROR' || errorPayload?.code === 'USAGE_ANALYTICS_EMPTY') {
+            showWorkerUsageUnavailable(`Worker działa, ale Cloudflare Analytics odrzuciło zapytanie. ${errorPayload.error || 'Sprawdź token oraz identyfikatory konta, workera i KV.'}`.trim(), { online: true });
           } else if (response.status === 404 || response.status === 405) {
             showWorkerUsageUnavailable('Worker odpowiada, ale nie ma jeszcze endpointu /usage. Widoczne progi są tylko limitem referencyjnym planu Free — zużycie nie jest liczone jako zero.', { online: true });
           } else {
@@ -1278,7 +1290,7 @@
         }
         const usage = normalizeWorkerUsage(payload);
         if (!usage.hasTelemetry) {
-          showWorkerUsageUnavailable('Endpoint /usage odpowiada, ale nie zwrócił liczników w obsługiwanym formacie. Nie traktuję brakujących wartości jako zera.', { online: true });
+          showWorkerUsageUnavailable('Worker działa, ale wdrożony endpoint /usage nie udostępnia jeszcze statystyk. Pokazane wartości graniczne są limitami referencyjnymi planu Free, a kreska oznacza brak pomiaru — nie zerowe zużycie.', { online: true });
           return;
         }
         const highestRatio = renderWorkerUsageMetrics(usage);
