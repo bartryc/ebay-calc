@@ -211,7 +211,7 @@
 
       <aside class="info-card">
         <div class="info-column-actions">
-          <button type="button" class="report-quick-btn" id="reportMappingBtn">⚑ Zgłoś</button>
+          <button type="button" class="report-quick-btn" id="reportMappingBtn">⚑ Zgłoś problem</button>
         </div>
         <div id="infoLayoutContainer">
         <div class="info-card search-card layout-item" data-layout-item="search-card">
@@ -352,22 +352,48 @@
   <div id="reportModal" class="mapping-modal" style="display: none;">
     <div class="mapping-modal-card report-modal-card" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
       <div class="mapping-modal-header">
-        <strong id="reportModalTitle">Zgłoś błędne mapowanie</strong>
+        <strong id="reportModalTitle">Zgłoś problem lub pomysł</strong>
         <button type="button" id="reportModalClose" aria-label="Zamknij">×</button>
       </div>
         <div class="mapping-modal-body">
-          <div class="report-meta" id="reportModalInfo"></div>
-          <label for="reportReason">Uwagi / powód</label>
-          <textarea id="reportReason" rows="3" maxlength="10000" placeholder="Np. powinno być Dell, nie Mellanox"></textarea>
-          <label class="report-checkbox">
-            <input type="checkbox" id="reportNonMapping">
-            <span>Bug strony</span>
-          </label>
+          <div class="report-primary-form">
+            <p class="report-form-intro">Opisz błąd działania, propozycję poprawki albo pomysł na nową funkcję.</p>
+            <label for="reportCategory">Rodzaj zgłoszenia</label>
+            <select id="reportCategory">
+              <option value="bug" selected>Błąd działania strony</option>
+              <option value="improvement">Propozycja poprawki</option>
+              <option value="feature">Pomysł na funkcję</option>
+              <option value="other">Inne</option>
+            </select>
+            <label for="reportTitle">Krótki tytuł</label>
+            <input type="text" id="reportTitle" maxlength="120" placeholder="Np. przełącznik VAT nie aktualizuje ceny">
+            <label for="reportReason">Opis</label>
+            <textarea id="reportReason" rows="4" maxlength="10000" placeholder="Co się stało, czego oczekiwałeś albo co warto poprawić?"></textarea>
+            <details class="report-context-details">
+              <summary>Informacje techniczne dołączane do zgłoszenia</summary>
+              <div id="reportTechnicalInfo" class="report-technical-info"></div>
+            </details>
+          </div>
+
+          <details id="reportMappingSection" class="report-mapping-details">
+            <summary>
+              <span>Błędny producent lub mapowanie PN?</span>
+              <small>Otwórz osobny formularz mapowania</small>
+            </summary>
+            <div class="report-mapping-form">
+              <div class="report-meta" id="reportModalInfo"></div>
+              <label for="reportCorrectVendor">Poprawny producent (jeśli znasz)</label>
+              <input type="text" id="reportCorrectVendor" maxlength="120" placeholder="Np. Dell">
+              <label for="reportMappingReason">Dodatkowa uwaga</label>
+              <textarea id="reportMappingReason" rows="3" maxlength="10000" placeholder="Opcjonalnie: opisz, co jest błędne"></textarea>
+              <button type="button" id="reportMappingSubmit">Wyślij błąd mapowania</button>
+            </div>
+          </details>
         </div>
       <div class="mapping-modal-actions">
         <button type="button" id="reportModalCancel">Anuluj</button>
         <button type="button" id="reportPendingFlushBtn" hidden>Wyślij zaległe</button>
-        <button type="button" id="reportModalSubmit">Wyślij zgłoszenie</button>
+        <button type="button" id="reportModalSubmit">Wyślij problem lub pomysł</button>
       </div>
     </div>
   </div>

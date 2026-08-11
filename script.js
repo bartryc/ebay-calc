@@ -2172,22 +2172,53 @@ function getDefaultSearchSourcesConfig() {
   };
 }
 
-function showMainToast(message, variant = 'info', durationMs) {
+function getResponsiveToastLimit() {
+  const viewportWidth = Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1024;
+  if (viewportWidth <= 420) return 2;
+  if (viewportWidth <= 760) return 3;
+  return 6;
+}
+
+function showMainToast(message, variant = 'info', durationMs, options = {}) {
   if (!mainToastStack) return;
-  const maxToasts = 6;
+  const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
+  const ms = hasTiming ? Math.round(durationMs) : 0;
+  const displayText = hasTiming ? `${message || ''} (${ms} ms)` : `${message || ''}`;
+  const toastKey = String(options?.dedupeKey || '').trim();
+  const maxToasts = getResponsiveToastLimit();
+  while (mainToastStack.children.length > maxToasts) {
+    mainToastStack.firstElementChild?.remove();
+  }
+  const existingToast = toastKey
+    ? Array.from(mainToastStack.children).find((item) => item.dataset.toastKey === toastKey)
+    : null;
+  if (existingToast) {
+    const existingText = existingToast.querySelector('.mapping-toast-text');
+    if (existingText) existingText.textContent = displayText;
+    clearTimeout(existingToast._toastCloseTimer);
+    clearTimeout(existingToast._toastRemoveTimer);
+    clearTimeout(existingToast._toastRefreshTimer);
+    existingToast.classList.add('is-visible');
+    existingToast.classList.remove('is-refreshed');
+    void existingToast.offsetWidth;
+    existingToast.classList.add('is-refreshed');
+    mainToastStack.append(existingToast);
+    existingToast._toastRefreshTimer = setTimeout(() => existingToast.classList.remove('is-refreshed'), 480);
+    existingToast._toastCloseTimer = setTimeout(existingToast._closeToast, 6000);
+    return existingToast;
+  }
   while (mainToastStack.children.length >= maxToasts) {
     mainToastStack.firstElementChild?.remove();
   }
   const toast = document.createElement('div');
   toast.className = 'mapping-toast';
+  if (toastKey) toast.dataset.toastKey = toastKey;
   if (variant === 'warn') toast.classList.add('is-warn');
   if (variant === 'info') toast.classList.add('is-info');
   if (variant === 'success' || variant === 'ok') toast.classList.add('is-ok');
-  const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
-  const ms = hasTiming ? Math.round(durationMs) : 0;
   const toastText = document.createElement('span');
   toastText.className = 'mapping-toast-text';
-  toastText.textContent = hasTiming ? `${message || ''} (${ms} ms)` : `${message || ''}`;
+  toastText.textContent = displayText;
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'mapping-toast-close';
@@ -2198,15 +2229,16 @@ function showMainToast(message, variant = 'info', durationMs) {
   requestAnimationFrame(() => {
     toast.classList.add('is-visible');
   });
-  let isClosed = false;
   const closeToast = () => {
-    if (isClosed) return;
-    isClosed = true;
+    clearTimeout(toast._toastCloseTimer);
+    clearTimeout(toast._toastRefreshTimer);
     toast.classList.remove('is-visible');
-    setTimeout(() => toast.remove(), 200);
+    toast._toastRemoveTimer = setTimeout(() => toast.remove(), 200);
   };
+  toast._closeToast = closeToast;
   closeBtn.addEventListener('click', closeToast);
-  setTimeout(closeToast, 6000);
+  toast._toastCloseTimer = setTimeout(closeToast, 6000);
+  return toast;
 }
 
 function logActivity(type, meta = {}) {
@@ -3004,7 +3036,7 @@ function syncFields(source) {
       });
       const { pricing, skip } = calculatePrimaryFromCurrentPricing(sourceToSync, primaryState, nextVatRate);
       if (!pricing) {
-        showResultError(resultDiv, 'Wpisz kwotę netto, brutto lub eBay, aby przeliczyć cenę z nową stawką VAT.');
+        clearResultMessage(resultDiv);
         updateBaseMultiplier();
         updateMarkupCalculations({ syncFields: false });
         updateSummaryMetrics();
@@ -3853,7 +3885,9 @@ if (baseMultiplierPresetButtons) {
     refreshCurrentBaseMultiplierPricing();
     window.CalculatorUI.flashRecalculatedField(currentBaseMultiplierEl);
     addHistoryEntry('currentBaseMultiplier');
-    showMainToast(`Ustawiono mnożnik Base: ${preset.label}.`, 'success');
+    showMainToast(`Ustawiono mnożnik Base: ${preset.label}.`, 'success', undefined, {
+      dedupeKey: `base-multiplier-preset:${preset.id}`
+    });
   });
 }
 
@@ -4082,8 +4116,14 @@ if (partNumberInput) {
   const reportModalSubmit = document.getElementById('reportModalSubmit');
   const reportPendingFlushBtn = document.getElementById('reportPendingFlushBtn');
   const reportModalInfo = document.getElementById('reportModalInfo');
+  const reportCategory = document.getElementById('reportCategory');
+  const reportTitle = document.getElementById('reportTitle');
   const reportReason = document.getElementById('reportReason');
-  const reportNonMapping = document.getElementById('reportNonMapping');
+  const reportTechnicalInfo = document.getElementById('reportTechnicalInfo');
+  const reportMappingSection = document.getElementById('reportMappingSection');
+  const reportCorrectVendor = document.getElementById('reportCorrectVendor');
+  const reportMappingReason = document.getElementById('reportMappingReason');
+  const reportMappingSubmit = document.getElementById('reportMappingSubmit');
   const searchClearBtn = document.getElementById('searchClearBtn');
   const searchSourcesContainer = document.getElementById('searchSources');
   const sourceInputMap = new Map();
@@ -4770,12 +4810,66 @@ if (partNumberInput) {
     reportPendingFlushBtn.textContent = pendingCount > 0 ? `Wyślij zaległe (${pendingCount})` : 'Wyślij zaległe';
   }
 
+  function createReportId() {
+    return `R-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  }
+
+  function getReportTechnicalContext() {
+    return {
+      page: 'calculator',
+      path: window.location?.pathname || '',
+      viewport: `${window.innerWidth || 0}×${window.innerHeight || 0}`,
+      userAgent: navigator.userAgent || '',
+      currency: document.getElementById('currency')?.value || '',
+      vat: document.getElementById('vatRate')?.value || '',
+      purchaseMode: getPurchaseAmountMode(),
+      saleMode: getMarkupSaleMode(),
+      advancedOptions: !!advancedOptionsToggle?.checked,
+      basePricing: !!document.getElementById('useCurrentBaseMultiplierToggle')?.checked
+    };
+  }
+
+  function renderReportTechnicalContext(context) {
+    if (!reportTechnicalInfo) return;
+    reportTechnicalInfo.innerHTML = `
+      <div><strong>Wersja:</strong> ${escapeHtml(appVersion || '—')}</div>
+      <div><strong>Widok:</strong> ${escapeHtml(context.viewport || '—')} · ${escapeHtml(context.currency || '—')} · VAT ${escapeHtml(context.vat || '—')}%</div>
+      <div><strong>Tryby:</strong> zakup ${escapeHtml(context.purchaseMode)} · sprzedaż ${escapeHtml(context.saleMode)} · Base ${context.basePricing ? 'włączony' : 'wyłączony'}</div>
+    `;
+  }
+
+  async function submitOrQueueReport(payload, submitButton, successMessage) {
+    if (!submitButton) return;
+    submitButton.disabled = true;
+    try {
+      await sendReportPayload(payload);
+      showMainToast(successMessage, 'ok');
+      closeReportModal();
+    } catch (error) {
+      const queued = queueReportPayload(payload);
+      const pendingCount = loadPendingReports().length;
+      if (queued) {
+        showMainToast(`Nie udało się wysłać teraz. Zapisano lokalnie do ponowienia (${pendingCount}).`, 'warn');
+        updatePendingReportButton();
+      } else {
+        showMainToast('Nie udało się wysłać zgłoszenia ani zapisać go lokalnie.', 'warn');
+      }
+      closeReportModal();
+    } finally {
+      submitButton.disabled = false;
+    }
+  }
+
   const closeReportModal = () => {
     if (!reportModal) return;
     reportModal.style.display = 'none';
+    if (reportCategory) reportCategory.value = 'bug';
+    if (reportTitle) reportTitle.value = '';
     if (reportReason) reportReason.value = '';
-    if (reportNonMapping) reportNonMapping.checked = false;
-    // no dropdown to reset
+    if (reportCorrectVendor) reportCorrectVendor.value = '';
+    if (reportMappingReason) reportMappingReason.value = '';
+    if (reportMappingSection) reportMappingSection.open = false;
+    if (reportModalSubmit) reportModalSubmit.hidden = false;
   };
   const openReportModal = () => {
     if (!reportModal) return;
@@ -4783,18 +4877,20 @@ if (partNumberInput) {
     const vendor = partNumberInput.dataset.suggestionVendor || '';
     const source = partNumberInput.dataset.suggestionSource || '';
     const detail = partNumberInput.dataset.suggestionDetail || '';
+    const technicalContext = getReportTechnicalContext();
+    renderReportTechnicalContext(technicalContext);
     if (reportModalInfo) {
       const pendingCount = loadPendingReports().length;
       reportModalInfo.innerHTML = `
-        <div><strong>PN:</strong> ${query || '—'}</div>
-        <div><strong>Sugestia:</strong> ${vendor || '—'} ${detail ? `(${detail})` : ''}</div>
-        <div><strong>Źródło:</strong> ${source || '—'}</div>
+        <div><strong>PN:</strong> ${escapeHtml(query || '—')}</div>
+        <div><strong>Obecne rozpoznanie:</strong> ${escapeHtml(vendor || '—')} ${detail ? `(${escapeHtml(detail)})` : ''}</div>
+        <div><strong>Źródło:</strong> ${escapeHtml(source || '—')}</div>
         ${pendingCount ? `<div><strong>Zaległe lokalnie:</strong> ${pendingCount}</div>` : ''}
       `;
     }
     updatePendingReportButton();
     reportModal.style.display = 'flex';
-    if (reportReason) reportReason.focus();
+    if (reportTitle) reportTitle.focus();
   };
 
   if (reportMappingBtn) {
@@ -4821,50 +4917,66 @@ if (partNumberInput) {
   }
   if (reportModalSubmit) {
     reportModalSubmit.addEventListener('click', async () => {
-      const query = partNumberInput.value.trim();
-      const vendor = partNumberInput.dataset.suggestionVendor || '';
-      const source = partNumberInput.dataset.suggestionSource || '';
-      const detail = partNumberInput.dataset.suggestionDetail || '';
+      const category = reportCategory?.value || 'bug';
+      const title = reportTitle?.value?.trim() || '';
       const reason = reportReason?.value?.trim() || '';
-      const nonMapping = !!(reportNonMapping && reportNonMapping.checked);
-      if (nonMapping) {
-        if (!reason) {
-          showMainToast('Dodaj krótki opis problemu.', 'warn');
-          return;
-        }
-      } else if (!query || !vendor) {
-        showMainToast('Brak danych do zgłoszenia.', 'warn');
+      if (!title) {
+        showMainToast('Dodaj krótki tytuł zgłoszenia.', 'warn');
+        reportTitle?.focus();
         return;
       }
-      const reportId = `R-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-      const payload = {
+      if (!reason) {
+        showMainToast('Opisz problem lub proponowaną zmianę.', 'warn');
+        reportReason?.focus();
+        return;
+      }
+      const payload = window.CalculatorUI.buildAppReportPayload({
+        title,
+        reason,
+        category,
+        reportId: createReportId(),
+        appVersion,
+        context: getReportTechnicalContext()
+      });
+      await submitOrQueueReport(payload, reportModalSubmit, 'Zgłoszenie dotyczące aplikacji zostało wysłane.');
+    });
+  }
+
+  if (reportMappingSection) {
+    reportMappingSection.addEventListener('toggle', () => {
+      if (reportModalSubmit) reportModalSubmit.hidden = reportMappingSection.open;
+      if (reportMappingSection.open) reportCorrectVendor?.focus();
+    });
+  }
+
+  if (reportMappingSubmit) {
+    reportMappingSubmit.addEventListener('click', async () => {
+      const query = partNumberInput.value.trim();
+      const detectedVendor = partNumberInput.dataset.suggestionVendor || '';
+      const source = partNumberInput.dataset.suggestionSource || '';
+      const detail = partNumberInput.dataset.suggestionDetail || '';
+      const correctVendor = reportCorrectVendor?.value?.trim() || '';
+      const reason = reportMappingReason?.value?.trim() || '';
+      if (!query) {
+        showMainToast('Najpierw wpisz PN w wyszukiwarce.', 'warn');
+        return;
+      }
+      if (!correctVendor && !reason) {
+        showMainToast('Podaj poprawnego producenta albo opisz błąd mapowania.', 'warn');
+        reportMappingReason?.focus();
+        return;
+      }
+      const payload = window.CalculatorUI.buildMappingReportPayload({
         query,
-        suggestedVendor: vendor,
+        correctVendor,
+        detectedVendor,
         source,
         detail,
         reason,
-        kind: nonMapping ? 'ui' : 'mapping',
-        reportId,
+        reportId: createReportId(),
         appVersion
-      };
-      reportModalSubmit.disabled = true;
-      try {
-        await sendReportPayload(payload);
-        showMainToast('Zgłoszenie wysłane do admina.', 'ok');
-        closeReportModal();
-      } catch (error) {
-        const queued = queueReportPayload(payload);
-        const pendingCount = loadPendingReports().length;
-        if (queued) {
-          showMainToast(`Nie udało się wysłać teraz. Zapisano lokalnie do ponowienia (${pendingCount}).`, 'warn');
-          updatePendingReportButton();
-        } else {
-          showMainToast('Nie udało się wysłać zgłoszenia ani zapisać go lokalnie.', 'warn');
-        }
-        closeReportModal();
-      } finally {
-        reportModalSubmit.disabled = false;
-      }
+      });
+      await submitOrQueueReport(payload, reportMappingSubmit, 'Błąd mapowania został wysłany.');
     });
   }
 }

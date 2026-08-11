@@ -63,6 +63,44 @@
     };
   }
 
+  function normalizeReportCategory(value) {
+    const category = String(value || '').trim().toLowerCase();
+    return ['bug', 'improvement', 'feature', 'other'].includes(category) ? category : 'bug';
+  }
+
+  function buildAppReportPayload(input = {}) {
+    const title = String(input.title || '').trim().slice(0, 120);
+    const reason = String(input.reason || '').trim().slice(0, 10000);
+    if (!title || !reason) return null;
+    return {
+      title,
+      reason,
+      category: normalizeReportCategory(input.category),
+      kind: 'ui',
+      reportId: String(input.reportId || ''),
+      appVersion: String(input.appVersion || ''),
+      context: input.context && typeof input.context === 'object' ? { ...input.context } : {}
+    };
+  }
+
+  function buildMappingReportPayload(input = {}) {
+    const query = String(input.query || '').trim();
+    const correctVendor = String(input.correctVendor || '').trim().slice(0, 120);
+    const reason = String(input.reason || '').trim().slice(0, 10000);
+    if (!query || (!correctVendor && !reason)) return null;
+    return {
+      query,
+      suggestedVendor: correctVendor,
+      detectedVendor: String(input.detectedVendor || '').trim().slice(0, 120),
+      source: String(input.source || '').trim(),
+      detail: String(input.detail || '').trim(),
+      reason,
+      kind: 'mapping',
+      reportId: String(input.reportId || ''),
+      appVersion: String(input.appVersion || '')
+    };
+  }
+
   function readPrimaryState(doc, getCommissionRate) {
     const commissionRaw = typeof getCommissionRate === 'function' ? getCommissionRate() : NaN;
     return {
@@ -161,6 +199,9 @@
     formatBaseMultiplierPresetValue,
     normalizeBaseMultiplierPreset,
     normalizeBaseMultiplierPresetsConfig,
+    normalizeReportCategory,
+    buildAppReportPayload,
+    buildMappingReportPayload,
     readPrimaryState,
     clearRecalculatedFields,
     flashRecalculatedField,

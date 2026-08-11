@@ -104,5 +104,35 @@
   equal(basePresets.presets[1].id, 'de-2', 'deduplicate Base preset ids');
   equal(basePresets.presets[1].enabled, false, 'keep disabled Base preset');
 
+  equal(ui.normalizeReportCategory('feature'), 'feature', 'keep valid report category');
+  equal(ui.normalizeReportCategory('unknown'), 'bug', 'fallback invalid report category');
+  const appReport = ui.buildAppReportPayload({
+    title: '  Problem z VAT  ',
+    reason: '  Pole nie przelicza ceny.  ',
+    category: 'improvement',
+    reportId: 'R-1',
+    appVersion: '1.2.3',
+    context: { currency: 'EUR' }
+  });
+  equal(appReport.title, 'Problem z VAT', 'trim app report title');
+  equal(appReport.reason, 'Pole nie przelicza ceny.', 'trim app report description');
+  equal(appReport.category, 'improvement', 'app report category');
+  equal(appReport.kind, 'ui', 'app report kind');
+  equal(appReport.context.currency, 'EUR', 'app report context');
+  equal(ui.buildAppReportPayload({ title: '', reason: 'Opis' }), null, 'reject app report without title');
+
+  const mappingReport = ui.buildMappingReportPayload({
+    query: ' ABC123 ',
+    correctVendor: ' Dell ',
+    detectedVendor: 'HPE',
+    source: 'exact',
+    reportId: 'R-2'
+  });
+  equal(mappingReport.query, 'ABC123', 'trim mapping report query');
+  equal(mappingReport.suggestedVendor, 'Dell', 'mapping report correct vendor');
+  equal(mappingReport.detectedVendor, 'HPE', 'mapping report detected vendor');
+  equal(mappingReport.kind, 'mapping', 'mapping report kind');
+  equal(ui.buildMappingReportPayload({ query: 'ABC123' }), null, 'mapping report needs correction or reason');
+
   root.__calculatorUiTestResult = 'ok';
 })(typeof globalThis !== 'undefined' ? globalThis : window);

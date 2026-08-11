@@ -1353,6 +1353,126 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
   color: var(--ink);
 }
 
+.report-modal-card {
+  width: min(100%, 640px);
+  max-width: 640px;
+  max-height: min(90vh, 820px);
+  overflow-y: auto;
+}
+
+.report-primary-form,
+.report-mapping-form {
+  display: grid;
+  gap: 8px;
+}
+
+.report-form-intro {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.report-primary-form input,
+.report-primary-form select,
+.report-mapping-form input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-2);
+  color: var(--ink);
+  font: inherit;
+}
+
+.report-context-details {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.report-context-details summary,
+.report-mapping-details > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.report-technical-info {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--card-2);
+}
+
+.report-mapping-details {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-2);
+}
+
+.report-mapping-details > summary {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  color: var(--ink);
+  list-style: none;
+}
+
+.report-mapping-details > summary::-webkit-details-marker,
+.report-mapping-admin-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.report-mapping-details > summary::after {
+  content: 'Rozwiń';
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--accent);
+  font-size: 0.76rem;
+}
+
+.report-mapping-details[open] > summary::after {
+  content: 'Zwiń';
+}
+
+.report-mapping-details > summary small {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.report-mapping-form {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.report-mapping-form button {
+  justify-self: start;
+  margin-top: 3px;
+  padding: 9px 14px;
+  border: 1px solid rgba(15, 91, 255, 0.4);
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.report-modal-card .mapping-modal-actions {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#reportModalSubmit {
+  border-color: rgba(15, 91, 255, 0.45);
+  background: var(--accent);
+  color: #fff;
+}
+
 .search-card input[type="text"]:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(15, 91, 255, 0.12);
@@ -2057,6 +2177,181 @@ body.dark-mode .admin-identity {
 
 .admin-card-wide {
   grid-column: 1 / -1;
+}
+
+.worker-usage-card {
+  display: grid;
+  gap: 14px;
+}
+
+.worker-usage-header,
+.worker-usage-header-actions,
+.worker-usage-metric-head,
+.worker-usage-footer {
+  display: flex;
+  align-items: center;
+}
+
+.worker-usage-header {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.worker-usage-header h3,
+.worker-usage-header p {
+  margin-bottom: 0;
+}
+
+.worker-usage-header p {
+  margin-top: 5px;
+}
+
+.worker-usage-header-actions {
+  flex: 0 0 auto;
+  gap: 9px;
+}
+
+.worker-usage-header-actions button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-2);
+  color: var(--ink);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.worker-usage-header-actions button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.worker-usage-state {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.worker-usage-state.is-ok {
+  border-color: color-mix(in srgb, var(--success) 42%, var(--border));
+  background: color-mix(in srgb, var(--card) 84%, var(--success) 16%);
+  color: var(--success);
+}
+
+.worker-usage-state.is-warn,
+.worker-usage-state.is-critical {
+  border-color: rgba(209, 59, 47, 0.35);
+  background: rgba(209, 59, 47, 0.1);
+  color: #b92f25;
+}
+
+.worker-usage-notice {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.worker-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.worker-usage-metric {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 92%, var(--card-2));
+}
+
+.worker-usage-metric:first-child {
+  grid-column: 1 / -1;
+}
+
+.worker-usage-metric-head {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.worker-usage-metric-head span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.worker-usage-metric-head strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.worker-usage-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.worker-usage-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.worker-usage-track span.is-ok {
+  background: var(--success);
+}
+
+.worker-usage-track span.is-warn {
+  background: #d89016;
+}
+
+.worker-usage-track span.is-critical {
+  background: #d13b2f;
+}
+
+.worker-usage-metric small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.worker-usage-footer {
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.worker-usage-footer strong {
+  color: var(--ink);
+}
+
+.worker-usage-footer a {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.worker-usage-footer a:hover {
+  text-decoration: underline;
 }
 
 .admin-actions {
@@ -3693,6 +3988,20 @@ body.dark-mode .admin-kpi {
   transform: translateY(0);
 }
 
+.mapping-toast.is-refreshed {
+  animation: toast-refresh 460ms ease;
+}
+
+@keyframes toast-refresh {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  42% {
+    transform: translateY(-3px) scale(1.025);
+    box-shadow: 0 10px 26px rgba(20, 88, 245, 0.28);
+  }
+}
+
 .mapping-toast.is-warn {
   background: rgba(209, 59, 47, 0.9);
   border-color: rgba(209, 59, 47, 0.6);
@@ -3790,7 +4099,38 @@ body.dark-mode .admin-kpi {
 
 .report-list {
   display: grid;
-  gap: 14px;
+  gap: 18px;
+}
+
+.report-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.report-overview-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.report-overview-item strong {
+  color: var(--ink);
+  font-size: 1.2rem;
+}
+
+.report-overview-ui {
+  border-color: rgba(15, 91, 255, 0.3);
+  background: color-mix(in srgb, var(--card-2) 88%, var(--accent) 12%);
 }
 
 .report-summary {
@@ -3921,6 +4261,100 @@ body.dark-mode .report-item.is-on-hold .report-kind {
 .report-section {
   display: grid;
   gap: 12px;
+}
+
+.report-ui-section {
+  padding: 14px;
+  border: 1px solid rgba(15, 91, 255, 0.28);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 94%, var(--accent) 6%);
+}
+
+.report-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink);
+}
+
+.report-section-heading h4 {
+  margin: 2px 0 0;
+  font-size: 1rem;
+}
+
+.report-section-kicker {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.report-mapping-admin-section {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-2);
+  overflow: hidden;
+}
+
+.report-mapping-admin-section > summary {
+  padding: 13px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.report-mapping-admin-section > summary::before {
+  content: '▸';
+  margin-right: 8px;
+  color: var(--muted);
+}
+
+.report-mapping-admin-section[open] > summary::before {
+  content: '▾';
+}
+
+.report-mapping-admin-section > summary > div {
+  flex: 1;
+}
+
+.report-mapping-admin-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.report-empty-state {
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.86rem;
+}
+
+.report-context-admin {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.report-context-admin summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.report-context-admin > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 7px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--card);
 }
 
 .report-section-title {
@@ -4439,6 +4873,29 @@ body.dark-mode .report-item.is-on-hold .report-kind {
 }
 
 @media (max-width: 700px) {
+  .worker-usage-header,
+  .worker-usage-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .worker-usage-footer a {
+    margin-left: 0;
+  }
+
+  .worker-usage-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .worker-usage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .worker-usage-metric:first-child {
+    grid-column: auto;
+  }
+
   .log-pretty-heading {
     flex-direction: column;
   }
@@ -6943,6 +7400,37 @@ body[data-page-title="Admin"] .layout-preset-row {
   }
 }
 
+@media (max-width: 700px) {
+  body[data-page-title="Kalkulator"] .report-modal-card {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  body[data-page-title="Kalkulator"] .report-modal-card .mapping-modal-actions button {
+    flex: 1 1 140px;
+  }
+
+  body[data-page-title="Admin"] .report-overview {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page-title="Admin"] .report-header,
+  body[data-page-title="Admin"] .report-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body[data-page-title="Admin"] .report-header-meta {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  body[data-page-title="Admin"] .report-meta-row {
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 900px) {
   body[data-page-title="Admin"] .admin-grid {
     grid-template-columns: 1fr;
@@ -7499,6 +7987,66 @@ body[data-page-title="Kalkulator"] #markupFromSaleBox {
 
   body[data-page-title="Kalkulator"] #markupFromSaleBox {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  body[data-page-title="Admin"] .admin-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  body[data-page-title="Admin"] .admin-sidebar {
+    position: sticky;
+    top: 4px;
+    z-index: 80;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  body[data-page-title="Admin"] .admin-tabs {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    padding: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+    scrollbar-width: thin;
+  }
+
+  body[data-page-title="Admin"] .admin-nav-group {
+    display: contents;
+  }
+
+  body[data-page-title="Admin"] .admin-nav-group + .admin-nav-group {
+    padding: 0;
+    border: 0;
+  }
+
+  body[data-page-title="Admin"] .admin-nav-group-title,
+  body[data-page-title="Admin"] .admin-tab-btn small {
+    display: none;
+  }
+
+  body[data-page-title="Admin"] .admin-tab-btn {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 36px;
+    padding: 6px 11px;
+    scroll-snap-align: start;
+  }
+
+  body[data-page-title="Admin"] .admin-tab-btn span {
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  body[data-page-title="Admin"] .admin-section-header {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
   }
 }
 

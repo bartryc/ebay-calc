@@ -327,7 +327,8 @@
 
     function showToast(message, variant, durationMs) {
       if (!toastStack) return;
-      const maxToasts = 6;
+      const viewportWidth = Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1024;
+      const maxToasts = viewportWidth <= 420 ? 2 : viewportWidth <= 760 ? 3 : 6;
       while (toastStack.children.length >= maxToasts) {
         toastStack.firstElementChild?.remove();
       }

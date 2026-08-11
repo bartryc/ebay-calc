@@ -84,6 +84,9 @@
               <button type="button" class="admin-tab-btn" data-admin-tab-btn="reports">
                 <span>Zgłoszenia</span><small>Aktywne i rozwiązane</small>
               </button>
+              <button type="button" class="admin-tab-btn" data-admin-tab-btn="worker-usage">
+                <span>Worker i KV</span><small>Stan usługi i limity dobowe</small>
+              </button>
             </div>
             <div class="admin-nav-group">
               <span class="admin-nav-group-title">Kalkulator</span>
@@ -129,6 +132,54 @@
           </header>
 
           <div class="admin-grid">
+        <div class="admin-card admin-card-wide worker-usage-card" data-admin-tab="worker-usage">
+          <div class="worker-usage-header">
+            <div>
+              <h3>Wykorzystanie Cloudflare</h3>
+              <p>Rzeczywiste liczniki są pobierane z chronionego endpointu <code>/usage</code>. Limity poniżej dotyczą planu Workers Free.</p>
+            </div>
+            <div class="worker-usage-header-actions">
+              <span id="workerUsageState" class="worker-usage-state is-loading">Sprawdzam…</span>
+              <button type="button" id="workerUsageRefreshBtn">Odśwież</button>
+            </div>
+          </div>
+          <div id="workerUsageNotice" class="worker-usage-notice" role="status" aria-live="polite">
+            Łączenie z workerem…
+          </div>
+          <div class="worker-usage-grid">
+            <div class="worker-usage-metric" data-usage-metric="workerRequests">
+              <div class="worker-usage-metric-head"><span>Żądania Workera</span><strong id="workerRequestsValue">— / 100 000</strong></div>
+              <div class="worker-usage-track"><span id="workerRequestsBar"></span></div>
+              <small id="workerRequestsHint">Dobowy limit planu Free</small>
+            </div>
+            <div class="worker-usage-metric" data-usage-metric="kvReads">
+              <div class="worker-usage-metric-head"><span>Odczyty KV</span><strong id="kvReadsValue">— / 100 000</strong></div>
+              <div class="worker-usage-track"><span id="kvReadsBar"></span></div>
+              <small id="kvReadsHint">Dobowy limit planu Free</small>
+            </div>
+            <div class="worker-usage-metric" data-usage-metric="kvWrites">
+              <div class="worker-usage-metric-head"><span>Zapisy KV</span><strong id="kvWritesValue">— / 1 000</strong></div>
+              <div class="worker-usage-track"><span id="kvWritesBar"></span></div>
+              <small id="kvWritesHint">Dobowy limit planu Free</small>
+            </div>
+            <div class="worker-usage-metric" data-usage-metric="kvDeletes">
+              <div class="worker-usage-metric-head"><span>Usunięcia KV</span><strong id="kvDeletesValue">— / 1 000</strong></div>
+              <div class="worker-usage-track"><span id="kvDeletesBar"></span></div>
+              <small id="kvDeletesHint">Dobowy limit planu Free</small>
+            </div>
+            <div class="worker-usage-metric" data-usage-metric="kvLists">
+              <div class="worker-usage-metric-head"><span>Operacje list KV</span><strong id="kvListsValue">— / 1 000</strong></div>
+              <div class="worker-usage-track"><span id="kvListsBar"></span></div>
+              <small id="kvListsHint">Dobowy limit planu Free</small>
+            </div>
+          </div>
+          <div class="worker-usage-footer">
+            <span>Reset limitów: <strong id="workerUsageReset">00:00 UTC</strong></span>
+            <span>Pomiar: <strong id="workerUsageMeasuredAt">brak danych</strong></span>
+            <a href="https://developers.cloudflare.com/workers/platform/limits/" target="_blank" rel="noopener noreferrer">Limity Cloudflare ↗</a>
+          </div>
+        </div>
+
         <div class="admin-card" data-admin-tab="maintenance">
           <h3>Backup mapowań</h3>
           <p>Zapisz bieżące mapowania do pliku JSON. Przyda się przed większymi zmianami.</p>
@@ -456,20 +507,24 @@
               <span>Zgłoszenia</span>
               <span class="report-count" id="reportCount">0</span>
             </summary>
-            <p>Raporty z wyszukiwarki PN oraz błędy działania strony.</p>
+            <p>Problemy, pomysły i poprawki dotyczące aplikacji są pokazane jako pierwsze. Zgłoszenia mapowań znajdują się w osobnej, zwijanej sekcji niżej.</p>
+            <div class="report-overview">
+              <div class="report-overview-item report-overview-ui">
+                <span>Problemy i pomysły</span>
+                <strong id="reportUiCount">0</strong>
+              </div>
+              <div class="report-overview-item">
+                <span>Błędy mapowania</span>
+                <strong id="reportMappingCount">0</strong>
+              </div>
+            </div>
             <div class="report-filter">
-              <label for="reportFilter">Filtr zgłoszeń</label>
-              <select id="reportFilter">
-                <option value="all" selected>Wszystkie</option>
-                <option value="mapping">Tylko mapowania</option>
-                <option value="ui">Tylko błędy strony</option>
-              </select>
               <label for="reportStatusFilter">Status</label>
               <select id="reportStatusFilter">
-                <option value="active" selected>Aktywne</option>
-                <option value="in-progress">W trakcie</option>
-                <option value="on-hold">On hold</option>
-                <option value="resolved">Resolved</option>
+                <option value="active" selected>Otwarte</option>
+                <option value="in-progress">Nowe / w trakcie</option>
+                <option value="on-hold">Wstrzymane</option>
+                <option value="resolved">Rozwiązane</option>
               </select>
             </div>
             <div id="reportList" class="report-list">Brak zgłoszeń.</div>
@@ -694,8 +749,8 @@
         </select>
         <label for="reportConfirmStatus">Status (dla błędów działania strony)</label>
         <select id="reportConfirmStatus">
-          <option value="resolved" selected>Resolved</option>
-          <option value="on-hold">On hold</option>
+          <option value="resolved" selected>Rozwiązane</option>
+          <option value="on-hold">Wstrzymane</option>
         </select>
         <label for="reportConfirmNote">Uwagi admina</label>
         <textarea id="reportConfirmNote" rows="2" placeholder="Opcjonalne uwagi admina"></textarea>
@@ -795,7 +850,8 @@
     const logRefreshBtn = document.getElementById('logRefreshBtn');
     const reportList = document.getElementById('reportList');
     const reportCount = document.getElementById('reportCount');
-    const reportFilter = document.getElementById('reportFilter');
+    const reportUiCount = document.getElementById('reportUiCount');
+    const reportMappingCount = document.getElementById('reportMappingCount');
     const reportStatusFilter = document.getElementById('reportStatusFilter');
     const logCount = document.getElementById('logCount');
     const reportConfirmModal = document.getElementById('reportConfirmModal');
@@ -937,6 +993,11 @@
     const hdWhitelistValue = document.getElementById('hdWhitelistValue');
     const hdWhitelistList = document.getElementById('hdWhitelistList');
     const adminTabDescription = document.getElementById('adminTabDescription');
+    const workerUsageState = document.getElementById('workerUsageState');
+    const workerUsageNotice = document.getElementById('workerUsageNotice');
+    const workerUsageRefreshBtn = document.getElementById('workerUsageRefreshBtn');
+    const workerUsageReset = document.getElementById('workerUsageReset');
+    const workerUsageMeasuredAt = document.getElementById('workerUsageMeasuredAt');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
     const LAYOUT_DEFAULT_PRESET_SELECT_VALUE = '__default__';
     const LAYOUT_DEFAULT_PRESET_ID = 'global-default-layout';
@@ -951,6 +1012,22 @@
     const LOG_ACTOR_ALIASES_NOTE_ID = 'log-actor-aliases-v1';
     const DEFAULT_COMMISSION_RATE = 15;
     const DEFAULT_HD_WHITELIST = [];
+    const WORKER_USAGE_ENDPOINT = '/usage';
+    const WORKER_USAGE_SNAPSHOT_KEY = 'adminWorkerUsageSnapshotV1';
+    const WORKER_USAGE_LIMITS = {
+      workerRequests: 100000,
+      kvReads: 100000,
+      kvWrites: 1000,
+      kvDeletes: 1000,
+      kvLists: 1000
+    };
+    const WORKER_USAGE_METRICS = [
+      { key: 'workerRequests', label: 'żądań Workera', valueId: 'workerRequestsValue', barId: 'workerRequestsBar', hintId: 'workerRequestsHint' },
+      { key: 'kvReads', label: 'odczytów KV', valueId: 'kvReadsValue', barId: 'kvReadsBar', hintId: 'kvReadsHint' },
+      { key: 'kvWrites', label: 'zapisów KV', valueId: 'kvWritesValue', barId: 'kvWritesBar', hintId: 'kvWritesHint' },
+      { key: 'kvDeletes', label: 'usunięć KV', valueId: 'kvDeletesValue', barId: 'kvDeletesBar', hintId: 'kvDeletesHint' },
+      { key: 'kvLists', label: 'operacji list KV', valueId: 'kvListsValue', barId: 'kvListsBar', hintId: 'kvListsHint' }
+    ];
     const PUBLIC_IP_ENDPOINTS = [
       'https://api.ipify.org?format=json',
       'https://api64.ipify.org?format=json'
@@ -988,7 +1065,8 @@
     const ADMIN_ACTIVE_TAB_KEY = 'adminActiveTabV1';
     const ADMIN_TAB_META = {
       logs: { group: 'Monitoring', title: 'Logi', description: 'Pełna historia operacji zapisywana przez worker, z wyszukiwaniem i czytelnym podglądem zdarzeń.' },
-      reports: { group: 'Monitoring', title: 'Zgłoszenia', description: 'Obsługa aktywnych, wstrzymanych i rozwiązanych zgłoszeń mapowań oraz błędów strony.' },
+      reports: { group: 'Monitoring', title: 'Zgłoszenia', description: 'Problemy i pomysły dotyczące aplikacji są priorytetem; błędy mapowań mają osobną sekcję poniżej.' },
+      'worker-usage': { group: 'Monitoring', title: 'Worker i KV', description: 'Dostępność workera, rzeczywiste wykorzystanie usług KV oraz ostrzeżenia przed limitami planu.' },
       'calculator-settings': { group: 'Kalkulator', title: 'Ustawienia domyślne', description: 'Domyślne źródło kursu i narzut eBay używane przez kalkulator.' },
       'calculator-presets': { group: 'Kalkulator', title: 'Presety wyceny', description: 'Szybkie zestawy waluty, VAT-u, narzutu eBay i narzutu sprzedaży.' },
       'base-presets': { group: 'Kalkulator', title: 'Presety Base', description: 'Lista aktualnych mnożników Base dostępnych bezpośrednio w kalkulatorze.' },
@@ -1042,6 +1120,193 @@
     let logPage = 1;
     let logsBackupCache = null;
     let logActorAliasesConfig = { version: 1, aliases: [] };
+    let workerUsageLoaded = false;
+
+    function readUsagePath(value, path) {
+      return path.split('.').reduce((current, key) => (
+        current && typeof current === 'object' ? current[key] : undefined
+      ), value);
+    }
+
+    function firstUsageNumber(value, paths) {
+      for (const path of paths) {
+        const rawCandidate = readUsagePath(value, path);
+        if (rawCandidate === null || rawCandidate === undefined || rawCandidate === '') continue;
+        const candidate = Number(rawCandidate);
+        if (Number.isFinite(candidate) && candidate >= 0) return candidate;
+      }
+      return null;
+    }
+
+    function normalizeWorkerUsage(payload) {
+      const data = payload && typeof payload === 'object' ? payload : {};
+      const plan = String(data.plan || data.worker?.plan || 'free').toLowerCase();
+      const paidPlan = plan.includes('paid');
+      const valuePaths = {
+        workerRequests: ['worker.requests', 'workerRequests', 'requests'],
+        kvReads: ['kv.reads', 'kvReads', 'reads'],
+        kvWrites: ['kv.writes', 'kvWrites', 'writes'],
+        kvDeletes: ['kv.deletes', 'kvDeletes', 'deletes'],
+        kvLists: ['kv.lists', 'kvLists', 'lists']
+      };
+      const limitPaths = {
+        workerRequests: ['worker.limit', 'limits.worker.requests', 'limits.workerRequests'],
+        kvReads: ['kv.limits.reads', 'limits.kv.reads', 'limits.kvReads'],
+        kvWrites: ['kv.limits.writes', 'limits.kv.writes', 'limits.kvWrites'],
+        kvDeletes: ['kv.limits.deletes', 'limits.kv.deletes', 'limits.kvDeletes'],
+        kvLists: ['kv.limits.lists', 'limits.kv.lists', 'limits.kvLists']
+      };
+      const values = {};
+      const limits = {};
+      WORKER_USAGE_METRICS.forEach(({ key }) => {
+        values[key] = firstUsageNumber(data, valuePaths[key]);
+        const explicitLimit = firstUsageNumber(data, limitPaths[key]);
+        limits[key] = explicitLimit === null
+          ? (paidPlan ? null : WORKER_USAGE_LIMITS[key])
+          : explicitLimit;
+      });
+      return {
+        values,
+        limits,
+        hasTelemetry: Object.values(values).some(Number.isFinite),
+        measuredAt: data.measuredAt || data.updatedAt || data.ts || new Date().toISOString(),
+        resetAt: data.resetAt || data.resetsAt || '',
+        source: String(data.source || 'worker'),
+        plan
+      };
+    }
+
+    function formatUsageNumber(value) {
+      return Number.isFinite(value) ? new Intl.NumberFormat('pl-PL').format(value) : '—';
+    }
+
+    function formatUsageTimestamp(value, fallback) {
+      if (!value) return fallback;
+      const date = new Date(value);
+      return Number.isFinite(date.getTime()) ? date.toLocaleString('pl-PL') : String(value);
+    }
+
+    function setWorkerUsageState(label, state) {
+      if (!workerUsageState) return;
+      workerUsageState.textContent = label;
+      workerUsageState.className = `worker-usage-state is-${state}`;
+    }
+
+    function renderWorkerUsageMetrics(usage, { stale = false } = {}) {
+      let highestRatio = 0;
+      WORKER_USAGE_METRICS.forEach(({ key, valueId, barId, hintId }) => {
+        const value = usage?.values?.[key];
+        const limit = usage?.limits?.[key];
+        const ratio = Number.isFinite(value) && Number.isFinite(limit) && limit > 0 ? value / limit : 0;
+        highestRatio = Math.max(highestRatio, ratio);
+        const valueEl = document.getElementById(valueId);
+        const barEl = document.getElementById(barId);
+        const hintEl = document.getElementById(hintId);
+        if (valueEl) {
+          valueEl.textContent = Number.isFinite(limit)
+            ? `${formatUsageNumber(value)} / ${formatUsageNumber(limit)}`
+            : `${formatUsageNumber(value)} / bez limitu dobowego`;
+        }
+        if (barEl) {
+          barEl.style.width = `${Math.min(100, Math.max(0, ratio * 100))}%`;
+          barEl.className = ratio >= 1 ? 'is-critical' : ratio >= 0.8 ? 'is-warn' : 'is-ok';
+        }
+        if (hintEl) {
+          if (!Number.isFinite(value)) hintEl.textContent = 'Brak rzeczywistego licznika';
+          else if (!Number.isFinite(limit)) hintEl.textContent = stale ? 'Ostatni zapisany pomiar' : 'Brak limitu dobowego w tym planie';
+          else hintEl.textContent = `${Math.min(999, ratio * 100).toFixed(ratio >= 0.01 ? 1 : 2)}% wykorzystania${stale ? ' · dane archiwalne' : ''}`;
+        }
+      });
+      if (workerUsageMeasuredAt) {
+        workerUsageMeasuredAt.textContent = usage?.hasTelemetry
+          ? `${formatUsageTimestamp(usage.measuredAt, 'brak daty')}${stale ? ' (zapisany)' : ''}`
+          : 'brak danych';
+      }
+      if (workerUsageReset) {
+        workerUsageReset.textContent = usage?.resetAt
+          ? formatUsageTimestamp(usage.resetAt, '00:00 UTC')
+          : '00:00 UTC';
+      }
+      return highestRatio;
+    }
+
+    function readWorkerUsageSnapshot() {
+      try {
+        return normalizeWorkerUsage(JSON.parse(localStorage.getItem(WORKER_USAGE_SNAPSHOT_KEY) || 'null'));
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function showWorkerUsageUnavailable(message, { online = false, limited = false } = {}) {
+      const snapshot = readWorkerUsageSnapshot();
+      renderWorkerUsageMetrics(snapshot?.hasTelemetry ? snapshot : null, { stale: !!snapshot?.hasTelemetry });
+      if (workerUsageNotice) workerUsageNotice.textContent = message;
+      if (limited) setWorkerUsageState('Możliwy limit', 'critical');
+      else if (online) setWorkerUsageState('Worker online · brak telemetryki', 'neutral');
+      else setWorkerUsageState('Brak połączenia', 'warn');
+    }
+
+    async function refreshWorkerUsage({ notify = false } = {}) {
+      if (!window.PN_MAPPINGS_API?.request || !workerUsageRefreshBtn) return;
+      workerUsageLoaded = true;
+      workerUsageRefreshBtn.disabled = true;
+      setWorkerUsageState('Sprawdzam…', 'loading');
+      if (workerUsageNotice) workerUsageNotice.textContent = 'Pobieram stan workera i liczniki KV…';
+      try {
+        const response = await window.PN_MAPPINGS_API.request(`${WORKER_USAGE_ENDPOINT}?cb=${Date.now()}`, {
+          method: 'GET',
+          cache: 'no-store'
+        });
+        const responseText = await response.text().catch(() => '');
+        const isLimitError = response.status === 429 || /(?:error\s*1027|daily request limit|limit.*exceed)/i.test(responseText);
+        if (!response.ok) {
+          if (isLimitError) {
+            showWorkerUsageUnavailable('Worker zwrócił informację o limicie lub zbyt wielu żądaniach. Aplikacja może przestać zapisywać dane do czasu resetu.', { limited: true });
+          } else if (response.status === 404 || response.status === 405) {
+            showWorkerUsageUnavailable('Worker odpowiada, ale nie ma jeszcze endpointu /usage. Widoczne progi są tylko limitem referencyjnym planu Free — zużycie nie jest liczone jako zero.', { online: true });
+          } else {
+            showWorkerUsageUnavailable(`Worker odpowiada błędem HTTP ${response.status}. Nie można potwierdzić bieżącego zużycia.`, { online: true });
+          }
+          return;
+        }
+        let payload = null;
+        try {
+          payload = JSON.parse(responseText);
+        } catch (_error) {
+          payload = null;
+        }
+        const usage = normalizeWorkerUsage(payload);
+        if (!usage.hasTelemetry) {
+          showWorkerUsageUnavailable('Endpoint /usage odpowiada, ale nie zwrócił liczników w obsługiwanym formacie. Nie traktuję brakujących wartości jako zera.', { online: true });
+          return;
+        }
+        const highestRatio = renderWorkerUsageMetrics(usage);
+        try {
+          localStorage.setItem(WORKER_USAGE_SNAPSHOT_KEY, JSON.stringify({
+            ...payload,
+            measuredAt: usage.measuredAt
+          }));
+        } catch (_error) {
+          // Monitoring działa również bez lokalnej kopii ostatniego pomiaru.
+        }
+        if (workerUsageNotice) {
+          workerUsageNotice.textContent = highestRatio >= 1
+            ? 'Co najmniej jeden limit został wykorzystany. Sprawdź usługę w panelu Cloudflare.'
+            : highestRatio >= 0.8
+              ? 'Co najmniej jeden licznik przekroczył 80% limitu. Warto ograniczyć ciężkie operacje i backupy.'
+              : 'Worker działa, a liczniki zwracają aktualne dane.';
+        }
+        setWorkerUsageState(highestRatio >= 1 ? 'Limit wykorzystany' : highestRatio >= 0.8 ? 'Blisko limitu' : 'OK', highestRatio >= 1 ? 'critical' : highestRatio >= 0.8 ? 'warn' : 'ok');
+        if (notify) showToast('Odświeżono wykorzystanie workera i KV.', 'ok');
+      } catch (_error) {
+        showWorkerUsageUnavailable('Nie udało się połączyć z workerem. Jeśli kalkulator również nie zapisuje danych, sprawdź limit dobowy i stan usługi Cloudflare.');
+      } finally {
+        workerUsageRefreshBtn.disabled = false;
+      }
+    }
+
+    workerUsageRefreshBtn?.addEventListener('click', () => refreshWorkerUsage({ notify: true }));
 
     function renderAdminIdentity() {
       const actor = window.PN_MAPPINGS_API?.getAdminLogActor?.() || '';
@@ -1956,6 +2221,7 @@
       if (adminTabTitle) adminTabTitle.textContent = meta.title;
       if (adminTabDescription) adminTabDescription.textContent = meta.description;
       localStorage.setItem(ADMIN_ACTIVE_TAB_KEY, validTab);
+      if (validTab === 'worker-usage' && !workerUsageLoaded) refreshWorkerUsage();
     }
 
     function setupAdminTabs() {
@@ -3148,7 +3414,8 @@
 
     function showToast(message, variant, durationMs) {
       if (!toastStack) return;
-      const maxToasts = 6;
+      const viewportWidth = Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1024;
+      const maxToasts = viewportWidth <= 420 ? 2 : viewportWidth <= 760 ? 3 : 6;
       while (toastStack.children.length >= maxToasts) {
         toastStack.firstElementChild?.remove();
       }
@@ -4717,9 +4984,10 @@
       if (entry.type === 'mapping-report') {
         const report = Object.keys(safeObject(meta.report)).length ? safeObject(meta.report) : meta;
         const query = report.query ? ` „${report.query}”` : '';
+        const reportTitle = report.title ? ` „${report.title}”` : '';
         return meta.action
           ? `Administrator wykonał: ${action}${query}.`
-          : `Użytkownik wysłał zgłoszenie${query}${report.reason ? `: ${report.reason}` : '.'}`;
+          : `Użytkownik wysłał zgłoszenie${reportTitle || query}${report.reason ? `: ${report.reason}` : '.'}`;
       }
       if (entry.type === 'stock-open') {
         return `Użytkownik otworzył produkt ${meta.productId || 'bez ID'} w systemie STOCK.`;
@@ -4765,10 +5033,14 @@
         add('Liczba otwartych adresów', Array.isArray(meta.calledUrls) ? meta.calledUrls.length : '');
       } else if (entry.type === 'mapping-report') {
         add('ID zgłoszenia', report.reportId || meta.reportId);
+        add('Tytuł', report.title);
+        add('Kategoria', report.category);
         add('PN / zapytanie', report.query);
-        add('Producent', report.suggestedVendor);
+        add('Obecne rozpoznanie', report.detectedVendor);
+        add('Poprawny producent', report.suggestedVendor);
         add('Rodzaj', report.kind);
         add('Powód', report.reason);
+        add('Kontekst techniczny', report.context);
         add('Źródło', report.source);
         add('Wzorzec', report.detail);
         add('Wynik mapowania', mapping.key && mapping.vendor ? `${mapping.key} → ${mapping.vendor}` : mapping.key);
@@ -5105,43 +5377,45 @@
         });
         const visibleMapping = visibleReports.filter((entry) => getReportKind(entry) !== 'ui');
         const visibleUi = visibleReports.filter((entry) => getReportKind(entry) === 'ui');
-        const sectionTemplate = (title, entries) => {
-          if (!entries.length) return '';
-          return `
-            <div class="report-section">
-              <div class="report-section-title">${title}</div>
-              ${entries.map((entry, index) => renderReportItem(entry, index)).join('')}
-            </div>
-          `;
-        };
-
-        const filterValue = reportFilter?.value || 'all';
-        let sections = [];
-        let displayedCount = visibleReports.length;
-        if (filterValue === 'mapping') {
-          sections = [sectionTemplate('Zgłoszenia mapowań', visibleMapping)];
-          displayedCount = visibleMapping.length;
-        } else if (filterValue === 'ui') {
-          sections = [sectionTemplate('Błędy działania strony', visibleUi)];
-          displayedCount = visibleUi.length;
-        } else {
-          sections = [
-            sectionTemplate('Zgłoszenia mapowań', visibleMapping),
-            sectionTemplate('Błędy działania strony', visibleUi)
-          ];
-        }
+        const mappingWasOpen = !!reportList.querySelector('.report-mapping-admin-section')?.open;
+        const uiItems = visibleUi.length
+          ? visibleUi.map((entry, index) => renderReportItem(entry, index)).join('')
+          : '<div class="report-empty-state">Brak problemów i pomysłów o wybranym statusie.</div>';
+        const mappingItems = visibleMapping.length
+          ? visibleMapping.map((entry, index) => renderReportItem(entry, index)).join('')
+          : '<div class="report-empty-state">Brak błędów mapowania o wybranym statusie.</div>';
+        const displayedCount = visibleReports.length;
 
         if (reportCount) {
           reportCount.textContent = String(displayedCount);
           reportCount.classList.toggle('is-bad', statusFilterValue !== 'resolved' && displayedCount > 0);
         }
+        if (reportUiCount) reportUiCount.textContent = String(visibleUi.length);
+        if (reportMappingCount) reportMappingCount.textContent = String(visibleMapping.length);
 
-        reportList.innerHTML = sections.join('');
+        reportList.innerHTML = `
+          <section class="report-section report-ui-section">
+            <div class="report-section-heading">
+              <div>
+                <span class="report-section-kicker">Aplikacja</span>
+                <h4>Problemy, poprawki i pomysły</h4>
+              </div>
+              <span class="report-count ${statusFilterValue !== 'resolved' && visibleUi.length ? 'is-bad' : ''}">${visibleUi.length}</span>
+            </div>
+            ${uiItems}
+          </section>
+          <details class="report-section report-mapping-admin-section" ${mappingWasOpen ? 'open' : ''}>
+            <summary class="report-section-heading">
+              <div>
+                <span class="report-section-kicker">Mapowania PN</span>
+                <h4>Błędy producenta i wzorców</h4>
+              </div>
+              <span class="report-count ${statusFilterValue !== 'resolved' && visibleMapping.length ? 'is-bad' : ''}">${visibleMapping.length}</span>
+            </summary>
+            <div class="report-mapping-admin-body">${mappingItems}</div>
+          </details>
+        `;
         hydrateAdminNotes();
-
-        if (!reportList.innerHTML.trim()) {
-          reportList.textContent = 'Brak zgłoszeń.';
-        }
       } catch (error) {
         reportList.textContent = 'Brak zgłoszeń.';
         showToast('Wykryto uszkodzony wpis zgłoszenia. Pomiń lub zrób migrację logów.', 'warn');
@@ -5150,15 +5424,33 @@
 
     function renderReportItem(entry, index) {
       const meta = getReportMeta(entry);
+      const legacyTitle = meta.reason ? String(meta.reason).trim().slice(0, 80) : '';
+      const title = escapeHtml(meta.title || legacyTitle || 'Zgłoszenie dotyczące aplikacji');
       const query = escapeHtml(meta.query || '');
       const suggestedVendor = escapeHtml(meta.suggestedVendor || '');
+      const detectedVendor = escapeHtml(meta.detectedVendor || '');
       const source = escapeHtml(meta.source || '');
       const detail = escapeHtml(meta.detail || '');
       const reason = escapeHtml(meta.reason || '');
+      const categoryLabels = {
+        bug: 'Błąd działania',
+        improvement: 'Propozycja poprawki',
+        feature: 'Pomysł na funkcję',
+        other: 'Inne'
+      };
+      const categoryLabel = categoryLabels[meta.category] || 'Zgłoszenie aplikacji';
+      const context = safeObject(meta.context);
+      const contextParts = [
+        meta.appVersion ? `Wersja ${escapeHtml(meta.appVersion)}` : '',
+        context.viewport ? `Widok ${escapeHtml(context.viewport)}` : '',
+        context.currency ? `${escapeHtml(context.currency)} · VAT ${escapeHtml(context.vat || '—')}%` : '',
+        context.purchaseMode || context.saleMode ? `Tryby: zakup ${escapeHtml(context.purchaseMode || '—')} / sprzedaż ${escapeHtml(context.saleMode || '—')}` : '',
+        typeof context.basePricing === 'boolean' ? `Base: ${context.basePricing ? 'włączony' : 'wyłączony'}` : ''
+      ].filter(Boolean);
       const ts = entry.ts ? new Date(entry.ts).toLocaleString('pl-PL') : '—';
       const reportKey = escapeHtml(buildReportKey(entry));
       const kind = getReportKind(entry);
-      const kindLabel = kind === 'ui' ? 'Błąd działania strony' : 'Błąd mapowania';
+      const kindLabel = kind === 'ui' ? categoryLabel : 'Błąd mapowania';
       const reportId = buildReportId(entry);
       const reportIdEscaped = escapeHtml(reportId);
       const storedNote = getAdminNote(reportId);
@@ -5166,8 +5458,8 @@
       const isResolved = reportStatus === 'resolved';
       const statusClass = reportStatus === 'on-hold' ? 'is-on-hold' : (isResolved ? 'is-resolved' : '');
       const statusBadge = reportStatus === 'on-hold'
-        ? '<span class="report-status-badge is-on-hold">On hold</span>'
-        : (isResolved ? '<span class="report-status-badge is-resolved">Resolved</span>' : '<span class="report-status-badge">W trakcie</span>');
+        ? '<span class="report-status-badge is-on-hold">Wstrzymane</span>'
+        : (isResolved ? '<span class="report-status-badge is-resolved">Rozwiązane</span>' : '<span class="report-status-badge">Nowe / w trakcie</span>');
       const statusAction = isResolved ? getReportStatusAction(entry) : null;
       const resolutionMeta = safeObject(statusAction?.meta?.mapping);
       const resolvedAt = statusAction?.ts ? new Date(statusAction.ts).toLocaleString('pl-PL') : '';
@@ -5186,9 +5478,9 @@
       ` : '';
       if (kind === 'ui') {
         return `
-          <div class="report-item report-${kind} ${statusClass}" data-report-index="${index}" data-report-key="${reportKey}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}" data-report-status="${reportStatus}">
+          <div class="report-item report-${kind} ${statusClass}" data-report-index="${index}" data-report-key="${reportKey}" data-report-title="${title}" data-report-category="${escapeHtml(meta.category || '')}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}" data-report-status="${reportStatus}">
             <div class="report-header">
-              <strong>ID: ${reportIdEscaped}</strong>
+              <strong>${title}</strong>
               <div class="report-header-meta">
                 <span class="report-ts">${ts}</span>
                 <div class="report-meta-row">
@@ -5198,15 +5490,16 @@
                 </div>
               </div>
             </div>
-            ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować treść uwagi"><span class="report-reason-label">Uwagi:</span> <strong>${reason}</strong></div>` : ''}
+            ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować opis"><span class="report-reason-label">Opis:</span> <strong>${reason}</strong></div>` : ''}
+            ${contextParts.length ? `<details class="report-context-admin"><summary>Kontekst techniczny</summary><div>${contextParts.map((part) => `<span>${part}</span>`).join('')}</div></details>` : ''}
             ${resolutionSummary}
             <div class="report-form">
               <textarea class="report-note" rows="2" placeholder="Notatki admina (opcjonalne)" data-saved-note="${escapeHtml(storedNote)}" ${isResolved ? 'readonly' : ''}>${escapeHtml(storedNote)}</textarea>
               <div class="report-actions">
                 ${isResolved ? '<span class="report-readonly-note">Zgłoszenie zamknięte — tylko do odczytu</span>' : `
                   <button type="button" class="report-save-note" hidden>Zapisz notatkę</button>
-                  <button type="button" class="report-resolve">Resolved</button>
-                  <button type="button" class="report-hold">On hold</button>
+                  <button type="button" class="report-resolve">Rozwiąż</button>
+                  <button type="button" class="report-hold">Wstrzymaj</button>
                   <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
                 `}
               </div>
@@ -5230,7 +5523,8 @@
               </div>
             </div>
             <div class="report-meta">
-              <span>Sugestia: <strong>${suggestedVendor || '—'}</strong></span>
+              ${detectedVendor ? `<span>Obecne rozpoznanie: <strong>${detectedVendor}</strong></span>` : ''}
+              <span>Poprawny producent: <strong>${suggestedVendor || '—'}</strong></span>
               <span>Źródło: ${source || '—'}</span>
               ${detail ? `<span>Wzorzec: ${detail}</span>` : ''}
             </div>
@@ -5350,6 +5644,8 @@
     function getReportMetaFromItem(item) {
       if (!item) return {};
       return {
+        title: item.getAttribute('data-report-title') || '',
+        category: item.getAttribute('data-report-category') || '',
         query: item.getAttribute('data-report-query') || '',
         suggestedVendor: item.getAttribute('data-report-vendor') || '',
         source: item.getAttribute('data-report-source') || '',
@@ -5516,7 +5812,7 @@
       if (!item || !reportRetypeModal) return;
       const title = item.querySelector('.report-header strong')?.textContent || 'zgłoszenie';
       if (reportRetypeMessage) {
-        const label = nextKind === 'ui' ? 'Błąd działania strony' : 'Błąd mapowania';
+        const label = nextKind === 'ui' ? 'Zgłoszenie aplikacji' : 'Błąd mapowania';
         reportRetypeMessage.textContent = `Zmień typ ${title} na: ${label}?`;
       }
       pendingReportRetype = {
@@ -5555,14 +5851,6 @@
       logNextBtn.addEventListener('click', () => {
         logPage += 1;
         fetchLogs();
-      });
-    }
-    if (reportFilter) {
-      reportFilter.addEventListener('change', () => {
-        if (!Array.isArray(reportsCache) || !reportsCache.length) {
-          fetchReports();
-        }
-        renderReports();
       });
     }
     if (reportStatusFilter) {
