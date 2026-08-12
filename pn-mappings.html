@@ -202,18 +202,38 @@
       if (!toastStack) return;
       const viewportWidth = Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1024;
       const maxToasts = viewportWidth <= 420 ? 2 : viewportWidth <= 760 ? 3 : 6;
+      const normalizedMessage = String(message || '').replace(/\s+/g, ' ').trim();
+      const toastKey = `${variant || 'info'}:${normalizedMessage}`;
+      const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
+      const ms = hasTiming ? Math.round(durationMs) : 0;
+      const displayText = hasTiming ? `${message || ''} (${ms} ms)` : `${message || ''}`;
+      const existingToast = Array.from(toastStack.children).find((item) => item.dataset.toastKey === toastKey);
+      if (existingToast) {
+        const existingText = existingToast.querySelector('.mapping-toast-text');
+        if (existingText) existingText.textContent = displayText;
+        clearTimeout(existingToast._toastCloseTimer);
+        clearTimeout(existingToast._toastRemoveTimer);
+        clearTimeout(existingToast._toastRefreshTimer);
+        existingToast.classList.add('is-visible');
+        existingToast.classList.remove('is-refreshed');
+        void existingToast.offsetWidth;
+        existingToast.classList.add('is-refreshed');
+        toastStack.append(existingToast);
+        existingToast._toastRefreshTimer = setTimeout(() => existingToast.classList.remove('is-refreshed'), 480);
+        existingToast._toastCloseTimer = setTimeout(existingToast._closeToast, 10000);
+        return existingToast;
+      }
       while (toastStack.children.length >= maxToasts) {
         toastStack.firstElementChild?.remove();
       }
       const toast = document.createElement('div');
       toast.className = 'mapping-toast';
+      toast.dataset.toastKey = toastKey;
       if (variant === 'warn') toast.classList.add('is-warn');
       if (variant === 'ok') toast.classList.add('is-ok');
-      const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
-      const ms = hasTiming ? Math.round(durationMs) : 0;
       const toastText = document.createElement('span');
       toastText.className = 'mapping-toast-text';
-      toastText.textContent = hasTiming ? `${message || ''} (${ms} ms)` : `${message || ''}`;
+      toastText.textContent = displayText;
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';
       closeBtn.className = 'mapping-toast-close';
@@ -224,15 +244,16 @@
       requestAnimationFrame(() => {
         toast.classList.add('is-visible');
       });
-      let isClosed = false;
       const closeToast = () => {
-        if (isClosed) return;
-        isClosed = true;
+        clearTimeout(toast._toastCloseTimer);
+        clearTimeout(toast._toastRefreshTimer);
         toast.classList.remove('is-visible');
-        setTimeout(() => toast.remove(), 200);
+        toast._toastRemoveTimer = setTimeout(() => toast.remove(), 200);
       };
+      toast._closeToast = closeToast;
       closeBtn.addEventListener('click', closeToast);
-      setTimeout(closeToast, 10000);
+      toast._toastCloseTimer = setTimeout(closeToast, 10000);
+      return toast;
     }
 
     function logMappingAction(action, meta = {}) {

@@ -178,6 +178,63 @@
             <span>Pomiar: <strong id="workerUsageMeasuredAt">brak danych</strong></span>
             <a href="https://developers.cloudflare.com/workers/platform/limits/" target="_blank" rel="noopener noreferrer">Limity Cloudflare ↗</a>
           </div>
+          <section class="worker-usage-history" aria-labelledby="workerUsageHistoryTitle">
+            <div class="worker-usage-history-header">
+              <div>
+                <h4 id="workerUsageHistoryTitle">Dzienne zużycie</h4>
+                <p>Zamknięte dni pochodzą z Cloudflare Analytics. Bieżący dzień i lokalne pomiary mogą być jeszcze niepełne.</p>
+              </div>
+              <label for="workerUsageHistoryDays">
+                Okres
+                <select id="workerUsageHistoryDays">
+                  <option value="7">7 dni</option>
+                  <option value="30" selected>30 dni</option>
+                  <option value="90">90 dni</option>
+                </select>
+              </label>
+            </div>
+            <div id="workerUsageHistorySummary" class="worker-usage-history-summary"></div>
+            <div class="worker-usage-charts">
+              <figure class="worker-usage-chart-card">
+                <figcaption>
+                  <span>Żądania Workera</span>
+                  <small>Dzienna liczba żądań</small>
+                </figcaption>
+                <div id="workerRequestsChart" class="worker-usage-chart" role="img" aria-label="Wykres dziennej liczby żądań Workera"></div>
+              </figure>
+              <figure class="worker-usage-chart-card">
+                <figcaption>
+                  <span>Wykorzystanie KV</span>
+                  <small>Procent dziennego limitu</small>
+                </figcaption>
+                <div class="worker-usage-chart-legend" aria-hidden="true">
+                  <span class="is-reads">Odczyty</span>
+                  <span class="is-writes">Zapisy</span>
+                  <span class="is-deletes">Usunięcia</span>
+                  <span class="is-lists">Listy</span>
+                </div>
+                <div id="workerKvChart" class="worker-usage-chart" role="img" aria-label="Wykres procentowego wykorzystania dziennych limitów KV"></div>
+              </figure>
+            </div>
+            <div class="worker-usage-history-table-wrap">
+              <table class="worker-usage-history-table">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Worker</th>
+                    <th>Odczyty KV</th>
+                    <th>Zapisy KV</th>
+                    <th>Usunięcia KV</th>
+                    <th>Listy KV</th>
+                    <th>Źródło</th>
+                  </tr>
+                </thead>
+                <tbody id="workerUsageHistoryBody">
+                  <tr><td colspan="7">Brak zapisanych pomiarów.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
 
         <div class="admin-card" data-admin-tab="maintenance">
@@ -575,9 +632,17 @@
             </div>
             <div id="adminLogList" class="admin-log-list">Brak danych.</div>
             <div class="admin-log-pagination">
+              <button type="button" id="logFirstBtn" title="Pierwsza strona" aria-label="Pierwsza strona">«</button>
+              <button type="button" id="logJumpBackBtn" title="Cofnij o 5 stron">−5</button>
               <button type="button" id="logPrevBtn">Wstecz</button>
-              <span id="logPageInfo">Strona 1 / 1</span>
+              <label class="admin-log-page-picker" for="logPageInput">
+                <span>Strona</span>
+                <input type="number" id="logPageInput" min="1" max="1" step="1" value="1" inputmode="numeric">
+                <span id="logPageInfo">z 1</span>
+              </label>
               <button type="button" id="logNextBtn">Dalej</button>
+              <button type="button" id="logJumpForwardBtn" title="Przejdź o 5 stron dalej">+5</button>
+              <button type="button" id="logLastBtn" title="Ostatnia strona" aria-label="Ostatnia strona">»</button>
             </div>
           </details>
         </div>
@@ -844,8 +909,13 @@
     const logTypeFilter = document.getElementById('logTypeFilter');
     const logQuery = document.getElementById('logQuery');
     const logPageSize = document.getElementById('logPageSize');
+    const logFirstBtn = document.getElementById('logFirstBtn');
+    const logJumpBackBtn = document.getElementById('logJumpBackBtn');
     const logPrevBtn = document.getElementById('logPrevBtn');
     const logNextBtn = document.getElementById('logNextBtn');
+    const logJumpForwardBtn = document.getElementById('logJumpForwardBtn');
+    const logLastBtn = document.getElementById('logLastBtn');
+    const logPageInput = document.getElementById('logPageInput');
     const logPageInfo = document.getElementById('logPageInfo');
     const logRefreshBtn = document.getElementById('logRefreshBtn');
     const reportList = document.getElementById('reportList');
@@ -998,6 +1068,11 @@
     const workerUsageRefreshBtn = document.getElementById('workerUsageRefreshBtn');
     const workerUsageReset = document.getElementById('workerUsageReset');
     const workerUsageMeasuredAt = document.getElementById('workerUsageMeasuredAt');
+    const workerUsageHistoryDays = document.getElementById('workerUsageHistoryDays');
+    const workerUsageHistorySummary = document.getElementById('workerUsageHistorySummary');
+    const workerUsageHistoryBody = document.getElementById('workerUsageHistoryBody');
+    const workerRequestsChart = document.getElementById('workerRequestsChart');
+    const workerKvChart = document.getElementById('workerKvChart');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
     const LAYOUT_DEFAULT_PRESET_SELECT_VALUE = '__default__';
     const LAYOUT_DEFAULT_PRESET_ID = 'global-default-layout';
@@ -1014,6 +1089,7 @@
     const DEFAULT_HD_WHITELIST = [];
     const WORKER_USAGE_ENDPOINT = '/usage';
     const WORKER_USAGE_SNAPSHOT_KEY = 'adminWorkerUsageSnapshotV1';
+    const WORKER_USAGE_HISTORY_KEY = 'adminWorkerUsageHistoryV1';
     const WORKER_USAGE_LIMITS = {
       workerRequests: 100000,
       kvReads: 100000,
@@ -1118,6 +1194,7 @@
     let reportsCache = [];
     let totalLogs = null;
     let logPage = 1;
+    let logTotalPages = 1;
     let logsBackupCache = null;
     let logActorAliasesConfig = { version: 1, aliases: [] };
     let workerUsageLoaded = false;
@@ -1139,15 +1216,20 @@
     }
 
     function normalizeWorkerUsage(payload) {
-      const data = payload && typeof payload === 'object' ? payload : {};
+      const rootData = payload && typeof payload === 'object' ? payload : {};
+      const data = rootData.current && typeof rootData.current === 'object'
+        ? rootData.current
+        : rootData.usage && typeof rootData.usage === 'object' && !Array.isArray(rootData.usage)
+          ? rootData.usage
+          : rootData;
       const plan = String(data.plan || data.worker?.plan || 'free').toLowerCase();
       const paidPlan = plan.includes('paid');
       const valuePaths = {
-        workerRequests: ['worker.requests', 'workerRequests', 'requests'],
-        kvReads: ['kv.reads', 'kvReads', 'reads'],
-        kvWrites: ['kv.writes', 'kvWrites', 'writes'],
-        kvDeletes: ['kv.deletes', 'kvDeletes', 'deletes'],
-        kvLists: ['kv.lists', 'kvLists', 'lists']
+        workerRequests: ['worker.requests', 'values.workerRequests', 'workerRequests', 'requests'],
+        kvReads: ['kv.reads', 'values.kvReads', 'kvReads', 'reads'],
+        kvWrites: ['kv.writes', 'values.kvWrites', 'kvWrites', 'writes'],
+        kvDeletes: ['kv.deletes', 'values.kvDeletes', 'kvDeletes', 'deletes'],
+        kvLists: ['kv.lists', 'values.kvLists', 'kvLists', 'lists']
       };
       const limitPaths = {
         workerRequests: ['worker.limit', 'limits.worker.requests', 'limits.workerRequests'],
@@ -1174,6 +1256,258 @@
         source: String(data.source || 'worker'),
         plan
       };
+    }
+
+    function getUsageUtcDay(value) {
+      const date = value ? new Date(value) : new Date();
+      return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : '';
+    }
+
+    function readLocalWorkerUsageHistory() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(WORKER_USAGE_HISTORY_KEY) || '[]');
+        return Array.isArray(stored) ? stored : [];
+      } catch (_error) {
+        return [];
+      }
+    }
+
+    function saveLocalWorkerUsageSnapshot(usage) {
+      if (!usage?.hasTelemetry) return;
+      const date = getUsageUtcDay(usage.measuredAt);
+      if (!date) return;
+      const history = readLocalWorkerUsageHistory();
+      const previous = history.find((item) => item?.date === date);
+      const values = {};
+      WORKER_USAGE_METRICS.forEach(({ key }) => {
+        const currentValue = usage.values?.[key];
+        const previousRawValue = previous?.values?.[key];
+        const previousValue = previousRawValue === null || previousRawValue === undefined
+          ? Number.NaN
+          : Number(previousRawValue);
+        values[key] = Number.isFinite(currentValue)
+          ? Math.max(currentValue, Number.isFinite(previousValue) ? previousValue : 0)
+          : (Number.isFinite(previousValue) ? previousValue : null);
+      });
+      const nextEntry = {
+        date,
+        values,
+        limits: usage.limits,
+        measuredAt: usage.measuredAt,
+        plan: usage.plan,
+        origin: 'local',
+        complete: false
+      };
+      const nextHistory = [nextEntry, ...history.filter((item) => item?.date !== date)]
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+        .slice(0, 120);
+      try {
+        localStorage.setItem(WORKER_USAGE_HISTORY_KEY, JSON.stringify(nextHistory));
+      } catch (_error) {
+        // Historia z serwera nadal będzie dostępna bez lokalnego fallbacku.
+      }
+    }
+
+    function normalizeWorkerUsageHistory(payload) {
+      const candidates = [
+        payload?.history,
+        payload?.daily,
+        payload?.days,
+        payload?.usageHistory,
+        payload?.history?.days
+      ];
+      const rawHistory = candidates.find(Array.isArray) || [];
+      return rawHistory.map((entry) => {
+        const usage = normalizeWorkerUsage(entry);
+        const date = String(entry?.date || entry?.day || entry?.dimensions?.date || getUsageUtcDay(usage.measuredAt)).slice(0, 10);
+        return {
+          ...usage,
+          date,
+          origin: 'cloudflare',
+          complete: entry?.complete !== false && entry?.partial !== true
+        };
+      }).filter((entry) => entry.date && entry.hasTelemetry);
+    }
+
+    function getVisibleWorkerUsageHistory(serverHistory = []) {
+      const requestedDays = Math.max(1, Number(workerUsageHistoryDays?.value) || 30);
+      const today = getUsageUtcDay();
+      const oldest = new Date(`${today}T00:00:00.000Z`);
+      oldest.setUTCDate(oldest.getUTCDate() - requestedDays + 1);
+      const oldestDay = oldest.toISOString().slice(0, 10);
+      const byDate = new Map();
+
+      readLocalWorkerUsageHistory().forEach((entry) => {
+        const usage = normalizeWorkerUsage(entry);
+        if (!entry?.date || !usage.hasTelemetry) return;
+        byDate.set(entry.date, { ...usage, date: entry.date, origin: 'local', complete: false });
+      });
+      serverHistory.forEach((entry) => {
+        byDate.set(entry.date, {
+          ...entry,
+          complete: entry.date === today ? false : entry.complete
+        });
+      });
+
+      return Array.from(byDate.values())
+        .filter((entry) => entry.date >= oldestDay && entry.date <= today)
+        .sort((a, b) => b.date.localeCompare(a.date));
+    }
+
+    function formatUsageHistoryDate(value) {
+      const date = new Date(`${value}T12:00:00.000Z`);
+      return Number.isFinite(date.getTime())
+        ? date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : value;
+    }
+
+    function getNiceChartMaximum(value) {
+      if (!Number.isFinite(value) || value <= 0) return 1;
+      const magnitude = 10 ** Math.floor(Math.log10(value));
+      const normalized = value / magnitude;
+      const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+      return step * magnitude;
+    }
+
+    function buildUsageChartSvg(history, series, { percent = false } = {}) {
+      const entries = history.slice().reverse();
+      const width = 720;
+      const height = 220;
+      const padding = { top: 18, right: 18, bottom: 34, left: 58 };
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+      const allValues = entries.flatMap((entry) => series.map(({ getValue }) => getValue(entry))).filter(Number.isFinite);
+      if (!allValues.length) return '';
+      const largestValue = Math.max(...allValues, 0);
+      const yMaximum = getNiceChartMaximum(Math.max(percent ? 1 : 1, largestValue * 1.08));
+      const xAt = (index) => entries.length === 1
+        ? padding.left + (plotWidth / 2)
+        : padding.left + ((index / (entries.length - 1)) * plotWidth);
+      const yAt = (value) => padding.top + plotHeight - ((Math.max(0, value) / yMaximum) * plotHeight);
+      const yTicks = [yMaximum, yMaximum / 2, 0];
+      const grid = yTicks.map((value) => {
+        const y = yAt(value);
+        const label = percent ? `${Number(value.toFixed(2))}%` : formatUsageNumber(Math.round(value));
+        return `<g class="worker-chart-grid"><line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"></line><text x="${padding.left - 9}" y="${y + 4}">${escapeHtml(label)}</text></g>`;
+      }).join('');
+      const labelStep = Math.max(1, Math.ceil(entries.length / 7));
+      const dateLabels = entries.map((entry, index) => {
+        if (index !== entries.length - 1 && index % labelStep !== 0) return '';
+        const label = String(entry.date || '').slice(5).split('-').reverse().join('.');
+        return `<text class="worker-chart-date" x="${xAt(index)}" y="${height - 9}">${escapeHtml(label)}</text>`;
+      }).join('');
+      const lines = series.map(({ className, label, getValue }) => {
+        let path = '';
+        const points = [];
+        let segmentOpen = false;
+        entries.forEach((entry, index) => {
+          const value = getValue(entry);
+          if (!Number.isFinite(value)) {
+            segmentOpen = false;
+            return;
+          }
+          const x = xAt(index);
+          const y = yAt(value);
+          path += `${segmentOpen ? ' L' : ' M'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+          segmentOpen = true;
+          const valueLabel = percent ? `${value.toFixed(value >= 1 ? 1 : 2)}%` : formatUsageNumber(value);
+          points.push(`<circle class="worker-chart-point ${entry.complete ? '' : 'is-partial'}" cx="${x}" cy="${y}" r="3.5"><title>${escapeHtml(`${formatUsageHistoryDate(entry.date)} · ${label}: ${valueLabel}${entry.complete ? '' : ' · pomiar niepełny'}`)}</title></circle>`);
+        });
+        return `<g class="worker-chart-series ${className}"><path d="${path.trim()}"></path>${points.join('')}</g>`;
+      }).join('');
+      return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${grid}${dateLabels}${lines}</svg>`;
+    }
+
+    function renderWorkerUsageCharts(history) {
+      if (workerRequestsChart) {
+        const svg = buildUsageChartSvg(history, [{
+          className: 'is-worker',
+          label: 'Żądania',
+          getValue: (entry) => entry.values?.workerRequests
+        }]);
+        workerRequestsChart.innerHTML = svg || '<div class="worker-usage-chart-empty">Brak danych o żądaniach.</div>';
+      }
+      if (workerKvChart) {
+        const ratioFor = (entry, key) => {
+          const value = entry.values?.[key];
+          const limit = entry.limits?.[key];
+          return Number.isFinite(value) && Number.isFinite(limit) && limit > 0 ? (value / limit) * 100 : null;
+        };
+        const svg = buildUsageChartSvg(history, [
+          { className: 'is-reads', label: 'Odczyty', getValue: (entry) => ratioFor(entry, 'kvReads') },
+          { className: 'is-writes', label: 'Zapisy', getValue: (entry) => ratioFor(entry, 'kvWrites') },
+          { className: 'is-deletes', label: 'Usunięcia', getValue: (entry) => ratioFor(entry, 'kvDeletes') },
+          { className: 'is-lists', label: 'Listy', getValue: (entry) => ratioFor(entry, 'kvLists') }
+        ], { percent: true });
+        workerKvChart.innerHTML = svg || '<div class="worker-usage-chart-empty">Brak danych o operacjach KV.</div>';
+      }
+    }
+
+    function renderWorkerUsageHistory(serverHistory = []) {
+      if (!workerUsageHistoryBody) return;
+      const history = getVisibleWorkerUsageHistory(serverHistory);
+      if (!history.length) {
+        workerUsageHistoryBody.innerHTML = '<tr><td colspan="7">Brak zapisanych pomiarów. Historia pojawi się po pierwszym poprawnym odczycie.</td></tr>';
+        if (workerUsageHistorySummary) workerUsageHistorySummary.innerHTML = '';
+        renderWorkerUsageCharts([]);
+        return;
+      }
+
+      renderWorkerUsageCharts(history);
+
+      let totalRequests = 0;
+      let requestDays = 0;
+      let highestRatio = 0;
+      history.forEach((entry) => {
+        const requests = entry.values?.workerRequests;
+        if (Number.isFinite(requests)) {
+          totalRequests += requests;
+          requestDays += 1;
+        }
+        WORKER_USAGE_METRICS.forEach(({ key }) => {
+          const value = entry.values?.[key];
+          const limit = entry.limits?.[key];
+          if (Number.isFinite(value) && Number.isFinite(limit) && limit > 0) {
+            highestRatio = Math.max(highestRatio, value / limit);
+          }
+        });
+      });
+
+      if (workerUsageHistorySummary) {
+        const completeDays = history.filter((entry) => entry.complete).length;
+        workerUsageHistorySummary.innerHTML = `
+          <div><span>Widoczne dni</span><strong>${history.length}</strong></div>
+          <div><span>Pełne dni</span><strong>${completeDays}</strong></div>
+          <div><span>Suma żądań</span><strong>${requestDays ? formatUsageNumber(totalRequests) : '—'}</strong></div>
+          <div><span>Najwyższe użycie limitu</span><strong>${(highestRatio * 100).toFixed(highestRatio >= 0.01 ? 1 : 2)}%</strong></div>
+        `;
+      }
+
+      workerUsageHistoryBody.innerHTML = history.map((entry) => {
+        const cell = (key) => {
+          const value = entry.values?.[key];
+          const limit = entry.limits?.[key];
+          if (!Number.isFinite(value)) return '<td>—</td>';
+          const ratio = Number.isFinite(limit) && limit > 0 ? value / limit : null;
+          const className = ratio >= 1 ? 'is-critical' : ratio >= 0.8 ? 'is-warn' : '';
+          const ratioText = ratio === null ? '' : `<small>${(ratio * 100).toFixed(ratio >= 0.01 ? 1 : 2)}%</small>`;
+          return `<td class="${className}"><strong>${formatUsageNumber(value)}</strong>${ratioText}</td>`;
+        };
+        const sourceLabel = entry.origin === 'cloudflare'
+          ? (entry.complete ? 'Cloudflare · pełny' : 'Cloudflare · w trakcie')
+          : 'Lokalny · ostatni pomiar';
+        return `
+          <tr>
+            <td><strong>${escapeHtml(formatUsageHistoryDate(entry.date))}</strong></td>
+            ${cell('workerRequests')}
+            ${cell('kvReads')}
+            ${cell('kvWrites')}
+            ${cell('kvDeletes')}
+            ${cell('kvLists')}
+            <td><span class="worker-usage-history-source ${entry.complete ? 'is-complete' : ''}">${escapeHtml(sourceLabel)}</span></td>
+          </tr>
+        `;
+      }).join('');
     }
 
     function formatUsageNumber(value) {
@@ -1243,6 +1577,7 @@
       const hasSnapshot = !!snapshot?.hasTelemetry;
       const displayUsage = hasSnapshot ? snapshot : normalizeWorkerUsage({ plan: 'free' });
       renderWorkerUsageMetrics(displayUsage, { stale: hasSnapshot });
+      renderWorkerUsageHistory();
       if (workerUsageNotice) workerUsageNotice.textContent = message;
       if (limited) setWorkerUsageState('Możliwy limit', 'critical');
       else if (online) setWorkerUsageState('Worker online · brak telemetryki', 'neutral');
@@ -1256,7 +1591,8 @@
       setWorkerUsageState('Sprawdzam…', 'loading');
       if (workerUsageNotice) workerUsageNotice.textContent = 'Pobieram stan workera i liczniki KV…';
       try {
-        const response = await window.PN_MAPPINGS_API.request(`${WORKER_USAGE_ENDPOINT}?cb=${Date.now()}`, {
+        const historyDays = Math.max(1, Number(workerUsageHistoryDays?.value) || 30);
+        const response = await window.PN_MAPPINGS_API.request(`${WORKER_USAGE_ENDPOINT}?days=${historyDays}&cb=${Date.now()}`, {
           method: 'GET',
           cache: 'no-store'
         });
@@ -1294,6 +1630,9 @@
           return;
         }
         const highestRatio = renderWorkerUsageMetrics(usage);
+        saveLocalWorkerUsageSnapshot(usage);
+        const serverHistory = normalizeWorkerUsageHistory(payload);
+        renderWorkerUsageHistory(serverHistory);
         try {
           localStorage.setItem(WORKER_USAGE_SNAPSHOT_KEY, JSON.stringify({
             ...payload,
@@ -1307,7 +1646,9 @@
             ? 'Co najmniej jeden limit został wykorzystany. Sprawdź usługę w panelu Cloudflare.'
             : highestRatio >= 0.8
               ? 'Co najmniej jeden licznik przekroczył 80% limitu. Warto ograniczyć ciężkie operacje i backupy.'
-              : 'Worker działa, a liczniki zwracają aktualne dane.';
+              : serverHistory.length
+                ? 'Worker działa, a liczniki i historia dzienna zwracają aktualne dane.'
+                : 'Worker działa i zwraca bieżące liczniki. Endpoint nie zwrócił jeszcze historii dziennej — tabela korzysta z lokalnych pomiarów.';
         }
         setWorkerUsageState(highestRatio >= 1 ? 'Limit wykorzystany' : highestRatio >= 0.8 ? 'Blisko limitu' : 'OK', highestRatio >= 1 ? 'critical' : highestRatio >= 0.8 ? 'warn' : 'ok');
         if (notify) showToast('Odświeżono wykorzystanie workera i KV.', 'ok');
@@ -1319,6 +1660,7 @@
     }
 
     workerUsageRefreshBtn?.addEventListener('click', () => refreshWorkerUsage({ notify: true }));
+    workerUsageHistoryDays?.addEventListener('change', () => refreshWorkerUsage());
 
     function renderAdminIdentity() {
       const actor = window.PN_MAPPINGS_API?.getAdminLogActor?.() || '';
@@ -3428,19 +3770,39 @@
       if (!toastStack) return;
       const viewportWidth = Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 1024;
       const maxToasts = viewportWidth <= 420 ? 2 : viewportWidth <= 760 ? 3 : 6;
+      const normalizedMessage = String(message || '').replace(/\s+/g, ' ').trim();
+      const toastKey = `${variant || 'info'}:${normalizedMessage}`;
+      const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
+      const suffix = hasTiming ? ` (${Math.round(durationMs)} ms)` : '';
+      const displayText = `${message || ''}${suffix}`;
+      const existingToast = Array.from(toastStack.children).find((item) => item.dataset.toastKey === toastKey);
+      if (existingToast) {
+        const existingText = existingToast.querySelector('.mapping-toast-text');
+        if (existingText) existingText.textContent = displayText;
+        clearTimeout(existingToast._toastCloseTimer);
+        clearTimeout(existingToast._toastRemoveTimer);
+        clearTimeout(existingToast._toastRefreshTimer);
+        existingToast.classList.add('is-visible');
+        existingToast.classList.remove('is-refreshed');
+        void existingToast.offsetWidth;
+        existingToast.classList.add('is-refreshed');
+        toastStack.append(existingToast);
+        existingToast._toastRefreshTimer = setTimeout(() => existingToast.classList.remove('is-refreshed'), 480);
+        existingToast._toastCloseTimer = setTimeout(existingToast._closeToast, 8000);
+        return existingToast;
+      }
       while (toastStack.children.length >= maxToasts) {
         toastStack.firstElementChild?.remove();
       }
       const toast = document.createElement('div');
       toast.className = 'mapping-toast';
+      toast.dataset.toastKey = toastKey;
       if (variant === 'warn') toast.classList.add('is-warn');
       if (variant === 'info') toast.classList.add('is-info');
       if (variant === 'ok') toast.classList.add('is-ok');
-      const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
-      const suffix = hasTiming ? ` (${Math.round(durationMs)} ms)` : '';
       const toastText = document.createElement('span');
       toastText.className = 'mapping-toast-text';
-      toastText.textContent = `${message || ''}${suffix}`;
+      toastText.textContent = displayText;
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';
       closeBtn.className = 'mapping-toast-close';
@@ -3451,15 +3813,16 @@
       requestAnimationFrame(() => {
         toast.classList.add('is-visible');
       });
-      let isClosed = false;
       const closeToast = () => {
-        if (isClosed) return;
-        isClosed = true;
+        clearTimeout(toast._toastCloseTimer);
+        clearTimeout(toast._toastRefreshTimer);
         toast.classList.remove('is-visible');
-        setTimeout(() => toast.remove(), 200);
+        toast._toastRemoveTimer = setTimeout(() => toast.remove(), 200);
       };
+      toast._closeToast = closeToast;
       closeBtn.addEventListener('click', closeToast);
-      setTimeout(closeToast, 8000);
+      toast._toastCloseTimer = setTimeout(closeToast, 8000);
+      return toast;
     }
 
     async function copyTextToClipboard(text) {
@@ -3485,6 +3848,13 @@
           return false;
         }
       }
+    }
+
+    function buildReportClipboardText(title, reason) {
+      return [title, reason]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .join('\n\n');
     }
 
     function logAdminAction(action, meta = {}) {
@@ -4799,6 +5169,7 @@
       const pageSize = Number(logPageSize?.value) || 20;
       const totalPages = Math.max(1, Math.ceil((totalLogs || logsCache.length) / pageSize));
       if (logPage > totalPages) logPage = totalPages;
+      logTotalPages = totalPages;
       const pageItems = logsCache;
       if (logCount) {
         const countValue = Number.isFinite(totalLogs) ? totalLogs : logsCache.length;
@@ -4858,12 +5229,29 @@
           `;
         }).join('');
       }
-      if (logPageInfo) {
-        logPageInfo.textContent = `Strona ${logPage} / ${totalPages}`;
+      if (logPageInput) {
+        logPageInput.value = String(logPage);
+        logPageInput.max = String(totalPages);
       }
+      if (logPageInfo) {
+        logPageInfo.textContent = `z ${totalPages}`;
+      }
+      if (logFirstBtn) logFirstBtn.disabled = logPage <= 1;
+      if (logJumpBackBtn) logJumpBackBtn.disabled = logPage <= 1;
       if (logPrevBtn) logPrevBtn.disabled = logPage <= 1;
       if (logNextBtn) logNextBtn.disabled = logPage >= totalPages;
+      if (logJumpForwardBtn) logJumpForwardBtn.disabled = logPage >= totalPages;
+      if (logLastBtn) logLastBtn.disabled = logPage >= totalPages;
       // reporty są ładowane osobno
+    }
+
+    function goToLogPage(value) {
+      const requestedPage = Number.parseInt(String(value), 10);
+      const nextPage = Math.min(logTotalPages, Math.max(1, Number.isFinite(requestedPage) ? requestedPage : logPage));
+      if (logPageInput) logPageInput.value = String(nextPage);
+      if (nextPage === logPage) return;
+      logPage = nextPage;
+      fetchLogs();
     }
 
     function escapeHtml(value) {
@@ -5502,7 +5890,7 @@
                 </div>
               </div>
             </div>
-            ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować opis"><span class="report-reason-label">Opis:</span> <strong>${reason}</strong></div>` : ''}
+            ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować tytuł i opis"><span class="report-reason-label">Opis:</span> <strong>${reason}</strong></div>` : ''}
             ${contextParts.length ? `<details class="report-context-admin"><summary>Kontekst techniczny</summary><div>${contextParts.map((part) => `<span>${part}</span>`).join('')}</div></details>` : ''}
             ${resolutionSummary}
             <div class="report-form">
@@ -5854,15 +6242,22 @@
       });
     }
     if (logPrevBtn) {
-      logPrevBtn.addEventListener('click', () => {
-        logPage = Math.max(1, logPage - 1);
-        fetchLogs();
-      });
+      logPrevBtn.addEventListener('click', () => goToLogPage(logPage - 1));
     }
     if (logNextBtn) {
-      logNextBtn.addEventListener('click', () => {
-        logPage += 1;
-        fetchLogs();
+      logNextBtn.addEventListener('click', () => goToLogPage(logPage + 1));
+    }
+    if (logFirstBtn) logFirstBtn.addEventListener('click', () => goToLogPage(1));
+    if (logJumpBackBtn) logJumpBackBtn.addEventListener('click', () => goToLogPage(logPage - 5));
+    if (logJumpForwardBtn) logJumpForwardBtn.addEventListener('click', () => goToLogPage(logPage + 5));
+    if (logLastBtn) logLastBtn.addEventListener('click', () => goToLogPage(logTotalPages));
+    if (logPageInput) {
+      logPageInput.addEventListener('change', () => goToLogPage(logPageInput.value));
+      logPageInput.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        goToLogPage(logPageInput.value);
+        logPageInput.select();
       });
     }
     if (reportStatusFilter) {
@@ -5940,13 +6335,20 @@
         if (reasonBlock) {
           const reasonText = reasonBlock.querySelector('strong')?.textContent?.trim() || '';
           if (!reasonText) return;
+          const reportItem = reasonBlock.closest('.report-item');
+          const titleText = (
+            reportItem?.getAttribute('data-report-title')
+            || reportItem?.querySelector('.report-header > strong')?.textContent
+            || ''
+          ).trim();
+          const clipboardText = buildReportClipboardText(titleText, reasonText);
           const t0 = performance.now();
-          copyTextToClipboard(reasonText).then((ok) => {
+          copyTextToClipboard(clipboardText).then((ok) => {
             const t1 = performance.now();
             if (ok) {
-              showToast('Skopiowano treść uwagi.', 'ok', t1 - t0);
+              showToast(titleText ? 'Skopiowano tytuł i opis zgłoszenia.' : 'Skopiowano treść uwagi.', 'ok', t1 - t0);
             } else {
-              showToast('Nie udało się skopiować uwagi.', 'warn', t1 - t0);
+              showToast('Nie udało się skopiować zgłoszenia.', 'warn', t1 - t0);
             }
           });
           return;

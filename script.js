@@ -2184,7 +2184,8 @@ function showMainToast(message, variant = 'info', durationMs, options = {}) {
   const hasTiming = Number.isFinite(durationMs) && durationMs > 0;
   const ms = hasTiming ? Math.round(durationMs) : 0;
   const displayText = hasTiming ? `${message || ''} (${ms} ms)` : `${message || ''}`;
-  const toastKey = String(options?.dedupeKey || '').trim();
+  const normalizedMessage = String(message || '').replace(/\s+/g, ' ').trim();
+  const toastKey = String(options?.dedupeKey || `${variant}:${normalizedMessage}`).trim();
   const maxToasts = getResponsiveToastLimit();
   while (mainToastStack.children.length > maxToasts) {
     mainToastStack.firstElementChild?.remove();
@@ -3886,7 +3887,7 @@ if (baseMultiplierPresetButtons) {
     window.CalculatorUI.flashRecalculatedField(currentBaseMultiplierEl);
     addHistoryEntry('currentBaseMultiplier');
     showMainToast(`Ustawiono mnożnik Base: ${preset.label}.`, 'success', undefined, {
-      dedupeKey: `base-multiplier-preset:${preset.id}`
+      dedupeKey: 'base-multiplier-preset'
     });
   });
 }
@@ -4920,13 +4921,13 @@ if (partNumberInput) {
       const category = reportCategory?.value || 'bug';
       const title = reportTitle?.value?.trim() || '';
       const reason = reportReason?.value?.trim() || '';
-      if (!title) {
-        showMainToast('Dodaj krótki tytuł zgłoszenia.', 'warn');
+      if (!window.CalculatorUI.hasMinimumReportContent(title, 3)) {
+        showMainToast('Tytuł musi zawierać co najmniej 3 litery lub cyfry.', 'warn');
         reportTitle?.focus();
         return;
       }
-      if (!reason) {
-        showMainToast('Opisz problem lub proponowaną zmianę.', 'warn');
+      if (!window.CalculatorUI.hasMinimumReportContent(reason, 8)) {
+        showMainToast('Opis musi zawierać co najmniej 8 liter lub cyfr.', 'warn');
         reportReason?.focus();
         return;
       }
@@ -4938,6 +4939,7 @@ if (partNumberInput) {
         appVersion,
         context: getReportTechnicalContext()
       });
+      if (!payload) return;
       await submitOrQueueReport(payload, reportModalSubmit, 'Zgłoszenie dotyczące aplikacji zostało wysłane.');
     });
   }
@@ -4961,9 +4963,11 @@ if (partNumberInput) {
         showMainToast('Najpierw wpisz PN w wyszukiwarce.', 'warn');
         return;
       }
-      if (!correctVendor && !reason) {
-        showMainToast('Podaj poprawnego producenta albo opisz błąd mapowania.', 'warn');
-        reportMappingReason?.focus();
+      const hasCorrectVendor = window.CalculatorUI.hasMinimumReportContent(correctVendor, 2);
+      const hasMappingReason = window.CalculatorUI.hasMinimumReportContent(reason, 4);
+      if (!hasCorrectVendor && !hasMappingReason) {
+        showMainToast('Podaj co najmniej 2 znaki nazwy producenta albo 4 znaki opisu.', 'warn');
+        (correctVendor ? reportCorrectVendor : reportMappingReason)?.focus();
         return;
       }
       const payload = window.CalculatorUI.buildMappingReportPayload({
@@ -4976,6 +4980,7 @@ if (partNumberInput) {
         reportId: createReportId(),
         appVersion
       });
+      if (!payload) return;
       await submitOrQueueReport(payload, reportMappingSubmit, 'Błąd mapowania został wysłany.');
     });
   }

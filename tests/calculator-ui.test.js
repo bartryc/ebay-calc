@@ -120,6 +120,10 @@
   equal(appReport.kind, 'ui', 'app report kind');
   equal(appReport.context.currency, 'EUR', 'app report context');
   equal(ui.buildAppReportPayload({ title: '', reason: 'Opis' }), null, 'reject app report without title');
+  equal(ui.buildAppReportPayload({ title: '...', reason: '.............' }), null, 'reject punctuation-only app report');
+  equal(ui.buildAppReportPayload({ title: 'OK', reason: 'To jest poprawny opis' }), null, 'reject too-short app report title');
+  equal(ui.buildAppReportPayload({ title: 'Błąd', reason: '...test' }), null, 'reject too-short meaningful description');
+  equal(ui.countReportContentCharacters('  Łąka... 123! '), 7, 'count only meaningful report characters');
 
   const mappingReport = ui.buildMappingReportPayload({
     query: ' ABC123 ',
@@ -133,6 +137,7 @@
   equal(mappingReport.detectedVendor, 'HPE', 'mapping report detected vendor');
   equal(mappingReport.kind, 'mapping', 'mapping report kind');
   equal(ui.buildMappingReportPayload({ query: 'ABC123' }), null, 'mapping report needs correction or reason');
+  equal(ui.buildMappingReportPayload({ query: 'ABC123', correctVendor: '.', reason: '...' }), null, 'reject punctuation-only mapping report');
 
   root.__calculatorUiTestResult = 'ok';
 })(typeof globalThis !== 'undefined' ? globalThis : window);

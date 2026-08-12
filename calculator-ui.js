@@ -68,10 +68,20 @@
     return ['bug', 'improvement', 'feature', 'other'].includes(category) ? category : 'bug';
   }
 
+  function countReportContentCharacters(value) {
+    return Array.from(String(value || '').normalize('NFKC'))
+      .filter((character) => /[\p{L}\p{N}]/u.test(character))
+      .length;
+  }
+
+  function hasMinimumReportContent(value, minimum) {
+    return countReportContentCharacters(value) >= minimum;
+  }
+
   function buildAppReportPayload(input = {}) {
     const title = String(input.title || '').trim().slice(0, 120);
     const reason = String(input.reason || '').trim().slice(0, 10000);
-    if (!title || !reason) return null;
+    if (!hasMinimumReportContent(title, 3) || !hasMinimumReportContent(reason, 8)) return null;
     return {
       title,
       reason,
@@ -87,14 +97,16 @@
     const query = String(input.query || '').trim();
     const correctVendor = String(input.correctVendor || '').trim().slice(0, 120);
     const reason = String(input.reason || '').trim().slice(0, 10000);
-    if (!query || (!correctVendor && !reason)) return null;
+    const hasVendor = hasMinimumReportContent(correctVendor, 2);
+    const hasReason = hasMinimumReportContent(reason, 4);
+    if (!query || (!hasVendor && !hasReason)) return null;
     return {
       query,
-      suggestedVendor: correctVendor,
+      suggestedVendor: hasVendor ? correctVendor : '',
       detectedVendor: String(input.detectedVendor || '').trim().slice(0, 120),
       source: String(input.source || '').trim(),
       detail: String(input.detail || '').trim(),
-      reason,
+      reason: hasReason ? reason : '',
       kind: 'mapping',
       reportId: String(input.reportId || ''),
       appVersion: String(input.appVersion || '')
@@ -200,6 +212,8 @@
     normalizeBaseMultiplierPreset,
     normalizeBaseMultiplierPresetsConfig,
     normalizeReportCategory,
+    countReportContentCharacters,
+    hasMinimumReportContent,
     buildAppReportPayload,
     buildMappingReportPayload,
     readPrimaryState,
