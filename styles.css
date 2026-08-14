@@ -1715,6 +1715,29 @@ body.is-external-network .search-sources .source-icon {
   display: none !important;
 }
 
+body:not(.is-internal-network) .field-help,
+body:not(.is-internal-network) .app-info-tooltip,
+body:not(.is-internal-network) .floating-tooltip {
+  display: none !important;
+}
+
+body:not(.is-internal-network) [data-tooltip]::before,
+body:not(.is-internal-network) [data-tooltip]::after {
+  display: none !important;
+  content: none !important;
+}
+
+body[data-page-title="Kalkulator"]:not(.is-internal-network) .layout,
+body[data-page-title="Kalkulator"]:not(.is-internal-network).layout-three-columns .layout {
+  grid-template-columns: minmax(0, 720px) !important;
+  justify-content: center;
+}
+
+body[data-page-title="Kalkulator"]:not(.is-internal-network) .app-card {
+  width: 100%;
+  grid-column: 1 !important;
+}
+
 .source-icon-placeholder {
   display: none;
   min-width: 30px;

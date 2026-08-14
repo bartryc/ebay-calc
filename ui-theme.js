@@ -6,6 +6,93 @@
   const FONT_SCALE_MIN = 0.7;
   const FONT_SCALE_MAX = 1.5;
   const FONT_SCALE_STEP = 0.1;
+  const FULL_VERSION_ACCESS_PATH = '/internal-access';
+  let fullVersionAccessPromise = null;
+  let nativeTooltipObserver = null;
+
+  function syncNativeTooltipTitles(root, isAllowed) {
+    const nodes = [];
+    if (root?.nodeType === 1 && (root.hasAttribute('title') || root.hasAttribute('data-full-version-title'))) {
+      nodes.push(root);
+    }
+    root?.querySelectorAll?.('[title], [data-full-version-title]').forEach((node) => nodes.push(node));
+    nodes.forEach((node) => {
+      if (isAllowed) {
+        const savedTitle = node.getAttribute('data-full-version-title');
+        if (savedTitle !== null) {
+          node.setAttribute('title', savedTitle);
+          node.removeAttribute('data-full-version-title');
+        }
+        return;
+      }
+      const title = node.getAttribute('title');
+      if (title !== null) {
+        node.setAttribute('data-full-version-title', title);
+        node.removeAttribute('title');
+      }
+    });
+  }
+
+  function ensureNativeTooltipObserver() {
+    if (nativeTooltipObserver || typeof MutationObserver !== 'function') return;
+    nativeTooltipObserver = new MutationObserver((mutations) => {
+      const isAllowed = document.body?.classList.contains('is-internal-network') === true;
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes') {
+          syncNativeTooltipTitles(mutation.target, isAllowed);
+          return;
+        }
+        mutation.addedNodes.forEach((node) => syncNativeTooltipTitles(node, isAllowed));
+      });
+    });
+    nativeTooltipObserver.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['title']
+    });
+  }
+
+  function applyFullVersionAccess(isAllowed, ip = '') {
+    const allowed = isAllowed === true;
+    const body = document.body;
+    if (!body) return;
+    body.classList.toggle('is-internal-network', allowed);
+    body.classList.toggle('is-external-network', !allowed);
+    if (ip) body.dataset.clientIp = ip;
+    else delete body.dataset.clientIp;
+    document.querySelectorAll('[data-internal-only]').forEach((element) => {
+      element.hidden = !allowed;
+      element.setAttribute('aria-hidden', allowed ? 'false' : 'true');
+    });
+    syncNativeTooltipTitles(document, allowed);
+    ensureNativeTooltipObserver();
+    document.dispatchEvent(new CustomEvent('internal-feature-access-change', {
+      detail: { allowed, ip }
+    }));
+  }
+
+  async function initFullVersionAccess() {
+    if (fullVersionAccessPromise) return fullVersionAccessPromise;
+    applyFullVersionAccess(false);
+    fullVersionAccessPromise = (async () => {
+      let access = { allowed: false, ip: '' };
+      try {
+        if (window.PN_MAPPINGS_API?.request) {
+          const response = await window.PN_MAPPINGS_API.request(FULL_VERSION_ACCESS_PATH, { method: 'GET' });
+          if (response.ok) {
+            const payload = await response.json();
+            access = { allowed: payload?.allowed === true, ip: String(payload?.ip || '') };
+          }
+        }
+      } catch (_error) {
+        access = { allowed: false, ip: '' };
+      }
+      applyFullVersionAccess(access.allowed, access.ip);
+      return access;
+    })();
+    return fullVersionAccessPromise;
+  }
 
   function getCookieValue(name) {
     const prefix = `${name}=`;
@@ -275,6 +362,7 @@
     const adminKeys = new Set();
 
     window.addEventListener('keydown', (event) => {
+      if (!document.body?.classList.contains('is-internal-network')) return;
       const target = event.target;
       const active = document.activeElement;
       const isEditableTarget = !!(
@@ -312,7 +400,7 @@
     let activeTarget = null;
     let lastPointer = { x: 0, y: 0 };
 
-    const isEnabled = () => narrowQuery.matches;
+    const isEnabled = () => narrowQuery.matches && document.body?.classList.contains('is-internal-network');
     const getTooltipTarget = (target) => {
       const node = target?.closest?.('[data-tooltip]');
       if (!node) return null;
@@ -409,12 +497,16 @@
     window.addEventListener('scroll', () => {
       if (activeTarget) positionTooltip(lastPointer.x, lastPointer.y);
     }, true);
+    document.addEventListener('internal-feature-access-change', (event) => {
+      if (!event.detail?.allowed) hideTooltip();
+    });
   }
 
   function init() {
     const body = document.body;
     if (!body) return;
     applyPageTitle();
+    initFullVersionAccess();
     initAppInfoTooltip();
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const storedTheme = localStorage.getItem('theme') || getCookieValue(THEME_COOKIE_KEY);
@@ -442,5 +534,5 @@
     initAdminShortcut();
   }
 
-  window.UITheme = { init };
+  window.UITheme = { init, initFullVersionAccess, applyFullVersionAccess };
 })();

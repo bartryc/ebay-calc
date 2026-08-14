@@ -10,7 +10,7 @@
 </head>
 <body data-page-title="Kalkulator" class="is-external-network">
   <div class="page">
-    <header class="topbar">
+    <header class="topbar internal-only-feature" data-internal-only hidden>
       <div class="top-actions">
         <nav class="top-menu" aria-label="Główne menu">
           <span class="top-menu-app">
@@ -22,14 +22,14 @@
             </a>
             <span class="app-info-tooltip" id="appInfoTooltip" role="tooltip"></span>
           </span>
-          <button type="button" id="layoutCustomizeBtn" class="top-menu-toggle">Układ</button>
-          <a class="top-menu-link" href="pn-mappings.html">
+          <button type="button" id="layoutCustomizeBtn" class="top-menu-toggle internal-only-feature" data-internal-only hidden>Układ</button>
+          <a class="top-menu-link internal-only-feature" href="pn-mappings.html" data-internal-only hidden>
             <span class="top-menu-icon" aria-hidden="true">
               <img src="resources/icon-mapping.svg" alt="">
             </span>
             <span>Mapowania</span>
           </a>
-          <a class="top-menu-link" href="mapping-builder.html">
+          <a class="top-menu-link internal-only-feature" href="mapping-builder.html" data-internal-only hidden>
             <span class="top-menu-icon" aria-hidden="true">
               <img src="resources/icon-builder.svg" alt="">
             </span>
@@ -55,7 +55,7 @@
       <section class="app-card">
         <form id="priceForm">
           <div id="calcLayoutContainer">
-            <div class="preset-buttons layout-item" data-layout-item="calc-presets" id="calculatorPresetButtons"></div>
+            <div class="preset-buttons layout-item internal-only-feature" data-layout-item="calc-presets" id="calculatorPresetButtons" data-internal-only hidden></div>
 
             <div class="layout-item" data-layout-item="calc-netto">
               <label for="plnNetto" class="field-label">Kwota netto w PLN
@@ -108,7 +108,7 @@
               <input type="number" id="vatRate" value="23" min="0" max="100" required>
             </div>
 
-            <div class="layout-item" data-layout-item="calc-min-markup">
+            <div class="layout-item internal-only-feature" data-layout-item="calc-min-markup" data-internal-only hidden>
               <div class="calc-field-pair">
                 <div class="field-label-row">
                   <label for="purchaseAmount" class="field-label">Kwota zakupu (PLN)</label>
@@ -160,7 +160,7 @@
               </div>
             </div>
 
-            <div class="layout-item" data-layout-item="calc-advanced">
+            <div class="layout-item internal-only-feature" data-layout-item="calc-advanced" data-internal-only hidden>
               <div class="toggle-row">
                 <label class="toggle-switch">
                 <input type="checkbox" id="advancedOptionsToggle">
@@ -207,14 +207,14 @@
 
       </section>
 
-      <div class="column-resizer column-resizer-left" id="columnResizer" data-resizer="left" role="separator" aria-label="Zmień szerokość kolumn" aria-orientation="vertical" tabindex="0"></div>
+      <div class="column-resizer column-resizer-left internal-only-feature" id="columnResizer" data-resizer="left" role="separator" aria-label="Zmień szerokość kolumn" aria-orientation="vertical" tabindex="0" data-internal-only hidden></div>
 
-      <aside class="info-card">
+      <aside class="info-card internal-only-feature" data-internal-only hidden>
         <div class="info-column-actions">
           <button type="button" class="report-quick-btn" id="reportMappingBtn">⚑ Zgłoś</button>
         </div>
         <div id="infoLayoutContainer">
-        <div class="info-card search-card layout-item" data-layout-item="search-card">
+        <div class="info-card search-card layout-item internal-only-feature" data-layout-item="search-card" data-internal-only hidden>
           <div class="search-header">
             <h3>Wyszukaj ofertę po PN</h3>
           </div>
@@ -268,7 +268,7 @@
           </div>
           <div class="search-status" id="searchStatus" aria-live="polite"></div>
         </div>
-        <details class="info-card collapsible-card history-collapsible layout-item" id="historyCard" data-layout-item="history-card">
+        <details class="info-card collapsible-card history-collapsible layout-item internal-only-feature" id="historyCard" data-layout-item="history-card" data-internal-only hidden>
           <summary class="collapsible-summary">
             <div class="history-header">
               <div>
@@ -326,9 +326,9 @@
         </div>
       </aside>
 
-      <div class="column-resizer column-resizer-right" id="columnResizerRight" data-resizer="right" role="separator" aria-label="Zmień szerokość drugiej i trzeciej kolumny" aria-orientation="vertical" tabindex="0"></div>
+      <div class="column-resizer column-resizer-right internal-only-feature" id="columnResizerRight" data-resizer="right" role="separator" aria-label="Zmień szerokość drugiej i trzeciej kolumny" aria-orientation="vertical" tabindex="0" data-internal-only hidden></div>
 
-      <aside class="info-card layout-extra-card" aria-label="Trzecia kolumna układu">
+      <aside class="info-card layout-extra-card internal-only-feature" aria-label="Trzecia kolumna układu" data-internal-only hidden>
         <div id="extraLayoutContainer"></div>
       </aside>
     </div>
