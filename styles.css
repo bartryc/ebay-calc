@@ -1738,6 +1738,16 @@ body[data-page-title="Kalkulator"]:not(.is-internal-network) .app-card {
   grid-column: 1 !important;
 }
 
+body[data-page-title="Kalkulator"].is-external-network .topbar,
+body[data-page-title="Kalkulator"].is-external-network .info-column-actions,
+body[data-page-title="Kalkulator"].is-external-network [data-layout-item="search-card"],
+body[data-page-title="Kalkulator"].is-external-network [data-layout-item="history-card"],
+body[data-page-title="Kalkulator"].is-external-network [data-layout-item="base-card"],
+body[data-page-title="Kalkulator"].is-external-network .layout > .column-resizer,
+body[data-page-title="Kalkulator"].is-external-network .layout > aside.info-card {
+  display: none !important;
+}
+
 .source-icon-placeholder {
   display: none;
   min-width: 30px;
