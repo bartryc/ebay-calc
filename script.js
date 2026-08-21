@@ -36,8 +36,11 @@ const CALCULATOR_PRESETS_NOTE_ID = 'calculator-presets-v1';
 const CALCULATOR_PRESETS_CACHE_KEY = 'calculatorPresetsV1';
 const BASE_MULTIPLIER_PRESETS_NOTE_ID = 'base-multiplier-presets-v1';
 const BASE_MULTIPLIER_PRESETS_CACHE_KEY = 'baseMultiplierPresetsV1';
+const CALCULATOR_PREFERENCES_KEY = 'calculatorPreferencesV1';
 const DEFAULT_COMMISSION_RATE = 15;
 let defaultCommissionRate = DEFAULT_COMMISSION_RATE;
+let selectedCalculatorPresetId = '';
+let selectedBaseMultiplierPresetId = '';
 const DEFAULT_CURRENCIES = [
   { code: 'EUR', label: 'EUR', fallbackRate: 4.3 },
   { code: 'USD', label: 'USD', fallbackRate: 3.9 },
@@ -179,6 +182,87 @@ function layoutGetCookieValue(name) {
 function layoutSetCookieValue(name, value, days = 365) {
   const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
   document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
+function readCalculatorPreferences() {
+  const raw = localStorage.getItem(CALCULATOR_PREFERENCES_KEY) || layoutGetCookieValue(CALCULATOR_PREFERENCES_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function persistCalculatorPreferences() {
+  const currency = String(document.getElementById('currency')?.value || 'EUR').trim().toUpperCase();
+  const vatRate = parseNumber(document.getElementById('vatRate')?.value);
+  const commission = parseNumber(document.getElementById('commission')?.value);
+  const markup = parseNumber(document.getElementById('minMarkup')?.value);
+  const baseMultiplier = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
+  const preferences = {
+    version: 1,
+    currency: /^[A-Z]{3}$/.test(currency) ? currency : 'EUR',
+    vatRate: Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100 ? vatRate : 23,
+    commission: Number.isFinite(commission) && commission >= 0 && commission <= 100 ? commission : defaultCommissionRate,
+    markup: Number.isFinite(markup) && markup > -100 ? markup : 30,
+    baseMultiplier: Number.isFinite(baseMultiplier) && baseMultiplier > 0 ? baseMultiplier : null,
+    calculatorPresetId: selectedCalculatorPresetId,
+    baseMultiplierPresetId: selectedBaseMultiplierPresetId,
+    purchaseIsNet: !!document.getElementById('purchaseAmountNetToggle')?.checked,
+    saleIsNet: !!document.getElementById('markupSaleNetToggle')?.checked,
+    basePricing: !!document.getElementById('useCurrentBaseMultiplierToggle')?.checked,
+    advancedOptions: !!document.getElementById('advancedOptionsToggle')?.checked
+  };
+  const payload = JSON.stringify(preferences);
+  localStorage.setItem(CALCULATOR_PREFERENCES_KEY, payload);
+  layoutSetCookieValue(CALCULATOR_PREFERENCES_KEY, payload);
+}
+
+function restoreCalculatorPreferences() {
+  const preferences = readCalculatorPreferences();
+  if (!preferences) return false;
+  const currencyEl = document.getElementById('currency');
+  const savedCurrency = String(preferences.currency || '').trim().toUpperCase();
+  if (currencyEl && Array.from(currencyEl.options).some((option) => option.value === savedCurrency)) {
+    currencyEl.value = savedCurrency;
+  }
+  const assignNumber = (id, value, minimum, maximum = Number.POSITIVE_INFINITY) => {
+    const parsed = parseNumber(value);
+    const input = document.getElementById(id);
+    if (!input || !Number.isFinite(parsed) || parsed < minimum || parsed > maximum) return;
+    input.value = String(parsed);
+  };
+  assignNumber('vatRate', preferences.vatRate, 0, 100);
+  assignNumber('commission', preferences.commission, 0, 100);
+  assignNumber('minMarkup', preferences.markup, -99.999);
+  assignNumber('currentBaseMultiplier', preferences.baseMultiplier, 0.0000001);
+  selectedCalculatorPresetId = String(preferences.calculatorPresetId || '');
+  selectedBaseMultiplierPresetId = String(preferences.baseMultiplierPresetId || '');
+  const purchaseToggle = document.getElementById('purchaseAmountNetToggle');
+  const saleToggle = document.getElementById('markupSaleNetToggle');
+  const baseToggle = document.getElementById('useCurrentBaseMultiplierToggle');
+  if (purchaseToggle) purchaseToggle.checked = preferences.purchaseIsNet === true;
+  if (saleToggle) saleToggle.checked = preferences.saleIsNet === true;
+  if (baseToggle) baseToggle.checked = preferences.basePricing === true;
+  if (advancedOptionsToggle) advancedOptionsToggle.checked = preferences.advancedOptions === true;
+  if (advancedOptions) advancedOptions.style.display = advancedOptionsToggle?.checked ? 'block' : 'none';
+  if (exchangeRateInput) exchangeRateInput.disabled = !advancedOptionsToggle?.checked;
+  if (currencyEl) document.getElementById('currencyLabel').innerText = currencyEl.value;
+  updatePurchaseAmountModeUI();
+  updateMarkupAmountModeUI();
+  updateEbayCurrencyLabel();
+  renderCalculatorPresetButtons();
+  renderBaseMultiplierPresetButtons();
+  return true;
+}
+
+function clearCalculatorPreferences() {
+  localStorage.removeItem(CALCULATOR_PREFERENCES_KEY);
+  document.cookie = `${CALCULATOR_PREFERENCES_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  selectedCalculatorPresetId = '';
+  selectedBaseMultiplierPresetId = '';
 }
 
 function getCurrentLayoutOrder() {
@@ -1712,6 +1796,7 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
     updateMarkupAmountModeUI();
     updateMarkupCalculations();
     if (options.history !== false) addHistoryEntry('purchaseAmountMode');
+    persistCalculatorPreferences();
     return true;
   }
 
@@ -1737,6 +1822,7 @@ function applyAmountModeChange(toggleId, toNetMode, options = {}) {
       window.CalculatorUI.flashRecalculatedField(vatRateInputEl);
     }
     if (options.history !== false) addHistoryEntry('markupAmountMode');
+    persistCalculatorPreferences();
     return true;
   }
 
@@ -2814,6 +2900,7 @@ advancedOptionsToggle.addEventListener('change', () => {
   if (advancedOptionsToggle.checked) {
     checkRateProvidersStatus(document.getElementById('currency').value);
   }
+  persistCalculatorPreferences();
 });
 
 // Update eBay currency label with VAT rate
@@ -2830,6 +2917,8 @@ function updateEbayCurrencyLabel() {
 
 // Clear button handler
 document.getElementById('clearBtn').addEventListener('click', () => {
+  clearCalculatorPreferences();
+  window.resetSearchPreferences?.();
   window.CalculatorUI.clearRecalculatedFields();
   document.getElementById('plnNetto').value = '';
   document.getElementById('plnBrutto').value = '';
@@ -2849,7 +2938,7 @@ document.getElementById('clearBtn').addEventListener('click', () => {
     purchaseAmountNetToggle.checked = false;
   }
   updatePurchaseAmountModeUI();
-  document.getElementById('minMarkup').value = '';
+  document.getElementById('minMarkup').value = '30';
   document.getElementById('targetSaleAmount').value = '';
   autoLinkedFieldValues.targetSaleAmount = '';
   const markupSaleNetToggle = document.getElementById('markupSaleNetToggle');
@@ -2877,6 +2966,8 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   hideSelfTestDetails();
   historyEntries.length = 0;
   renderHistory();
+  renderCalculatorPresetButtons();
+  renderBaseMultiplierPresetButtons();
   updateBaseMultiplier();
   updateSummaryMetrics();
   fetchExchangeRate('EUR');
@@ -3097,6 +3188,13 @@ function renderBaseMultiplierPresetButtons() {
   }).join('');
 }
 
+function syncSelectedBaseMultiplierPreset() {
+  const current = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
+  selectedBaseMultiplierPresetId = baseMultiplierPresetsConfig.presets.find((item) => (
+    item.enabled !== false && Number.isFinite(current) && Math.abs(current - item.multiplier) < 0.0000001
+  ))?.id || '';
+}
+
 async function loadBaseMultiplierPresetsConfig() {
   const fromLocal = localStorage.getItem(BASE_MULTIPLIER_PRESETS_CACHE_KEY);
   if (fromLocal) {
@@ -3135,7 +3233,7 @@ function renderCalculatorPresetButtons() {
     return;
   }
   container.innerHTML = presets
-    .map((item) => `<button type="button" data-calculator-preset-id="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>`)
+    .map((item) => `<button type="button" class="${item.id === selectedCalculatorPresetId ? 'is-active' : ''}" data-calculator-preset-id="${escapeHtml(item.id)}" aria-pressed="${item.id === selectedCalculatorPresetId ? 'true' : 'false'}">${escapeHtml(item.label)}</button>`)
     .join('');
 }
 
@@ -3653,11 +3751,13 @@ ebayPriceInputEl.addEventListener('blur', () => {
 
 vatRateInputEl.addEventListener('input', () => {
   lastChanged = 'vatRate';
+  selectedCalculatorPresetId = '';
   hideSelfTestDetails();
   syncFields('vatRate');
   updateBaseMultiplier();
   updateMarkupCalculations({ syncFields: false });
   scheduleHistoryLog('vatRate');
+  if (Number.isFinite(parseNumber(vatRateInputEl.value))) persistCalculatorPreferences();
 });
 vatRateInputEl.addEventListener('focus', () => {
   setFieldBaseline('vatRate');
@@ -3666,6 +3766,7 @@ vatRateInputEl.addEventListener('blur', () => {
   updateBaseMultiplier();
   updateMarkupCalculations({ syncFields: false });
   flushHistoryLog('vatRate');
+  persistCalculatorPreferences();
 });
 
 function getSourceForPricingParamChange() {
@@ -3710,20 +3811,24 @@ function resyncPricingFromCurrentSource(preferredSource = null) {
 
 ['exchangeRate', 'commission'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => {
+    if (id === 'commission') selectedCalculatorPresetId = '';
     hideSelfTestDetails();
     resyncPricingFromCurrentSource();
     scheduleHistoryLog(id);
+    if (id === 'commission' && Number.isFinite(parseNumber(document.getElementById(id).value))) persistCalculatorPreferences();
   });
   document.getElementById(id).addEventListener('focus', () => {
     setFieldBaseline(id);
   });
   document.getElementById(id).addEventListener('blur', () => {
     flushHistoryLog(id);
+    if (id === 'commission') persistCalculatorPreferences();
   });
 });
 
 currencySelectEl.addEventListener('change', () => {
   const selectedCurrency = currencySelectEl.value;
+  selectedCalculatorPresetId = '';
   window.CalculatorUI.clearRecalculatedFields();
   document.getElementById('currencyLabel').innerText = selectedCurrency;
   updateEbayCurrencyLabel();
@@ -3731,6 +3836,7 @@ currencySelectEl.addEventListener('change', () => {
   fetchExchangeRate(selectedCurrency, { notify: false });
   checkRateProvidersStatus(selectedCurrency);
   addHistoryEntry('currency');
+  persistCalculatorPreferences();
 });
 
 ['purchaseAmount', 'minMarkup'].forEach((id) => {
@@ -3739,10 +3845,12 @@ currencySelectEl.addEventListener('change', () => {
   el.addEventListener('input', () => {
     window.CalculatorUI.clearRecalculatedFields();
     if (id === 'minMarkup') {
+      selectedCalculatorPresetId = '';
       rememberMarkupSource('minMarkup');
     }
     updateMarkupAfterFieldEdit(id, el);
     scheduleHistoryLog(id, { force: true });
+    if (id === 'minMarkup' && Number.isFinite(parseNumber(el.value))) persistCalculatorPreferences();
   });
   el.addEventListener('change', () => {
     window.CalculatorUI.clearRecalculatedFields();
@@ -3752,6 +3860,7 @@ currencySelectEl.addEventListener('change', () => {
     }
     updateMarkupAfterFieldEdit(id, el);
     flushHistoryLog(id, { force: true });
+    if (id === 'minMarkup') persistCalculatorPreferences();
   });
   el.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
@@ -3769,6 +3878,7 @@ currencySelectEl.addEventListener('change', () => {
   el.addEventListener('blur', () => {
     finishDecimalInput(el);
     flushHistoryLog(id, { force: true });
+    if (id === 'minMarkup') persistCalculatorPreferences();
   });
 });
 
@@ -3787,10 +3897,14 @@ if (currentBaseMultiplierEl) {
   currentBaseMultiplierEl.addEventListener('input', () => {
     refreshCurrentBaseMultiplierPricing();
     scheduleHistoryLog('currentBaseMultiplier');
+    syncSelectedBaseMultiplierPreset();
+    persistCalculatorPreferences();
   });
   currentBaseMultiplierEl.addEventListener('change', () => {
     refreshCurrentBaseMultiplierPricing();
     flushHistoryLog('currentBaseMultiplier');
+    syncSelectedBaseMultiplierPreset();
+    persistCalculatorPreferences();
   });
   currentBaseMultiplierEl.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
@@ -3802,6 +3916,8 @@ if (currentBaseMultiplierEl) {
   });
   currentBaseMultiplierEl.addEventListener('blur', () => {
     flushHistoryLog('currentBaseMultiplier');
+    syncSelectedBaseMultiplierPreset();
+    persistCalculatorPreferences();
   });
 }
 
@@ -3813,10 +3929,12 @@ if (baseMultiplierPresetButtons) {
     const presetId = button.getAttribute('data-base-multiplier-preset-id') || '';
     const preset = baseMultiplierPresetsConfig.presets.find((item) => item.id === presetId && item.enabled !== false);
     if (!preset) return;
+    selectedBaseMultiplierPresetId = preset.id;
     currentBaseMultiplierEl.value = formatBaseMultiplierPresetValue(preset.multiplier);
     refreshCurrentBaseMultiplierPricing();
     window.CalculatorUI.flashRecalculatedField(currentBaseMultiplierEl);
     addHistoryEntry('currentBaseMultiplier');
+    persistCalculatorPreferences();
     showMainToast(`Ustawiono mnożnik Base: ${preset.label}.`, 'success', undefined, {
       dedupeKey: 'base-multiplier-preset'
     });
@@ -3829,6 +3947,7 @@ if (useCurrentBaseMultiplierToggle) {
     window.CalculatorUI.clearRecalculatedFields();
     hideSelfTestDetails();
     resyncPricingFromCurrentSource();
+    persistCalculatorPreferences();
   });
 }
 
@@ -3937,7 +4056,12 @@ if (calculatorPresetButtons) {
     if (!button) return;
     const presetId = button.getAttribute('data-calculator-preset-id') || '';
     const preset = calculatorPresetsConfig.presets.find((item) => item.id === presetId);
-    if (preset) applyPreset(preset);
+    if (preset) {
+      selectedCalculatorPresetId = preset.id;
+      applyPreset(preset);
+      renderCalculatorPresetButtons();
+      persistCalculatorPreferences();
+    }
   });
 }
 
@@ -3949,6 +4073,7 @@ if (calculatorPresetButtons) {
   await loadBaseMultiplierPresetsConfig();
   await loadDefaultRateProviderSelection();
   await loadDefaultCommissionRate();
+  restoreCalculatorPreferences();
   const currency = document.getElementById('currency').value;
   fetchExchangeRate(currency, { notify: false });
   checkRateProvidersStatus(currency);
@@ -4049,7 +4174,6 @@ if (partNumberInput) {
   const reportPendingFlushBtn = document.getElementById('reportPendingFlushBtn');
   const reportModalInfo = document.getElementById('reportModalInfo');
   const reportCategory = document.getElementById('reportCategory');
-  const reportTitle = document.getElementById('reportTitle');
   const reportReason = document.getElementById('reportReason');
   const reportTechnicalInfo = document.getElementById('reportTechnicalInfo');
   const reportMappingSection = document.getElementById('reportMappingSection');
@@ -4367,6 +4491,21 @@ if (partNumberInput) {
     const defaultRadio = submenu?.querySelector(`input[name="sourceSort-${sourceId}"][data-reset="1"]`)
       || submenu?.querySelector(`input[name="sourceSort-${sourceId}"]`);
     if (defaultRadio) defaultRadio.checked = true;
+  };
+  window.resetSearchPreferences = () => {
+    localStorage.removeItem(SEARCH_SOURCES_STORAGE_KEY);
+    localStorage.removeItem(SEARCH_SOURCE_VARIANTS_STORAGE_KEY);
+    document.cookie = `${SEARCH_SOURCES_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+    document.cookie = `${SEARCH_SOURCE_VARIANTS_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+    sourceInputMap.forEach((inputEl, sourceId) => {
+      if (inputEl) inputEl.checked = true;
+      const cfg = getSourceConfig(sourceId);
+      const variants = Array.isArray(cfg?.variants) ? cfg.variants : [];
+      const defaultVariantId = String(variants.find((item) => item?.isDefault)?.id || variants[0]?.id || 'default');
+      const radios = Array.from(getSourceSubmenu(sourceId)?.querySelectorAll(`input[name="sourceSort-${sourceId}"]`) || []);
+      const defaultRadio = radios.find((radio) => String(radio.value) === defaultVariantId) || radios[0];
+      if (defaultRadio) defaultRadio.checked = true;
+    });
   };
   const getSourceVariantConfig = (sourceId) => {
     const cfg = getSourceConfig(sourceId);
@@ -4796,7 +4935,6 @@ if (partNumberInput) {
     if (!reportModal) return;
     reportModal.style.display = 'none';
     if (reportCategory) reportCategory.value = 'bug';
-    if (reportTitle) reportTitle.value = '';
     if (reportReason) reportReason.value = '';
     if (reportCorrectVendor) reportCorrectVendor.value = '';
     if (reportMappingReason) reportMappingReason.value = '';
@@ -4822,7 +4960,7 @@ if (partNumberInput) {
     }
     updatePendingReportButton();
     reportModal.style.display = 'flex';
-    if (reportTitle) reportTitle.focus();
+    if (reportReason) reportReason.focus();
   };
 
   if (reportMappingBtn) {
@@ -4850,20 +4988,13 @@ if (partNumberInput) {
   if (reportModalSubmit) {
     reportModalSubmit.addEventListener('click', async () => {
       const category = reportCategory?.value || 'bug';
-      const title = reportTitle?.value?.trim() || '';
       const reason = reportReason?.value?.trim() || '';
-      if (!window.CalculatorUI.hasMinimumReportContent(title, 3)) {
-        showMainToast('Tytuł musi zawierać co najmniej 3 litery lub cyfry.', 'warn');
-        reportTitle?.focus();
-        return;
-      }
       if (!window.CalculatorUI.hasMinimumReportContent(reason, 8)) {
         showMainToast('Opis musi zawierać co najmniej 8 liter lub cyfr.', 'warn');
         reportReason?.focus();
         return;
       }
       const payload = window.CalculatorUI.buildAppReportPayload({
-        title,
         reason,
         category,
         reportId: createReportId(),

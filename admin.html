@@ -182,7 +182,7 @@
             <div class="worker-usage-history-header">
               <div>
                 <h4 id="workerUsageHistoryTitle">Dzienne zużycie</h4>
-                <p>Zamknięte dni pochodzą z Cloudflare Analytics. Bieżący dzień i lokalne pomiary mogą być jeszcze niepełne.</p>
+                <p>Historia jest zapisywana globalnie w Worker KV. Bieżący dzień może być jeszcze niepełny.</p>
               </div>
               <label for="workerUsageHistoryDays">
                 Okres
@@ -1088,8 +1088,7 @@
     const DEFAULT_COMMISSION_RATE = 15;
     const DEFAULT_HD_WHITELIST = [];
     const WORKER_USAGE_ENDPOINT = '/usage';
-    const WORKER_USAGE_SNAPSHOT_KEY = 'adminWorkerUsageSnapshotV1';
-    const WORKER_USAGE_HISTORY_KEY = 'adminWorkerUsageHistoryV1';
+    const WORKER_USAGE_ARCHIVE_NOTE_ID = 'worker-usage-history-v1';
     const WORKER_USAGE_LIMITS = {
       workerRequests: 100000,
       kvReads: 100000,
@@ -1198,6 +1197,7 @@
     let logsBackupCache = null;
     let logActorAliasesConfig = { version: 1, aliases: [] };
     let workerUsageLoaded = false;
+    let workerUsageArchive = [];
 
     function readUsagePath(value, path) {
       return path.split('.').reduce((current, key) => (
@@ -1263,24 +1263,80 @@
       return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : '';
     }
 
-    function readLocalWorkerUsageHistory() {
+    function normalizeWorkerUsageArchive(value) {
+      const rawHistory = Array.isArray(value) ? value : (Array.isArray(value?.history) ? value.history : []);
+      return rawHistory.map((entry) => {
+        const usage = normalizeWorkerUsage(entry);
+        const date = String(entry?.date || entry?.day || getUsageUtcDay(usage.measuredAt)).slice(0, 10);
+        return {
+          ...usage,
+          date,
+          origin: 'worker',
+          complete: entry?.complete === true
+        };
+      }).filter((entry) => entry.date && entry.hasTelemetry);
+    }
+
+    function readLegacyLocalWorkerUsageArchive() {
+      const entries = [];
       try {
-        const stored = JSON.parse(localStorage.getItem(WORKER_USAGE_HISTORY_KEY) || '[]');
-        return Array.isArray(stored) ? stored : [];
+        const history = JSON.parse(localStorage.getItem('adminWorkerUsageHistoryV1') || '[]');
+        if (Array.isArray(history)) entries.push(...history);
       } catch (_error) {
-        return [];
+        // Uszkodzony lokalny wpis nie blokuje odczytu globalnej historii.
+      }
+      try {
+        const snapshot = JSON.parse(localStorage.getItem('adminWorkerUsageSnapshotV1') || 'null');
+        const usage = normalizeWorkerUsage(snapshot);
+        if (usage.hasTelemetry) {
+          entries.push({
+            ...usage,
+            date: getUsageUtcDay(usage.measuredAt),
+            complete: false
+          });
+        }
+      } catch (_error) {
+        // Brak poprawnego snapshotu oznacza po prostu brak danych do migracji.
+      }
+      return normalizeWorkerUsageArchive(entries);
+    }
+
+    function clearLegacyLocalWorkerUsageArchive() {
+      try {
+        localStorage.removeItem('adminWorkerUsageSnapshotV1');
+        localStorage.removeItem('adminWorkerUsageHistoryV1');
+      } catch (_error) {
+        // Globalny zapis jest już potwierdzony; lokalna kopia może wygasnąć później.
       }
     }
 
-    function saveLocalWorkerUsageSnapshot(usage) {
-      if (!usage?.hasTelemetry) return;
-      const date = getUsageUtcDay(usage.measuredAt);
-      if (!date) return;
-      const history = readLocalWorkerUsageHistory();
-      const previous = history.find((item) => item?.date === date);
+    async function loadWorkerUsageArchive() {
+      const response = await window.PN_MAPPINGS_API.request(
+        `/notes?id=${encodeURIComponent(WORKER_USAGE_ARCHIVE_NOTE_ID)}`,
+        { method: 'GET', cache: 'no-store' }
+      );
+      if (response.status === 404) {
+        workerUsageArchive = [];
+        return workerUsageArchive;
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      let parsed = null;
+      try {
+        parsed = payload?.note ? JSON.parse(payload.note) : null;
+      } catch (_error) {
+        parsed = null;
+      }
+      workerUsageArchive = normalizeWorkerUsageArchive(parsed);
+      return workerUsageArchive;
+    }
+
+    function mergeWorkerUsageDay(history, entry) {
+      if (!entry?.date || !entry?.hasTelemetry) return history;
+      const previous = history.find((item) => item?.date === entry.date);
       const values = {};
       WORKER_USAGE_METRICS.forEach(({ key }) => {
-        const currentValue = usage.values?.[key];
+        const currentValue = entry.values?.[key];
         const previousRawValue = previous?.values?.[key];
         const previousValue = previousRawValue === null || previousRawValue === undefined
           ? Number.NaN
@@ -1290,22 +1346,53 @@
           : (Number.isFinite(previousValue) ? previousValue : null);
       });
       const nextEntry = {
-        date,
+        date: entry.date,
         values,
-        limits: usage.limits,
-        measuredAt: usage.measuredAt,
-        plan: usage.plan,
-        origin: 'local',
-        complete: false
+        limits: entry.limits,
+        measuredAt: entry.measuredAt,
+        plan: entry.plan,
+        origin: 'worker',
+        complete: entry.complete === true
       };
-      const nextHistory = [nextEntry, ...history.filter((item) => item?.date !== date)]
+      return [nextEntry, ...history.filter((item) => item?.date !== entry.date)]
         .sort((a, b) => String(b.date).localeCompare(String(a.date)))
         .slice(0, 120);
-      try {
-        localStorage.setItem(WORKER_USAGE_HISTORY_KEY, JSON.stringify(nextHistory));
-      } catch (_error) {
-        // Historia z serwera nadal będzie dostępna bez lokalnego fallbacku.
+    }
+
+    async function saveWorkerUsageArchive(currentUsage, serverHistory = []) {
+      let nextHistory = workerUsageArchive.slice();
+      readLegacyLocalWorkerUsageArchive().forEach((entry) => {
+        nextHistory = mergeWorkerUsageDay(nextHistory, entry);
+      });
+      serverHistory.forEach((entry) => {
+        nextHistory = mergeWorkerUsageDay(nextHistory, entry);
+      });
+      nextHistory = mergeWorkerUsageDay(nextHistory, {
+        ...currentUsage,
+        date: getUsageUtcDay(currentUsage.measuredAt),
+        complete: false
+      });
+      const response = await window.PN_MAPPINGS_API.request(
+        `/notes?id=${encodeURIComponent(WORKER_USAGE_ARCHIVE_NOTE_ID)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            note: JSON.stringify({
+              version: 1,
+              updatedAt: new Date().toISOString(),
+              history: nextHistory
+            })
+          })
+        }
+      );
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
       }
+      workerUsageArchive = nextHistory;
+      clearLegacyLocalWorkerUsageArchive();
+      return workerUsageArchive;
     }
 
     function normalizeWorkerUsageHistory(payload) {
@@ -1329,7 +1416,7 @@
       }).filter((entry) => entry.date && entry.hasTelemetry);
     }
 
-    function getVisibleWorkerUsageHistory(serverHistory = []) {
+    function getVisibleWorkerUsageHistory(serverHistory = [], archivedHistory = workerUsageArchive) {
       const requestedDays = Math.max(1, Number(workerUsageHistoryDays?.value) || 30);
       const today = getUsageUtcDay();
       const oldest = new Date(`${today}T00:00:00.000Z`);
@@ -1337,10 +1424,10 @@
       const oldestDay = oldest.toISOString().slice(0, 10);
       const byDate = new Map();
 
-      readLocalWorkerUsageHistory().forEach((entry) => {
+      archivedHistory.forEach((entry) => {
         const usage = normalizeWorkerUsage(entry);
         if (!entry?.date || !usage.hasTelemetry) return;
-        byDate.set(entry.date, { ...usage, date: entry.date, origin: 'local', complete: false });
+        byDate.set(entry.date, { ...usage, date: entry.date, origin: 'worker', complete: entry.complete === true });
       });
       serverHistory.forEach((entry) => {
         byDate.set(entry.date, {
@@ -1443,9 +1530,9 @@
       }
     }
 
-    function renderWorkerUsageHistory(serverHistory = []) {
+    function renderWorkerUsageHistory(serverHistory = [], archivedHistory = workerUsageArchive) {
       if (!workerUsageHistoryBody) return;
-      const history = getVisibleWorkerUsageHistory(serverHistory);
+      const history = getVisibleWorkerUsageHistory(serverHistory, archivedHistory);
       if (!history.length) {
         workerUsageHistoryBody.innerHTML = '<tr><td colspan="7">Brak zapisanych pomiarów. Historia pojawi się po pierwszym poprawnym odczycie.</td></tr>';
         if (workerUsageHistorySummary) workerUsageHistorySummary.innerHTML = '';
@@ -1495,7 +1582,7 @@
         };
         const sourceLabel = entry.origin === 'cloudflare'
           ? (entry.complete ? 'Cloudflare · pełny' : 'Cloudflare · w trakcie')
-          : 'Lokalny · ostatni pomiar';
+          : (entry.complete ? 'Worker KV · pełny' : 'Worker KV · w trakcie');
         return `
           <tr>
             <td><strong>${escapeHtml(formatUsageHistoryDate(entry.date))}</strong></td>
@@ -1565,11 +1652,10 @@
     }
 
     function readWorkerUsageSnapshot() {
-      try {
-        return normalizeWorkerUsage(JSON.parse(localStorage.getItem(WORKER_USAGE_SNAPSHOT_KEY) || 'null'));
-      } catch (_error) {
-        return null;
-      }
+      const latest = workerUsageArchive
+        .slice()
+        .sort((a, b) => String(b.measuredAt || b.date).localeCompare(String(a.measuredAt || a.date)))[0];
+      return latest ? normalizeWorkerUsage(latest) : null;
     }
 
     function showWorkerUsageUnavailable(message, { online = false, limited = false } = {}) {
@@ -1577,7 +1663,7 @@
       const hasSnapshot = !!snapshot?.hasTelemetry;
       const displayUsage = hasSnapshot ? snapshot : normalizeWorkerUsage({ plan: 'free' });
       renderWorkerUsageMetrics(displayUsage, { stale: hasSnapshot });
-      renderWorkerUsageHistory();
+      renderWorkerUsageHistory([], workerUsageArchive);
       if (workerUsageNotice) workerUsageNotice.textContent = message;
       if (limited) setWorkerUsageState('Możliwy limit', 'critical');
       else if (online) setWorkerUsageState('Worker online · brak telemetryki', 'neutral');
@@ -1592,10 +1678,16 @@
       if (workerUsageNotice) workerUsageNotice.textContent = 'Pobieram stan workera i liczniki KV…';
       try {
         const historyDays = Math.max(1, Number(workerUsageHistoryDays?.value) || 30);
-        const response = await window.PN_MAPPINGS_API.request(`${WORKER_USAGE_ENDPOINT}?days=${historyDays}&cb=${Date.now()}`, {
-          method: 'GET',
-          cache: 'no-store'
-        });
+        const [usageResult, archiveResult] = await Promise.allSettled([
+          window.PN_MAPPINGS_API.request(`${WORKER_USAGE_ENDPOINT}?days=${historyDays}&cb=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store'
+          }),
+          loadWorkerUsageArchive()
+        ]);
+        const archiveLoaded = archiveResult.status === 'fulfilled';
+        if (usageResult.status === 'rejected') throw usageResult.reason;
+        const response = usageResult.value;
         const responseText = await response.text().catch(() => '');
         let errorPayload = null;
         try {
@@ -1630,28 +1722,38 @@
           return;
         }
         const highestRatio = renderWorkerUsageMetrics(usage);
-        saveLocalWorkerUsageSnapshot(usage);
         const serverHistory = normalizeWorkerUsageHistory(payload);
-        renderWorkerUsageHistory(serverHistory);
-        try {
-          localStorage.setItem(WORKER_USAGE_SNAPSHOT_KEY, JSON.stringify({
-            ...payload,
-            measuredAt: usage.measuredAt
-          }));
-        } catch (_error) {
-          // Monitoring działa również bez lokalnej kopii ostatniego pomiaru.
+        let archiveSaved = false;
+        if (archiveLoaded) {
+          try {
+            await saveWorkerUsageArchive(usage, serverHistory);
+            archiveSaved = true;
+          } catch (_error) {
+            archiveSaved = false;
+          }
         }
+        renderWorkerUsageHistory(serverHistory, workerUsageArchive);
         if (workerUsageNotice) {
-          workerUsageNotice.textContent = highestRatio >= 1
+          workerUsageNotice.textContent = !archiveSaved
+            ? 'Liczniki zostały pobrane, ale nie udało się zapisać globalnej historii w Worker KV.'
+            : highestRatio >= 1
             ? 'Co najmniej jeden limit został wykorzystany. Sprawdź usługę w panelu Cloudflare.'
             : highestRatio >= 0.8
               ? 'Co najmniej jeden licznik przekroczył 80% limitu. Warto ograniczyć ciężkie operacje i backupy.'
               : serverHistory.length
-                ? 'Worker działa, a liczniki i historia dzienna zwracają aktualne dane.'
-                : 'Worker działa i zwraca bieżące liczniki. Endpoint nie zwrócił jeszcze historii dziennej — tabela korzysta z lokalnych pomiarów.';
+                ? 'Worker działa, a liczniki i historia dzienna są zapisane globalnie.'
+                : 'Worker działa, a bieżący pomiar został zapisany globalnie w Worker KV.';
         }
-        setWorkerUsageState(highestRatio >= 1 ? 'Limit wykorzystany' : highestRatio >= 0.8 ? 'Blisko limitu' : 'OK', highestRatio >= 1 ? 'critical' : highestRatio >= 0.8 ? 'warn' : 'ok');
-        if (notify) showToast('Odświeżono wykorzystanie workera i KV.', 'ok');
+        setWorkerUsageState(
+          !archiveSaved ? 'Błąd zapisu historii' : highestRatio >= 1 ? 'Limit wykorzystany' : highestRatio >= 0.8 ? 'Blisko limitu' : 'OK',
+          !archiveSaved ? 'warn' : highestRatio >= 1 ? 'critical' : highestRatio >= 0.8 ? 'warn' : 'ok'
+        );
+        if (notify) {
+          showToast(
+            archiveSaved ? 'Odświeżono i zapisano globalnie wykorzystanie workera i KV.' : 'Odświeżono liczniki, ale globalny zapis historii nie powiódł się.',
+            archiveSaved ? 'ok' : 'warn'
+          );
+        }
       } catch (_error) {
         showWorkerUsageUnavailable('Nie udało się połączyć z workerem. Jeśli kalkulator również nie zapisuje danych, sprawdź limit dobowy i stan usługi Cloudflare.');
       } finally {

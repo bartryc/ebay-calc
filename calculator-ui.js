@@ -81,9 +81,9 @@
   function buildAppReportPayload(input = {}) {
     const title = String(input.title || '').trim().slice(0, 120);
     const reason = String(input.reason || '').trim().slice(0, 10000);
-    if (!hasMinimumReportContent(title, 3) || !hasMinimumReportContent(reason, 8)) return null;
+    if (!hasMinimumReportContent(reason, 8)) return null;
     return {
-      title,
+      ...(hasMinimumReportContent(title, 3) ? { title } : {}),
       reason,
       category: normalizeReportCategory(input.category),
       kind: 'ui',

@@ -5393,9 +5393,14 @@ body.dark-mode .search-card {
   font-weight: 600;
 }
 
-.preset-buttons button:hover {
+.preset-buttons button:hover,
+.preset-buttons button.is-active {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.preset-buttons button.is-active {
+  background: color-mix(in srgb, var(--accent) 10%, var(--card-2));
 }
 
 .preset-empty {
@@ -5432,7 +5437,8 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(15, 91, 255, 0.15);
 }
 
-input[type="number"]:disabled {
+input[type="number"]:disabled,
+input[type="text"][inputmode="decimal"]:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
@@ -8333,7 +8339,8 @@ body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="cal
   min-width: 0;
 }
 
-body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair > input[type="number"] {
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair > input[type="number"],
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-min-markup"] > .calc-field-pair > input[type="text"][inputmode="decimal"] {
   height: 40px;
   min-height: 40px;
 }

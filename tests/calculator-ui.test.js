@@ -119,9 +119,11 @@
   equal(appReport.category, 'improvement', 'app report category');
   equal(appReport.kind, 'ui', 'app report kind');
   equal(appReport.context.currency, 'EUR', 'app report context');
-  equal(ui.buildAppReportPayload({ title: '', reason: 'Opis' }), null, 'reject app report without title');
+  const titlelessAppReport = ui.buildAppReportPayload({ reason: 'To jest poprawny opis zgłoszenia' });
+  equal(titlelessAppReport.reason, 'To jest poprawny opis zgłoszenia', 'accept app report without title');
+  equal(titlelessAppReport.title, undefined, 'omit empty app report title');
   equal(ui.buildAppReportPayload({ title: '...', reason: '.............' }), null, 'reject punctuation-only app report');
-  equal(ui.buildAppReportPayload({ title: 'OK', reason: 'To jest poprawny opis' }), null, 'reject too-short app report title');
+  equal(ui.buildAppReportPayload({ title: 'OK', reason: 'To jest poprawny opis' }).title, undefined, 'omit too-short optional title');
   equal(ui.buildAppReportPayload({ title: 'Błąd', reason: '...test' }), null, 'reject too-short meaningful description');
   equal(ui.countReportContentCharacters('  Łąka... 123! '), 7, 'count only meaningful report characters');
 
