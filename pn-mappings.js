@@ -13,9 +13,15 @@ const DEFAULT_PN_DATA = {
 };
 let pnCache = null;
 const LOG_QUEUE = [];
+const LOG_QUEUE_STORAGE_KEY = 'pnMappingsLogQueueV2';
+const LOG_CALC_AGGREGATE_STORAGE_KEY = 'pnMappingsCalcAggregateV1';
 let logFlushTimer = null;
-const LOG_FLUSH_INTERVAL = 20000;
-const LOG_MAX_BATCH = 50;
+let logRetryTimer = null;
+let logRetryDelay = 0;
+let calcAggregateTimer = null;
+const LOG_FLUSH_DELAY_MS = 2500;
+const LOG_CALC_AGGREGATE_INTERVAL_MS = 120000;
+const LOG_MAX_BATCH = 40;
 const LOG_MAX_QUEUE = 300;
 const LOG_DEDUP_WINDOW_MS = 5000;
 const LOG_MAX_META_CHARS = 3500;
@@ -28,9 +34,9 @@ const ADMIN_LOG_ACTOR_COOKIE_DAYS = 180;
 const CLIENT_LOG_ID_COOKIE_KEY = 'logClientIdV1';
 const CLIENT_LOG_ID_STORAGE_KEY = 'logClientIdV1';
 const CLIENT_LOG_ID_COOKIE_DAYS = 400;
-let preferDirectLog = false;
 let isLogFlushInProgress = false;
 const recentLogMap = new Map();
+let calcAggregate = null;
 const BACKFILL_MAX_LOG_PAGES = 20;
 const BACKFILL_PAGE_SIZE = 200;
 
@@ -179,38 +185,79 @@ async function flushLogQueue() {
   if (!LOG_QUEUE.length || isLogFlushInProgress) return;
   isLogFlushInProgress = true;
   const batch = LOG_QUEUE.splice(0, LOG_MAX_BATCH);
+  persistLogQueue();
   try {
-    if (preferDirectLog) {
-      await sendLogsIndividually(batch);
-      return;
-    }
     const resp = await fetch(`${PN_MAPPINGS_API_URL}/log-batch`, {
       method: 'POST',
       headers: buildHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ logs: batch })
     });
     if (!resp.ok) {
-      preferDirectLog = true;
-      await sendLogsIndividually(batch);
+      throw new Error(`Log batch failed: HTTP ${resp.status}`);
     }
-  } catch (error) {
-    preferDirectLog = true;
-    await sendLogsIndividually(batch);
+    logRetryDelay = 0;
+  } catch (_error) {
+    // Put the batch back exactly as it was. Entry IDs let a future idempotent
+    // worker safely accept a retry even if a response was lost in transit.
+    LOG_QUEUE.unshift(...batch);
+    if (LOG_QUEUE.length > LOG_MAX_QUEUE) {
+      LOG_QUEUE.splice(LOG_MAX_QUEUE);
+    }
+    persistLogQueue();
+    scheduleLogRetry();
   } finally {
     isLogFlushInProgress = false;
     if (LOG_QUEUE.length) {
-      setTimeout(() => {
-        flushLogQueue();
-      }, 0);
+      if (!logRetryTimer) scheduleLogFlush();
     }
   }
 }
 
 function scheduleLogFlush() {
-  if (logFlushTimer) return;
-  logFlushTimer = setInterval(() => {
+  if (logFlushTimer || logRetryTimer) return;
+  logFlushTimer = setTimeout(() => {
+    logFlushTimer = null;
     flushLogQueue();
-  }, LOG_FLUSH_INTERVAL);
+  }, LOG_FLUSH_DELAY_MS);
+}
+
+function scheduleLogRetry() {
+  if (logRetryTimer) return;
+  logRetryDelay = Math.min(logRetryDelay ? logRetryDelay * 2 : 5000, 300000);
+  logRetryTimer = setTimeout(() => {
+    logRetryTimer = null;
+    flushLogQueue();
+  }, logRetryDelay);
+}
+
+function persistLogQueue() {
+  try {
+    localStorage.setItem(LOG_QUEUE_STORAGE_KEY, JSON.stringify(LOG_QUEUE));
+  } catch (_error) {
+    // Logging must never block the calculator when browser storage is unavailable.
+  }
+}
+
+function restoreLogQueue() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOG_QUEUE_STORAGE_KEY) || '[]');
+    if (!Array.isArray(saved)) return;
+    saved.slice(-LOG_MAX_QUEUE).forEach((entry) => {
+      if (!entry || typeof entry.type !== 'string' || !entry.id) return;
+      LOG_QUEUE.push(entry);
+    });
+  } catch (_error) {
+    // Ignore a damaged queue and allow new telemetry to continue.
+  }
+}
+
+function createLogId() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch (_error) {
+    // Fall through to a timestamp-based ID on older browsers.
+  }
+  return `log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function truncateString(value, maxLength = LOG_MAX_STRING_CHARS) {
@@ -272,6 +319,14 @@ function buildLogFingerprint(type, meta) {
 }
 
 function enqueueLog(type, meta = {}) {
+  if (type === 'calc') {
+    aggregateCalcLog(meta);
+    return;
+  }
+  queueLog(type, meta);
+}
+
+function queueLog(type, meta = {}) {
   const safeMeta = sanitizeLogMeta(addClientIdentityToMeta(meta));
   const fingerprint = buildLogFingerprint(type, safeMeta);
   const now = Date.now();
@@ -285,13 +340,68 @@ function enqueueLog(type, meta = {}) {
     }
   }
 
-  LOG_QUEUE.push({ type, meta: safeMeta, ts: now });
+  LOG_QUEUE.push({ id: createLogId(), v: 2, type, meta: safeMeta, ts: now });
   if (LOG_QUEUE.length > LOG_MAX_QUEUE) {
     LOG_QUEUE.splice(0, LOG_QUEUE.length - LOG_MAX_QUEUE);
   }
-  scheduleLogFlush();
+  persistLogQueue();
   if (LOG_QUEUE.length >= LOG_MAX_BATCH) {
     flushLogQueue();
+  } else {
+    scheduleLogFlush();
+  }
+}
+
+function persistCalcAggregate() {
+  try {
+    if (calcAggregate) localStorage.setItem(LOG_CALC_AGGREGATE_STORAGE_KEY, JSON.stringify(calcAggregate));
+    else localStorage.removeItem(LOG_CALC_AGGREGATE_STORAGE_KEY);
+  } catch (_error) {
+    // The regular queue still protects other log types if storage is unavailable.
+  }
+}
+
+function aggregateCalcLog(meta = {}) {
+  const now = Date.now();
+  const previous = calcAggregate && typeof calcAggregate === 'object' ? calcAggregate : null;
+  calcAggregate = {
+    count: Math.min(9999, Number(previous?.count || 0) + 1),
+    firstTs: Number(previous?.firstTs) || now,
+    lastTs: now,
+    sources: Array.from(new Set([...(Array.isArray(previous?.sources) ? previous.sources : []), String(meta.source || '')].filter(Boolean))).slice(-12),
+    last: meta
+  };
+  persistCalcAggregate();
+  if (!calcAggregateTimer) {
+    calcAggregateTimer = setTimeout(() => {
+      calcAggregateTimer = null;
+      flushCalcAggregate();
+    }, LOG_CALC_AGGREGATE_INTERVAL_MS);
+  }
+}
+
+function restoreCalcAggregate() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOG_CALC_AGGREGATE_STORAGE_KEY) || 'null');
+    if (saved && typeof saved === 'object' && Number(saved.count) > 0) calcAggregate = saved;
+  } catch (_error) {
+    calcAggregate = null;
+  }
+}
+
+function flushCalcAggregate() {
+  if (calcAggregate?.count) {
+    const aggregate = calcAggregate;
+    calcAggregate = null;
+    persistCalcAggregate();
+    queueLog('calc', {
+      aggregated: true,
+      count: aggregate.count,
+      firstTs: aggregate.firstTs,
+      lastTs: aggregate.lastTs,
+      sources: aggregate.sources,
+      ...aggregate.last
+    });
   }
 }
 
@@ -311,25 +421,26 @@ function addAdminActorToLogRequest(path, options = {}) {
   }
 }
 
-async function sendLogsIndividually(batch) {
-  for (const entry of batch) {
-    try {
-      await fetch(`${PN_MAPPINGS_API_URL}/log`, {
-        method: 'POST',
-        headers: buildHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ type: entry.type, meta: entry.meta })
-      });
-    } catch (error) {
-      // drop if direct logging fails
-    }
-  }
-}
-
 if (typeof window !== 'undefined') {
+  restoreLogQueue();
+  restoreCalcAggregate();
+  if (LOG_QUEUE.length) scheduleLogFlush();
+  if (calcAggregate?.count) {
+    const age = Math.max(0, Date.now() - Number(calcAggregate.lastTs || 0));
+    calcAggregateTimer = setTimeout(() => {
+      calcAggregateTimer = null;
+      flushCalcAggregate();
+    }, Math.max(0, LOG_CALC_AGGREGATE_INTERVAL_MS - age));
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
+      flushCalcAggregate();
       flushLogQueue();
     }
+  });
+  window.addEventListener('pagehide', () => {
+    flushCalcAggregate();
+    persistLogQueue();
   });
 }
 

@@ -189,7 +189,9 @@
                 <select id="workerUsageHistoryDays">
                   <option value="7">7 dni</option>
                   <option value="30" selected>30 dni</option>
+                  <option value="60">60 dni</option>
                   <option value="90">90 dni</option>
+                  <option value="all">Cała historia</option>
                 </select>
               </label>
             </div>
@@ -1355,8 +1357,7 @@
         complete: entry.complete === true
       };
       return [nextEntry, ...history.filter((item) => item?.date !== entry.date)]
-        .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-        .slice(0, 120);
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)));
     }
 
     async function saveWorkerUsageArchive(currentUsage, serverHistory = []) {
@@ -1416,12 +1417,21 @@
       }).filter((entry) => entry.date && entry.hasTelemetry);
     }
 
+    function getWorkerUsagePeriodDays() {
+      const value = String(workerUsageHistoryDays?.value || '30');
+      if (value === 'all') return null;
+      return Math.max(1, Number(value) || 30);
+    }
+
     function getVisibleWorkerUsageHistory(serverHistory = [], archivedHistory = workerUsageArchive) {
-      const requestedDays = Math.max(1, Number(workerUsageHistoryDays?.value) || 30);
+      const requestedDays = getWorkerUsagePeriodDays();
       const today = getUsageUtcDay();
-      const oldest = new Date(`${today}T00:00:00.000Z`);
-      oldest.setUTCDate(oldest.getUTCDate() - requestedDays + 1);
-      const oldestDay = oldest.toISOString().slice(0, 10);
+      let oldestDay = '';
+      if (requestedDays) {
+        const oldest = new Date(`${today}T00:00:00.000Z`);
+        oldest.setUTCDate(oldest.getUTCDate() - requestedDays + 1);
+        oldestDay = oldest.toISOString().slice(0, 10);
+      }
       const byDate = new Map();
 
       archivedHistory.forEach((entry) => {
@@ -1437,7 +1447,7 @@
       });
 
       return Array.from(byDate.values())
-        .filter((entry) => entry.date >= oldestDay && entry.date <= today)
+        .filter((entry) => (!oldestDay || entry.date >= oldestDay) && entry.date <= today)
         .sort((a, b) => b.date.localeCompare(a.date));
     }
 
@@ -1677,9 +1687,13 @@
       setWorkerUsageState('Sprawdzam…', 'loading');
       if (workerUsageNotice) workerUsageNotice.textContent = 'Pobieram stan workera i liczniki KV…';
       try {
-        const historyDays = Math.max(1, Number(workerUsageHistoryDays?.value) || 30);
+        const historyDays = getWorkerUsagePeriodDays();
+        // The archive supplies the complete history.  For the all-time view,
+        // only refresh today's counter so the view does not create a costly
+        // long-range Analytics query on every open.
+        const historyRequestDays = historyDays === null ? 1 : historyDays;
         const [usageResult, archiveResult] = await Promise.allSettled([
-          window.PN_MAPPINGS_API.request(`${WORKER_USAGE_ENDPOINT}?days=${historyDays}&cb=${Date.now()}`, {
+          window.PN_MAPPINGS_API.request(`${WORKER_USAGE_ENDPOINT}?days=${historyRequestDays}&cb=${Date.now()}`, {
             method: 'GET',
             cache: 'no-store'
           }),

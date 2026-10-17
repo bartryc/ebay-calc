@@ -2918,7 +2918,6 @@ function updateEbayCurrencyLabel() {
 // Clear button handler
 document.getElementById('clearBtn').addEventListener('click', () => {
   clearCalculatorPreferences();
-  window.resetSearchPreferences?.();
   window.CalculatorUI.clearRecalculatedFields();
   document.getElementById('plnNetto').value = '';
   document.getElementById('plnBrutto').value = '';
