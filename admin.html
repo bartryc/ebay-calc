@@ -6021,7 +6021,7 @@
       ` : '';
       if (kind === 'ui') {
         return `
-          <div class="report-item report-${kind} ${statusClass}" data-report-index="${index}" data-report-key="${reportKey}" data-report-category="${escapeHtml(meta.category || '')}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}" data-report-status="${reportStatus}">
+          <div class="report-item report-${kind} ${statusClass}" data-report-index="${index}" data-report-key="${reportKey}" data-report-category="${escapeHtml(meta.category || '')}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}" data-report-status="${reportStatus}" data-report-expected-version="${escapeHtml(expectedVersion)}">
             <div class="report-header">
               <div class="report-header-meta">
                 <span class="report-ts">${ts}</span>
@@ -6373,8 +6373,7 @@
 
     function openReportValidateModal(item) {
       if (!item || !reportValidateModal) return;
-      const entry = reportsCache[Number(item.getAttribute('data-report-index'))];
-      const expectedVersion = String(getReportStatusAction(entry)?.meta?.expectedVersion || '').trim();
+      const expectedVersion = String(item.getAttribute('data-report-expected-version') || '').trim();
       pendingReportValidate = { item };
       if (reportValidateVersion) reportValidateVersion.value = expectedVersion;
       reportValidateModal.style.display = 'flex';
