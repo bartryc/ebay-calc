@@ -7788,12 +7788,19 @@ body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="cal
   grid-column: 1 / -1;
 }
 
-body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-clear"][data-layout-span="2"] {
-  grid-column: span 2;
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-clear"][data-layout-span="2"],
+body[data-page-title="Kalkulator"] #infoLayoutContainer > [data-layout-item="calc-clear"][data-layout-span="2"],
+body[data-page-title="Kalkulator"] #extraLayoutContainer > [data-layout-item="calc-clear"][data-layout-span="2"] {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-clear"] .action-row,
-body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-clear"] #clearBtn {
+body[data-page-title="Kalkulator"] #infoLayoutContainer > [data-layout-item="calc-clear"] .action-row,
+body[data-page-title="Kalkulator"] #extraLayoutContainer > [data-layout-item="calc-clear"] .action-row,
+body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-clear"] #clearBtn,
+body[data-page-title="Kalkulator"] #infoLayoutContainer > [data-layout-item="calc-clear"] #clearBtn,
+body[data-page-title="Kalkulator"] #extraLayoutContainer > [data-layout-item="calc-clear"] #clearBtn {
   width: 100%;
 }
 
@@ -7946,7 +7953,9 @@ body[data-page-title="Admin"] .layout-preset-row {
     grid-template-columns: 1fr;
   }
 
-  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-clear"][data-layout-span="2"] {
+  body[data-page-title="Kalkulator"] #calcLayoutContainer > [data-layout-item="calc-clear"][data-layout-span="2"],
+  body[data-page-title="Kalkulator"] #infoLayoutContainer > [data-layout-item="calc-clear"][data-layout-span="2"],
+  body[data-page-title="Kalkulator"] #extraLayoutContainer > [data-layout-item="calc-clear"][data-layout-span="2"] {
     grid-column: 1 / -1;
   }
 }

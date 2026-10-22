@@ -1308,39 +1308,6 @@
       }).filter((entry) => entry.date && entry.hasTelemetry);
     }
 
-    function readLegacyLocalWorkerUsageArchive() {
-      const entries = [];
-      try {
-        const history = JSON.parse(localStorage.getItem('adminWorkerUsageHistoryV1') || '[]');
-        if (Array.isArray(history)) entries.push(...history);
-      } catch (_error) {
-        // Uszkodzony lokalny wpis nie blokuje odczytu globalnej historii.
-      }
-      try {
-        const snapshot = JSON.parse(localStorage.getItem('adminWorkerUsageSnapshotV1') || 'null');
-        const usage = normalizeWorkerUsage(snapshot);
-        if (usage.hasTelemetry) {
-          entries.push({
-            ...usage,
-            date: getUsageUtcDay(usage.measuredAt),
-            complete: false
-          });
-        }
-      } catch (_error) {
-        // Brak poprawnego snapshotu oznacza po prostu brak danych do migracji.
-      }
-      return normalizeWorkerUsageArchive(entries);
-    }
-
-    function clearLegacyLocalWorkerUsageArchive() {
-      try {
-        localStorage.removeItem('adminWorkerUsageSnapshotV1');
-        localStorage.removeItem('adminWorkerUsageHistoryV1');
-      } catch (_error) {
-        // Globalny zapis jest już potwierdzony; lokalna kopia może wygasnąć później.
-      }
-    }
-
     async function loadWorkerUsageArchive() {
       const response = await window.PN_MAPPINGS_API.request(
         `/notes?id=${encodeURIComponent(WORKER_USAGE_ARCHIVE_NOTE_ID)}`,
@@ -1391,9 +1358,6 @@
 
     async function saveWorkerUsageArchive(currentUsage, serverHistory = []) {
       let nextHistory = workerUsageArchive.slice();
-      readLegacyLocalWorkerUsageArchive().forEach((entry) => {
-        nextHistory = mergeWorkerUsageDay(nextHistory, entry);
-      });
       serverHistory.forEach((entry) => {
         nextHistory = mergeWorkerUsageDay(nextHistory, entry);
       });
@@ -1421,7 +1385,6 @@
         throw new Error(text || `HTTP ${response.status}`);
       }
       workerUsageArchive = nextHistory;
-      clearLegacyLocalWorkerUsageArchive();
       return workerUsageArchive;
     }
 
