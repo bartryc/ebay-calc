@@ -5076,7 +5076,8 @@ body.dark-mode .report-item.is-on-hold .report-kind {
   border-color: rgba(15, 91, 255, 0.35);
 }
 
-.report-validate.is-active {
+.report-validate.is-active,
+.report-item[data-report-status="validate"] .report-validate {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
