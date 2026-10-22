@@ -4345,7 +4345,10 @@ if (partNumberInput) {
       radio.addEventListener('change', () => {
         clearSearchStatus();
         if (radio.checked) {
+          const sourceCheckbox = sourceInputMap.get(sourceId);
+          if (sourceCheckbox) sourceCheckbox.checked = true;
           setSavedVariantForSource(sourceId, radio.value);
+          persistSourcesState();
         }
       });
     });
