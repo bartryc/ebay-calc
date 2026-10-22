@@ -1,9 +1,9 @@
 let lastChanged = null;
 let originalEbayPrice = null;
 let originalCurrency = 'EUR';
-let originalExchangeRate = 4.3;
+let originalExchangeRate = 0.2326;
 let lastCurrency = 'EUR';
-let currentExchangeRate = 4.3;
+let currentExchangeRate = 0.2326;
 const rateStatusCache = {};
 let isPresetApplied = false;
 const numberFormatter = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 });
@@ -42,9 +42,9 @@ let defaultCommissionRate = DEFAULT_COMMISSION_RATE;
 let selectedCalculatorPresetId = '';
 let selectedBaseMultiplierPresetId = '';
 const DEFAULT_CURRENCIES = [
-  { code: 'EUR', label: 'EUR', fallbackRate: 4.3 },
-  { code: 'USD', label: 'USD', fallbackRate: 3.9 },
-  { code: 'GBP', label: 'GBP', fallbackRate: 5.0 }
+  { code: 'EUR', label: 'EUR', fallbackRate: 0.2326 },
+  { code: 'USD', label: 'USD', fallbackRate: 0.2632 },
+  { code: 'GBP', label: 'GBP', fallbackRate: 0.2000 }
 ];
 let currenciesConfig = { version: 1, currencies: DEFAULT_CURRENCIES };
 let calculatorPresetsConfig = { version: 1, presets: [] };
@@ -3464,14 +3464,19 @@ function renderRateProviderOptions() {
 function normalizeCurrencyItem(item) {
   const code = String(item?.code || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
   if (!/^[A-Z]{3}$/.test(code)) return null;
-  const fallbackRate = parseFloat(String(item?.fallbackRate ?? '').replace(',', '.'));
+  const rawFallbackRate = parseFloat(String(item?.fallbackRate ?? '').replace(',', '.'));
+  // Old defaults were stored inversely (e.g. EUR = 4.3 PLN). Convert only
+  // those legacy currencies, because other currencies may validly exceed 1.
+  const fallbackRate = ['EUR', 'USD', 'GBP'].includes(code) && rawFallbackRate > 1
+    ? 1 / rawFallbackRate
+    : rawFallbackRate;
   return {
     code,
     label: String(item?.label || code).trim() || code,
     enabled: item?.enabled !== false,
     fallbackRate: Number.isFinite(fallbackRate) && fallbackRate > 0
       ? fallbackRate
-      : (window.RateService.DEFAULT_RATES[code] || 4.3)
+      : (window.RateService.DEFAULT_RATES[code] || 0.2326)
   };
 }
 

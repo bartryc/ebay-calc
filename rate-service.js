@@ -1,7 +1,8 @@
 (function (root) {
   'use strict';
 
-  const DEFAULT_RATES = { EUR: 4.3, USD: 3.9, GBP: 5.0 };
+  // The calculator stores a direct rate: 1 PLN = X target currency.
+  const DEFAULT_RATES = { EUR: 0.2326, USD: 0.2632, GBP: 0.2000 };
   const DEFAULT_PROVIDER = 'erapi';
   const DEFAULT_RATE_PROVIDERS = [
     {
@@ -105,7 +106,7 @@
   }
 
   function getDefaultRate(currency) {
-    return DEFAULT_RATES[currency] || 4.3;
+    return DEFAULT_RATES[currency] || 0.2326;
   }
 
   function registerCustomCurrencies(items) {
