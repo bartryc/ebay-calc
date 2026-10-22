@@ -5076,19 +5076,30 @@ body.dark-mode .report-item.is-on-hold .report-kind {
   border-color: rgba(15, 91, 255, 0.35);
 }
 
-.report-validate-form {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
+.report-validate-modal-card {
+  max-width: 360px;
 }
 
-.report-validate-form input {
+.report-validate-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.report-validate-input-row input {
   min-width: 0;
   flex: 1;
 }
 
-.report-validate-form button {
+.report-validate-input-row button {
   flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 91, 255, 0.35);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .report-actions button {

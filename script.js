@@ -1876,9 +1876,22 @@ function getCurrentBasePricingMultiplier() {
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : NaN;
 }
 
+// Every PLN-brutto <-> eBay conversion goes through this one multiplier.
+// With the switch off it is derived from rate, client VAT and eBay fee;
+// with the switch on it is the manually entered Base multiplier.
+function getEffectivePricingMultiplier(primaryState = null, vatRateOverride) {
+  if (isCurrentBasePricingEnabled()) {
+    return getCurrentBasePricingMultiplier();
+  }
+
+  const state = primaryState || window.CalculatorUI.readPrimaryState(document, getActiveCommissionRate);
+  const vatRate = Number.isFinite(vatRateOverride) ? vatRateOverride : state.vatRate;
+  return window.CalculatorCore.baseMultiplier(state.exchangeRate, vatRate, state.commission);
+}
+
 function validatePricingInputs(exchangeRate, commission, vatRate, resultDiv) {
   if (isCurrentBasePricingEnabled()) {
-    const multiplier = getCurrentBasePricingMultiplier();
+    const multiplier = getEffectivePricingMultiplier();
     if (!Number.isFinite(multiplier)) {
       showResultError(resultDiv, 'Podaj poprawny aktualny mnożnik Base albo wyłącz wycenę po Base.');
       updateSummaryMetrics();
@@ -1895,42 +1908,16 @@ function validatePricingInputs(exchangeRate, commission, vatRate, resultDiv) {
 }
 
 function calculatePrimaryFromCurrentPricing(source, primaryState, vatRateOverride = primaryState?.vatRate) {
-  if (isCurrentBasePricingEnabled()) {
-    return window.CalculatorCore.calculatePrimaryFromBaseSource(source, primaryState, getCurrentBasePricingMultiplier());
-  }
-  return window.CalculatorCore.calculatePrimaryFromSource(
-    source,
-    primaryState,
-    primaryState.exchangeRate,
-    vatRateOverride,
-    primaryState.commission
-  );
+  const multiplier = getEffectivePricingMultiplier(primaryState, vatRateOverride);
+  return window.CalculatorCore.calculatePrimaryFromBaseSource(source, primaryState, multiplier);
 }
 
 function ebayFromSaleBruttoCurrent(saleBrutto) {
-  if (isCurrentBasePricingEnabled()) {
-    const baseMultiplier = getCurrentBasePricingMultiplier();
-    return Number.isFinite(baseMultiplier)
-      ? window.CalculatorCore.ebayFromBaseBrutto(saleBrutto, baseMultiplier)
-      : NaN;
-  }
-  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
-  const commissionRaw = getActiveCommissionRate();
-  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
-  return window.CalculatorCore.ebayFromSaleBrutto(saleBrutto, exchangeRate, commission);
+  return window.CalculatorCore.ebayFromBaseBrutto(saleBrutto, getEffectivePricingMultiplier());
 }
 
 function saleBruttoFromEbayCurrent(ebayPrice) {
-  if (isCurrentBasePricingEnabled()) {
-    const baseMultiplier = getCurrentBasePricingMultiplier();
-    return Number.isFinite(baseMultiplier)
-      ? window.CalculatorCore.bruttoFromBaseEbay(ebayPrice, baseMultiplier)
-      : NaN;
-  }
-  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
-  const commissionRaw = getActiveCommissionRate();
-  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
-  return window.CalculatorCore.saleBruttoFromEbay(ebayPrice, exchangeRate, commission);
+  return window.CalculatorCore.bruttoFromBaseEbay(ebayPrice, getEffectivePricingMultiplier());
 }
 
 function updateMinSaleByMarkup() {
@@ -1944,9 +1931,6 @@ function updateMinSaleByMarkup() {
 
   const purchase = parseNumber(purchaseEl.value);
   const markupPercent = parseNumber(markupEl.value);
-  const exchangeRate = parseNumber(document.getElementById('exchangeRate')?.value);
-  const commissionRaw = getActiveCommissionRate();
-  const commission = Number.isFinite(commissionRaw) ? commissionRaw / 100 : NaN;
   const currency = currencyEl.value || 'EUR';
 
   if (minSaleCurrencyLabelEl) minSaleCurrencyLabelEl.textContent = currency;
@@ -1966,7 +1950,7 @@ function updateMinSaleByMarkup() {
 
   minSalePlnEl.textContent = `${saleBrutto.toFixed(2)} PLN`;
 
-  if (!isCurrentBasePricingEnabled() && (!Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(commission) || commission < 0)) {
+  if (!Number.isFinite(getEffectivePricingMultiplier())) {
     minSaleEbayEl.textContent = '—';
     return;
   }

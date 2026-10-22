@@ -862,6 +862,22 @@
     </div>
   </div>
 
+  <div id="reportValidateModal" class="mapping-modal" style="display: none;">
+    <div class="mapping-modal-card report-validate-modal-card" role="dialog" aria-modal="true" aria-labelledby="reportValidateTitle">
+      <div class="mapping-modal-header">
+        <strong id="reportValidateTitle">Do walidacji</strong>
+        <button type="button" id="reportValidateClose" aria-label="Zamknij">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <label for="reportValidateVersion">Oczekiwana wersja wdrożenia</label>
+        <div class="report-validate-input-row">
+          <input type="text" id="reportValidateVersion" maxlength="80" placeholder="np. 1.4.0">
+          <button type="button" id="reportValidateApply">Zapisz</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="migrateLogsModal" class="mapping-modal" style="display: none;">
     <div class="mapping-modal-card" role="dialog" aria-modal="true" aria-labelledby="migrateLogsTitle">
       <div class="mapping-modal-header">
@@ -947,6 +963,10 @@
     const reportRetypeCancel = document.getElementById('reportRetypeCancel');
     const reportRetypeApply = document.getElementById('reportRetypeApply');
     const reportRetypeMessage = document.getElementById('reportRetypeMessage');
+    const reportValidateModal = document.getElementById('reportValidateModal');
+    const reportValidateClose = document.getElementById('reportValidateClose');
+    const reportValidateVersion = document.getElementById('reportValidateVersion');
+    const reportValidateApply = document.getElementById('reportValidateApply');
     const migrateLogsModal = document.getElementById('migrateLogsModal');
     const migrateLogsClose = document.getElementById('migrateLogsClose');
     const migrateLogsCancel = document.getElementById('migrateLogsCancel');
@@ -1183,6 +1203,7 @@
     let pendingReportApply = null;
     let pendingReportDismiss = null;
     let pendingReportRetype = null;
+    let pendingReportValidate = null;
     let sourceConfig = null;
     let sourceConfigDirty = false;
     let sourceConfigSavedSnapshot = '';
@@ -6025,10 +6046,6 @@
                   <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
                 `}
               </div>
-              ${isResolved ? '' : `<div class="report-validate-form" ${isValidate ? '' : 'hidden'}>
-                <input type="text" class="report-validate-version" maxlength="80" value="${escapeHtml(expectedVersion)}" placeholder="Oczekiwana wersja, np. 1.4.0">
-                <button type="button" class="report-validate-confirm">Ustaw validate</button>
-              </div>`}
               ${(source || detail) ? `<div class="report-extra">// ${source ? `Źródło: ${source}` : ''}${detail ? ` · Wzorzec: ${detail}` : ''}</div>` : ''}
             </div>
           </div>
@@ -6348,6 +6365,22 @@
       reportRetypeModal.style.display = 'flex';
     }
 
+    function closeReportValidateModal() {
+      if (!reportValidateModal) return;
+      reportValidateModal.style.display = 'none';
+      pendingReportValidate = null;
+    }
+
+    function openReportValidateModal(item) {
+      if (!item || !reportValidateModal) return;
+      const entry = reportsCache[Number(item.getAttribute('data-report-index'))];
+      const expectedVersion = String(getReportStatusAction(entry)?.meta?.expectedVersion || '').trim();
+      pendingReportValidate = { item };
+      if (reportValidateVersion) reportValidateVersion.value = expectedVersion;
+      reportValidateModal.style.display = 'flex';
+      reportValidateVersion?.focus();
+    }
+
     [logTypeFilter, logQuery, logPageSize].forEach((el) => {
       if (!el) return;
       el.addEventListener('input', () => {
@@ -6572,41 +6605,7 @@
         const validateBtn = target.closest('.report-validate');
         if (validateBtn) {
           const item = validateBtn.closest('.report-item');
-          const form = item?.querySelector('.report-validate-form');
-          if (!form) return;
-          form.hidden = !form.hidden;
-          if (!form.hidden) form.querySelector('.report-validate-version')?.focus();
-          return;
-        }
-        const validateConfirmBtn = target.closest('.report-validate-confirm');
-        if (validateConfirmBtn) {
-          const item = validateConfirmBtn.closest('.report-item');
-          if (!item) return;
-          const expectedVersion = item.querySelector('.report-validate-version')?.value?.trim() || '';
-          if (!expectedVersion) {
-            showToast('Wpisz oczekiwaną wersję wdrożenia.', 'warn');
-            item.querySelector('.report-validate-version')?.focus();
-            return;
-          }
-          const reportMeta = getReportMetaFromItem(item);
-          reportMeta.kind = 'ui';
-          const reportId = item.getAttribute('data-report-id') || '';
-          const adminNote = item.querySelector('.report-note')?.value?.trim() || '';
-          setAdminNote(reportId, adminNote);
-          logReportAction({
-            action: 'validate',
-            report: reportMeta,
-            expectedVersion,
-            mapping: {
-              key: 'nie dotyczy',
-              vendor: 'nie dotyczy',
-              type: 'walidacja wdrożenia',
-              note: adminNote || 'nie dotyczy'
-            }
-          });
-          if (reportId) setReportStatus(reportId, 'validate');
-          showToast(`Zgłoszenie oczekuje na walidację w wersji ${expectedVersion}.`, 'ok');
-          renderReports();
+          openReportValidateModal(item);
           return;
         }
         const dismissBtn = target.closest('.report-dismiss');
@@ -6682,6 +6681,49 @@
         }
         renderReports();
         closeReportConfirmModal();
+      });
+    }
+
+    if (reportValidateClose) {
+      reportValidateClose.addEventListener('click', closeReportValidateModal);
+    }
+    if (reportValidateApply) {
+      reportValidateApply.addEventListener('click', () => {
+        const item = pendingReportValidate?.item;
+        const expectedVersion = reportValidateVersion?.value?.trim() || '';
+        if (!item || !expectedVersion) {
+          showToast('Wpisz oczekiwaną wersję wdrożenia.', 'warn');
+          reportValidateVersion?.focus();
+          return;
+        }
+        const reportMeta = getReportMetaFromItem(item);
+        reportMeta.kind = 'ui';
+        const reportId = item.getAttribute('data-report-id') || '';
+        const adminNote = item.querySelector('.report-note')?.value?.trim() || '';
+        setAdminNote(reportId, adminNote);
+        logReportAction({
+          action: 'validate',
+          report: reportMeta,
+          expectedVersion,
+          mapping: {
+            key: 'nie dotyczy',
+            vendor: 'nie dotyczy',
+            type: 'walidacja wdrożenia',
+            note: adminNote || 'nie dotyczy'
+          }
+        });
+        if (reportId) setReportStatus(reportId, 'validate');
+        showToast(`Zgłoszenie oczekuje na walidację w wersji ${expectedVersion}.`, 'ok');
+        renderReports();
+        closeReportValidateModal();
+      });
+    }
+    if (reportValidateVersion) {
+      reportValidateVersion.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          reportValidateApply?.click();
+        }
       });
     }
 
