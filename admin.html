@@ -578,8 +578,15 @@
               </div>
             </div>
             <div class="report-filter">
-              <label for="reportStatusFilter">Status</label>
-              <select id="reportStatusFilter">
+              <span class="report-filter-label">Status</span>
+              <div class="report-filter-chips" role="group" aria-label="Filtr statusu zgłoszeń">
+                <button type="button" class="report-filter-chip is-active" data-report-status-filter="active">Otwarte</button>
+                <button type="button" class="report-filter-chip" data-report-status-filter="in-progress">W trakcie</button>
+                <button type="button" class="report-filter-chip" data-report-status-filter="on-hold">Wstrzymane</button>
+                <button type="button" class="report-filter-chip" data-report-status-filter="validate">Do walidacji</button>
+                <button type="button" class="report-filter-chip" data-report-status-filter="resolved">Rozwiązane</button>
+              </div>
+              <select id="reportStatusFilter" class="sr-only" aria-label="Status zgłoszeń">
                 <option value="active" selected>Otwarte</option>
                 <option value="in-progress">Nowe / w trakcie</option>
                 <option value="on-hold">Wstrzymane</option>
@@ -5906,6 +5913,11 @@
           return right - left;
         });
         const statusFilterValue = reportStatusFilter?.value || 'active';
+        document.querySelectorAll('[data-report-status-filter]').forEach((button) => {
+          const isActive = button.getAttribute('data-report-status-filter') === statusFilterValue;
+          button.classList.toggle('is-active', isActive);
+          button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
         const visibleReports = reports.filter((entry) => {
           const status = getEffectiveReportStatus(entry);
           if (statusFilterValue === 'resolved') return status === 'resolved';
@@ -6036,16 +6048,22 @@
             ${contextParts.length ? `<details class="report-context-admin"><summary>Kontekst techniczny</summary><div>${contextParts.map((part) => `<span>${part}</span>`).join('')}</div></details>` : ''}
             ${resolutionSummary}
             <div class="report-form">
-              <textarea class="report-note" rows="2" placeholder="Notatki admina (opcjonalne)" data-saved-note="${escapeHtml(storedNote)}" ${isResolved ? 'readonly' : ''}>${escapeHtml(storedNote)}</textarea>
-              <div class="report-actions">
+              <div class="report-actions" aria-label="Akcje zgłoszenia">
                 ${isResolved ? '<span class="report-readonly-note">Zgłoszenie zamknięte — tylko do odczytu</span>' : `
-                  <button type="button" class="report-save-note" hidden>Zapisz notatkę</button>
-                  <button type="button" class="report-resolve">Rozwiąż</button>
-                  <button type="button" class="report-hold ${isOnHold ? 'is-active' : ''}" aria-pressed="${isOnHold ? 'true' : 'false'}">Wstrzymaj</button>
-                  <button type="button" class="report-validate ${isValidate ? 'is-active' : ''}" aria-pressed="${isValidate ? 'true' : 'false'}">Do walidacji</button>
-                  <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
+                  <button type="button" class="report-action report-resolve">Rozwiąż</button>
+                  <button type="button" class="report-action report-hold ${isOnHold ? 'is-active' : ''}" aria-pressed="${isOnHold ? 'true' : 'false'}">Wstrzymaj</button>
+                  <button type="button" class="report-action report-validate ${isValidate ? 'is-active' : ''}" aria-pressed="${isValidate ? 'true' : 'false'}">Do walidacji</button>
+                  <button type="button" class="report-action report-dismiss">Usuń</button>
                 `}
               </div>
+              ${isValidate && expectedVersion ? `<div class="report-status-detail">Oczekiwana wersja: <strong>${escapeHtml(expectedVersion)}</strong></div>` : ''}
+              <details class="report-note-panel" ${storedNote ? 'open' : ''}>
+                <summary>Notatka admina${storedNote ? '' : ' (opcjonalnie)'}</summary>
+                <div>
+                  <textarea class="report-note" rows="2" placeholder="Dodaj notatkę" data-saved-note="${escapeHtml(storedNote)}" ${isResolved ? 'readonly' : ''}>${escapeHtml(storedNote)}</textarea>
+                  ${isResolved ? '' : '<button type="button" class="report-save-note" hidden>Zapisz notatkę</button>'}
+                </div>
+              </details>
               ${(source || detail) ? `<div class="report-extra">// ${source ? `Źródło: ${source}` : ''}${detail ? ` · Wzorzec: ${detail}` : ''}</div>` : ''}
             </div>
           </div>
@@ -6426,6 +6444,13 @@
         renderReports();
       });
     }
+    document.querySelectorAll('[data-report-status-filter]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (!reportStatusFilter) return;
+        reportStatusFilter.value = button.getAttribute('data-report-status-filter') || 'active';
+        reportStatusFilter.dispatchEvent(new Event('change'));
+      });
+    });
     if (adminLogList) {
       adminLogList.addEventListener('click', (event) => {
         const target = event.target;

@@ -185,14 +185,20 @@ function layoutSetCookieValue(name, value, days = 365) {
 }
 
 function readCalculatorPreferences() {
-  const raw = localStorage.getItem(CALCULATOR_PREFERENCES_KEY) || layoutGetCookieValue(CALCULATOR_PREFERENCES_KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch (_error) {
-    return null;
+  const candidates = [
+    localStorage.getItem(CALCULATOR_PREFERENCES_KEY),
+    layoutGetCookieValue(CALCULATOR_PREFERENCES_KEY)
+  ];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch (_error) {
+      // Try the cookie when local data is stale or malformed.
+    }
   }
+  return null;
 }
 
 function persistCalculatorPreferences() {
@@ -216,7 +222,11 @@ function persistCalculatorPreferences() {
     advancedOptions: !!document.getElementById('advancedOptionsToggle')?.checked
   };
   const payload = JSON.stringify(preferences);
-  localStorage.setItem(CALCULATOR_PREFERENCES_KEY, payload);
+  try {
+    localStorage.setItem(CALCULATOR_PREFERENCES_KEY, payload);
+  } catch (_error) {
+    // Cookie remains the durable fallback when localStorage is unavailable.
+  }
   layoutSetCookieValue(CALCULATOR_PREFERENCES_KEY, payload);
 }
 
@@ -259,7 +269,11 @@ function restoreCalculatorPreferences() {
 }
 
 function clearCalculatorPreferences() {
-  localStorage.removeItem(CALCULATOR_PREFERENCES_KEY);
+  try {
+    localStorage.removeItem(CALCULATOR_PREFERENCES_KEY);
+  } catch (_error) {
+    // Cookie reset below still restores factory defaults.
+  }
   document.cookie = `${CALCULATOR_PREFERENCES_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
   selectedCalculatorPresetId = '';
   selectedBaseMultiplierPresetId = '';
@@ -2902,6 +2916,7 @@ function updateEbayCurrencyLabel() {
 // Clear button handler
 document.getElementById('clearBtn').addEventListener('click', () => {
   clearCalculatorPreferences();
+  window.resetSearchPreferences?.();
   window.CalculatorUI.clearRecalculatedFields();
   document.getElementById('plnNetto').value = '';
   document.getElementById('plnBrutto').value = '';
@@ -4196,9 +4211,16 @@ if (partNumberInput) {
     });
   };
   const persistSourcesState = () => {
-    const state = getSourcesState();
+    const state = {
+      ...(readSavedSourcesState() || {}),
+      ...getSourcesState()
+    };
     const payload = JSON.stringify(state);
-    localStorage.setItem(SEARCH_SOURCES_STORAGE_KEY, payload);
+    try {
+      localStorage.setItem(SEARCH_SOURCES_STORAGE_KEY, payload);
+    } catch (_error) {
+      // Cookie remains the durable fallback when localStorage is unavailable.
+    }
     setCookieValue(SEARCH_SOURCES_COOKIE_KEY, payload);
   };
   const clearSourcesSelection = () => {
@@ -4234,13 +4256,20 @@ if (partNumberInput) {
     persistVariantsState(state);
   };
   const readSavedSourcesState = () => {
-    const raw = localStorage.getItem(SEARCH_SOURCES_STORAGE_KEY) || getCookieValue(SEARCH_SOURCES_COOKIE_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      return null;
+    const candidates = [
+      localStorage.getItem(SEARCH_SOURCES_STORAGE_KEY),
+      getCookieValue(SEARCH_SOURCES_COOKIE_KEY)
+    ];
+    for (const raw of candidates) {
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch (_error) {
+        // Try the cookie when local data is stale or malformed.
+      }
     }
+    return null;
   };
   const clearSearchStatus = () => {
     if (!searchStatus) return;
@@ -4486,8 +4515,12 @@ if (partNumberInput) {
     if (defaultRadio) defaultRadio.checked = true;
   };
   window.resetSearchPreferences = () => {
-    localStorage.removeItem(SEARCH_SOURCES_STORAGE_KEY);
-    localStorage.removeItem(SEARCH_SOURCE_VARIANTS_STORAGE_KEY);
+    try {
+      localStorage.removeItem(SEARCH_SOURCES_STORAGE_KEY);
+      localStorage.removeItem(SEARCH_SOURCE_VARIANTS_STORAGE_KEY);
+    } catch (_error) {
+      // Cookie reset below still restores factory defaults.
+    }
     document.cookie = `${SEARCH_SOURCES_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
     document.cookie = `${SEARCH_SOURCE_VARIANTS_COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
     sourceInputMap.forEach((inputEl, sourceId) => {
