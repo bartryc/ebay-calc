@@ -583,6 +583,7 @@
                 <option value="active" selected>Otwarte</option>
                 <option value="in-progress">Nowe / w trakcie</option>
                 <option value="on-hold">Wstrzymane</option>
+                <option value="validate">Do walidacji</option>
                 <option value="resolved">Rozwiązane</option>
               </select>
             </div>
@@ -5757,7 +5758,7 @@
     }
 
     const REPORT_STATUS_LEGACY_KEY = 'adminReportStatus';
-    const VALID_REPORT_STATUSES = new Set(['on-hold', 'resolved', 'dismissed']);
+    const VALID_REPORT_STATUSES = new Set(['in-progress', 'on-hold', 'validate', 'resolved', 'dismissed']);
     const reportStatusCache = new Map();
     const reportStatusByKeyCache = new Map();
     const reportStatusActionCache = new Map();
@@ -5888,7 +5889,8 @@
           const status = getEffectiveReportStatus(entry);
           if (statusFilterValue === 'resolved') return status === 'resolved';
           if (statusFilterValue === 'on-hold') return status === 'on-hold';
-          if (statusFilterValue === 'in-progress') return !status;
+          if (statusFilterValue === 'validate') return status === 'validate';
+          if (statusFilterValue === 'in-progress') return !status || status === 'in-progress';
           return status !== 'resolved' && status !== 'dismissed';
         });
         const visibleMapping = visibleReports.filter((entry) => getReportKind(entry) !== 'ui');
@@ -5940,8 +5942,6 @@
 
     function renderReportItem(entry, index) {
       const meta = getReportMeta(entry);
-      const legacyTitle = meta.reason ? String(meta.reason).trim().slice(0, 80) : '';
-      const title = escapeHtml(meta.title || legacyTitle || 'Zgłoszenie dotyczące aplikacji');
       const query = escapeHtml(meta.query || '');
       const suggestedVendor = escapeHtml(meta.suggestedVendor || '');
       const detectedVendor = escapeHtml(meta.detectedVendor || '');
@@ -5972,14 +5972,20 @@
       const storedNote = getAdminNote(reportId);
       const reportStatus = getEffectiveReportStatus(entry);
       const isResolved = reportStatus === 'resolved';
-      const statusClass = reportStatus === 'on-hold' ? 'is-on-hold' : (isResolved ? 'is-resolved' : '');
+      const isOnHold = reportStatus === 'on-hold';
+      const isValidate = reportStatus === 'validate';
+      const statusClass = isOnHold ? 'is-on-hold' : (isValidate ? 'is-validate' : (isResolved ? 'is-resolved' : ''));
+      const statusAction = getReportStatusAction(entry);
+      const expectedVersion = String(statusAction?.meta?.expectedVersion || '').trim();
       const statusBadge = reportStatus === 'on-hold'
         ? '<span class="report-status-badge is-on-hold">Wstrzymane</span>'
-        : (isResolved ? '<span class="report-status-badge is-resolved">Rozwiązane</span>' : '<span class="report-status-badge">Nowe / w trakcie</span>');
-      const statusAction = isResolved ? getReportStatusAction(entry) : null;
-      const resolutionMeta = safeObject(statusAction?.meta?.mapping);
-      const resolvedAt = statusAction?.ts ? new Date(statusAction.ts).toLocaleString('pl-PL') : '';
-      const resolvedActor = statusAction ? getEffectiveLogActor(statusAction) : '';
+        : (isValidate
+          ? `<span class="report-status-badge is-validate">Do walidacji${expectedVersion ? ` · ${escapeHtml(expectedVersion)}` : ''}</span>`
+          : (isResolved ? '<span class="report-status-badge is-resolved">Rozwiązane</span>' : '<span class="report-status-badge">Nowe / w trakcie</span>'));
+      const resolutionStatusAction = isResolved ? statusAction : null;
+      const resolutionMeta = safeObject(resolutionStatusAction?.meta?.mapping);
+      const resolvedAt = resolutionStatusAction?.ts ? new Date(resolutionStatusAction.ts).toLocaleString('pl-PL') : '';
+      const resolvedActor = resolutionStatusAction ? getEffectiveLogActor(resolutionStatusAction) : '';
       const resolutionKey = String(resolutionMeta.key || '').trim();
       const resolutionVendor = String(resolutionMeta.vendor || '').trim();
       const resolutionType = String(resolutionMeta.type || '').trim();
@@ -5994,9 +6000,8 @@
       ` : '';
       if (kind === 'ui') {
         return `
-          <div class="report-item report-${kind} ${statusClass}" data-report-index="${index}" data-report-key="${reportKey}" data-report-title="${title}" data-report-category="${escapeHtml(meta.category || '')}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}" data-report-status="${reportStatus}">
+          <div class="report-item report-${kind} ${statusClass}" data-report-index="${index}" data-report-key="${reportKey}" data-report-category="${escapeHtml(meta.category || '')}" data-report-query="${query}" data-report-vendor="${suggestedVendor}" data-report-source="${source}" data-report-detail="${detail}" data-report-reason="${reason}" data-report-kind="${kind}" data-report-id="${reportIdEscaped}" data-report-status="${reportStatus}">
             <div class="report-header">
-              <strong>${title}</strong>
               <div class="report-header-meta">
                 <span class="report-ts">${ts}</span>
                 <div class="report-meta-row">
@@ -6006,7 +6011,7 @@
                 </div>
               </div>
             </div>
-            ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować tytuł i opis"><span class="report-reason-label">Opis:</span> <strong>${reason}</strong></div>` : ''}
+            ${reason ? `<div class="report-reason is-copyable" title="Kliknij, aby skopiować opis"><span class="report-reason-label">Opis:</span> <strong>${reason}</strong></div>` : ''}
             ${contextParts.length ? `<details class="report-context-admin"><summary>Kontekst techniczny</summary><div>${contextParts.map((part) => `<span>${part}</span>`).join('')}</div></details>` : ''}
             ${resolutionSummary}
             <div class="report-form">
@@ -6015,10 +6020,15 @@
                 ${isResolved ? '<span class="report-readonly-note">Zgłoszenie zamknięte — tylko do odczytu</span>' : `
                   <button type="button" class="report-save-note" hidden>Zapisz notatkę</button>
                   <button type="button" class="report-resolve">Rozwiąż</button>
-                  <button type="button" class="report-hold">Wstrzymaj</button>
+                  <button type="button" class="report-hold ${isOnHold ? 'is-active' : ''}" aria-pressed="${isOnHold ? 'true' : 'false'}">Wstrzymaj</button>
+                  <button type="button" class="report-validate">Do walidacji</button>
                   <button type="button" class="report-dismiss">Usuń zgłoszenie</button>
                 `}
               </div>
+              ${isResolved ? '' : `<div class="report-validate-form" ${isValidate ? '' : 'hidden'}>
+                <input type="text" class="report-validate-version" maxlength="80" value="${escapeHtml(expectedVersion)}" placeholder="Oczekiwana wersja, np. 1.4.0">
+                <button type="button" class="report-validate-confirm">Ustaw validate</button>
+              </div>`}
               ${(source || detail) ? `<div class="report-extra">// ${source ? `Źródło: ${source}` : ''}${detail ? ` · Wzorzec: ${detail}` : ''}</div>` : ''}
             </div>
           </div>
@@ -6160,7 +6170,7 @@
     function getReportMetaFromItem(item) {
       if (!item) return {};
       return {
-        title: item.getAttribute('data-report-title') || '',
+            title: '',
         category: item.getAttribute('data-report-category') || '',
         query: item.getAttribute('data-report-query') || '',
         suggestedVendor: item.getAttribute('data-report-vendor') || '',
@@ -6452,17 +6462,13 @@
           const reasonText = reasonBlock.querySelector('strong')?.textContent?.trim() || '';
           if (!reasonText) return;
           const reportItem = reasonBlock.closest('.report-item');
-          const titleText = (
-            reportItem?.getAttribute('data-report-title')
-            || reportItem?.querySelector('.report-header > strong')?.textContent
-            || ''
-          ).trim();
+          const titleText = '';
           const clipboardText = buildReportClipboardText(titleText, reasonText);
           const t0 = performance.now();
           copyTextToClipboard(clipboardText).then((ok) => {
             const t1 = performance.now();
             if (ok) {
-              showToast(titleText ? 'Skopiowano tytuł i opis zgłoszenia.' : 'Skopiowano treść uwagi.', 'ok', t1 - t0);
+              showToast('Skopiowano treść zgłoszenia.', 'ok', t1 - t0);
             } else {
               showToast('Nie udało się skopiować zgłoszenia.', 'warn', t1 - t0);
             }
@@ -6546,9 +6552,10 @@
           reportMeta.kind = 'ui';
           const adminNote = item.querySelector('.report-note')?.value?.trim() || '';
           const reportId = item.getAttribute('data-report-id') || '';
+          const wasOnHold = item.getAttribute('data-report-status') === 'on-hold';
           setAdminNote(reportId, adminNote);
           logReportAction({
-            action: 'on-hold',
+            action: wasOnHold ? 'in-progress' : 'on-hold',
             report: reportMeta,
             mapping: {
               key: 'nie dotyczy',
@@ -6557,9 +6564,49 @@
               note: adminNote || 'nie dotyczy'
             }
           });
-          if (reportId) setReportStatus(reportId, 'on-hold');
-          item.classList.add('is-on-hold');
-          showToast('Zgłoszenie oznaczone jako on hold.', 'info');
+          if (reportId) setReportStatus(reportId, wasOnHold ? 'in-progress' : 'on-hold');
+          showToast(wasOnHold ? 'Cofnięto wstrzymanie zgłoszenia.' : 'Zgłoszenie wstrzymane.', 'info');
+          renderReports();
+          return;
+        }
+        const validateBtn = target.closest('.report-validate');
+        if (validateBtn) {
+          const item = validateBtn.closest('.report-item');
+          const form = item?.querySelector('.report-validate-form');
+          if (!form) return;
+          form.hidden = !form.hidden;
+          if (!form.hidden) form.querySelector('.report-validate-version')?.focus();
+          return;
+        }
+        const validateConfirmBtn = target.closest('.report-validate-confirm');
+        if (validateConfirmBtn) {
+          const item = validateConfirmBtn.closest('.report-item');
+          if (!item) return;
+          const expectedVersion = item.querySelector('.report-validate-version')?.value?.trim() || '';
+          if (!expectedVersion) {
+            showToast('Wpisz oczekiwaną wersję wdrożenia.', 'warn');
+            item.querySelector('.report-validate-version')?.focus();
+            return;
+          }
+          const reportMeta = getReportMetaFromItem(item);
+          reportMeta.kind = 'ui';
+          const reportId = item.getAttribute('data-report-id') || '';
+          const adminNote = item.querySelector('.report-note')?.value?.trim() || '';
+          setAdminNote(reportId, adminNote);
+          logReportAction({
+            action: 'validate',
+            report: reportMeta,
+            expectedVersion,
+            mapping: {
+              key: 'nie dotyczy',
+              vendor: 'nie dotyczy',
+              type: 'walidacja wdrożenia',
+              note: adminNote || 'nie dotyczy'
+            }
+          });
+          if (reportId) setReportStatus(reportId, 'validate');
+          showToast(`Zgłoszenie oczekuje na walidację w wersji ${expectedVersion}.`, 'ok');
+          renderReports();
           return;
         }
         const dismissBtn = target.closest('.report-dismiss');

@@ -1627,6 +1627,21 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
   z-index: 2;
 }
 
+.search-sources-clear {
+  margin-top: 6px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  text-decoration: underline;
+}
+
+.search-sources-clear:hover {
+  color: var(--ink);
+}
+
 .source-option {
   display: inline-flex;
   align-items: center;
@@ -4566,6 +4581,11 @@ body.dark-mode .admin-kpi {
   border-color: rgba(31, 157, 85, 0.45);
 }
 
+.report-item.is-validate {
+  border-color: rgba(15, 91, 255, 0.55);
+  box-shadow: 0 0 0 2px rgba(15, 91, 255, 0.1);
+}
+
 .report-status-badge {
   padding: 2px 8px;
   border: 1px solid var(--border);
@@ -4585,6 +4605,12 @@ body.dark-mode .admin-kpi {
   border-color: rgba(31, 157, 85, 0.5);
   background: rgba(31, 157, 85, 0.14);
   color: #16753f;
+}
+
+.report-status-badge.is-validate {
+  border-color: rgba(15, 91, 255, 0.45);
+  background: rgba(15, 91, 255, 0.1);
+  color: #0f5bff;
 }
 
 .report-readonly-note {
@@ -4616,6 +4642,13 @@ body.dark-mode .admin-kpi {
 }
 
 .report-item.is-on-hold .report-hold {
+  background: #ffb020;
+  color: #221600;
+  border-color: #ffcc66;
+  box-shadow: 0 0 0 2px rgba(255, 176, 32, 0.18);
+}
+
+.report-hold.is-active {
   background: #ffb020;
   color: #221600;
   border-color: #ffcc66;
@@ -5035,6 +5068,27 @@ body.dark-mode .report-item.is-on-hold .report-kind {
   background: rgba(255, 122, 69, 0.12);
   color: var(--accent-2);
   border-color: rgba(255, 122, 69, 0.4);
+}
+
+.report-validate {
+  background: rgba(15, 91, 255, 0.1);
+  color: #0f5bff;
+  border-color: rgba(15, 91, 255, 0.35);
+}
+
+.report-validate-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.report-validate-form input {
+  min-width: 0;
+  flex: 1;
+}
+
+.report-validate-form button {
+  flex: 0 0 auto;
 }
 
 .report-actions button {

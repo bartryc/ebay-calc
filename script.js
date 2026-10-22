@@ -3098,7 +3098,6 @@ function calculatePrice() {
   const primaryState = window.CalculatorUI.readPrimaryState(document, getActiveCommissionRate);
   const { netto, brutto, ebayPrice, exchangeRate, commission, vatRate } = primaryState;
   const resultDiv = document.getElementById('result');
-
   if (isNaN(netto) && isNaN(brutto) && isNaN(ebayPrice)) {
     clearResultMessage(resultDiv);
     updateSummaryMetrics();
@@ -4180,6 +4179,7 @@ if (partNumberInput) {
   const reportMappingReason = document.getElementById('reportMappingReason');
   const reportMappingSubmit = document.getElementById('reportMappingSubmit');
   const searchClearBtn = document.getElementById('searchClearBtn');
+  const searchSourcesClearBtn = document.getElementById('searchSourcesClearBtn');
   const searchSourcesContainer = document.getElementById('searchSources');
   const sourceInputMap = new Map();
   let searchSourcesConfig = getDefaultSearchSourcesConfig();
@@ -4216,6 +4216,13 @@ if (partNumberInput) {
     const payload = JSON.stringify(state);
     localStorage.setItem(SEARCH_SOURCES_STORAGE_KEY, payload);
     setCookieValue(SEARCH_SOURCES_COOKIE_KEY, payload);
+  };
+  const clearSourcesSelection = () => {
+    sourceInputMap.forEach((inputEl) => {
+      if (inputEl) inputEl.checked = false;
+    });
+    persistSourcesState();
+    clearSearchStatus();
   };
   const readSavedVariantsState = () => {
     const raw = localStorage.getItem(SEARCH_SOURCE_VARIANTS_STORAGE_KEY) || getCookieValue(SEARCH_SOURCE_VARIANTS_COOKIE_KEY);
@@ -4749,6 +4756,9 @@ if (partNumberInput) {
       clearSearchStatus();
       partNumberInput.focus();
     });
+  }
+  if (searchSourcesClearBtn) {
+    searchSourcesClearBtn.addEventListener('click', clearSourcesSelection);
   }
   let lastSourcesRefreshAt = 0;
   const refreshSearchSourcesConfig = () => {
