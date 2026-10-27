@@ -2741,20 +2741,29 @@ body.dark-mode .admin-identity {
 }
 
 .admin-edit-toggle {
-  min-height: 34px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
+  min-height: 38px;
+  padding: 7px 14px;
+  border: 1px solid var(--accent);
   border-radius: 8px;
-  background: var(--card);
-  color: var(--ink);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(15, 91, 255, 0.18);
   cursor: pointer;
   font-weight: 700;
 }
 
 .admin-edit-toggle:hover,
+.admin-edit-toggle:focus-visible {
+  filter: brightness(1.07);
+  outline: 3px solid rgba(15, 91, 255, 0.22);
+  outline-offset: 2px;
+}
+
 .admin-edit-scope.is-admin-editing .admin-edit-toggle {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: none;
 }
 
 .admin-edit-scope.is-admin-edit-locked .admin-edit-action {
@@ -2764,10 +2773,23 @@ body.dark-mode .admin-identity {
 .admin-edit-scope.is-admin-edit-locked input:disabled,
 .admin-edit-scope.is-admin-edit-locked select:disabled,
 .admin-edit-scope.is-admin-edit-locked textarea:disabled {
-  opacity: 1;
-  background: var(--card-2);
+  opacity: 0.68;
+  background: color-mix(in srgb, var(--card-2) 82%, var(--muted) 18%);
+  border-color: color-mix(in srgb, var(--border) 72%, var(--muted) 28%);
   color: var(--muted);
-  cursor: default;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.admin-edit-scope.is-admin-edit-locked input:disabled::placeholder,
+.admin-edit-scope.is-admin-edit-locked textarea:disabled::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+
+.admin-edit-scope.is-admin-edit-locked input[type="checkbox"]:disabled,
+.admin-edit-scope.is-admin-edit-locked input[type="radio"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .default-calculator-settings {
@@ -3299,9 +3321,32 @@ body.dark-mode .admin-identity {
   display: none;
 }
 
+.hd-whitelist-row .hd-whitelist-edit {
+  border-color: rgba(15, 91, 255, 0.55);
+  background: rgba(15, 91, 255, 0.12);
+  color: var(--accent);
+}
+
+.hd-whitelist-row .hd-whitelist-edit:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .hd-whitelist-row input[readonly] {
-  color: var(--ink);
+  opacity: 0.72;
+  background: color-mix(in srgb, var(--card-2) 82%, var(--muted) 18%);
+  border-color: color-mix(in srgb, var(--border) 72%, var(--muted) 28%);
+  color: var(--muted);
+  box-shadow: none;
   cursor: default;
+}
+
+.hd-whitelist-row.is-editing input[readonly] {
+  opacity: 1;
+  background: var(--card);
+  border-color: var(--accent);
+  color: var(--ink);
 }
 
 @media (max-width: 680px) {
