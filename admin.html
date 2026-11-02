@@ -218,6 +218,7 @@
                 <div id="workerKvChart" class="worker-usage-chart" role="img" aria-label="Wykres procentowego wykorzystania dziennych limitów KV"></div>
               </figure>
             </div>
+            <div id="workerUsageChartTooltip" class="worker-usage-chart-tooltip" role="status" aria-live="polite" hidden></div>
             <div class="worker-usage-history-table-wrap">
               <table class="worker-usage-history-table">
                 <thead>
@@ -1103,6 +1104,7 @@
     const workerUsageHistoryBody = document.getElementById('workerUsageHistoryBody');
     const workerRequestsChart = document.getElementById('workerRequestsChart');
     const workerKvChart = document.getElementById('workerKvChart');
+    const workerUsageChartTooltip = document.getElementById('workerUsageChartTooltip');
     const LAYOUT_PRESETS_NOTE_ID = 'layout-presets-v1';
     const LAYOUT_DEFAULT_PRESET_SELECT_VALUE = '__default__';
     const LAYOUT_DEFAULT_PRESET_ID = 'global-default-layout';
@@ -1229,6 +1231,7 @@
     let logActorAliasesConfig = { version: 1, aliases: [] };
     let workerUsageLoaded = false;
     let workerUsageArchive = [];
+    let workerUsageTooltipEntries = new Map();
 
     function readUsagePath(value, path) {
       return path.split('.').reduce((current, key) => (
@@ -1485,7 +1488,7 @@
         const label = String(entry.date || '').slice(5).split('-').reverse().join('.');
         return `<text class="worker-chart-date" x="${xAt(index)}" y="${height - 9}">${escapeHtml(label)}</text>`;
       }).join('');
-      const lines = series.map(({ className, label, getValue }) => {
+      const lines = series.map(({ key, className, label, getValue }) => {
         let path = '';
         const points = [];
         let segmentOpen = false;
@@ -1500,7 +1503,8 @@
           path += `${segmentOpen ? ' L' : ' M'} ${x.toFixed(2)} ${y.toFixed(2)}`;
           segmentOpen = true;
           const valueLabel = percent ? `${value.toFixed(value >= 1 ? 1 : 2)}%` : formatUsageNumber(value);
-          points.push(`<circle class="worker-chart-point ${entry.complete ? '' : 'is-partial'}" cx="${x}" cy="${y}" r="3.5"><title>${escapeHtml(`${formatUsageHistoryDate(entry.date)} · ${label}: ${valueLabel}${entry.complete ? '' : ' · pomiar niepełny'}`)}</title></circle>`);
+          const ariaLabel = `${formatUsageHistoryDate(entry.date)} · ${label}: ${valueLabel}${entry.complete ? '' : ' · pomiar niepełny'}`;
+          points.push(`<circle class="worker-chart-point ${entry.complete ? '' : 'is-partial'}" cx="${x}" cy="${y}" r="3.5" tabindex="0" role="img" data-usage-day="${escapeHtml(entry.date)}" data-usage-metric="${escapeHtml(key)}" aria-label="${escapeHtml(ariaLabel)}"><title>${escapeHtml(ariaLabel)}</title></circle>`);
         });
         return `<g class="worker-chart-series ${className}"><path d="${path.trim()}"></path>${points.join('')}</g>`;
       }).join('');
@@ -1508,8 +1512,10 @@
     }
 
     function renderWorkerUsageCharts(history) {
+      workerUsageTooltipEntries = new Map(history.map((entry) => [entry.date, entry]));
       if (workerRequestsChart) {
         const svg = buildUsageChartSvg(history, [{
+          key: 'workerRequests',
           className: 'is-worker',
           label: 'Żądania',
           getValue: (entry) => entry.values?.workerRequests
@@ -1523,14 +1529,80 @@
           return Number.isFinite(value) && Number.isFinite(limit) && limit > 0 ? (value / limit) * 100 : null;
         };
         const svg = buildUsageChartSvg(history, [
-          { className: 'is-reads', label: 'Odczyty', getValue: (entry) => ratioFor(entry, 'kvReads') },
-          { className: 'is-writes', label: 'Zapisy', getValue: (entry) => ratioFor(entry, 'kvWrites') },
-          { className: 'is-deletes', label: 'Usunięcia', getValue: (entry) => ratioFor(entry, 'kvDeletes') },
-          { className: 'is-lists', label: 'Listy', getValue: (entry) => ratioFor(entry, 'kvLists') }
+          { key: 'kvReads', className: 'is-reads', label: 'Odczyty', getValue: (entry) => ratioFor(entry, 'kvReads') },
+          { key: 'kvWrites', className: 'is-writes', label: 'Zapisy', getValue: (entry) => ratioFor(entry, 'kvWrites') },
+          { key: 'kvDeletes', className: 'is-deletes', label: 'Usunięcia', getValue: (entry) => ratioFor(entry, 'kvDeletes') },
+          { key: 'kvLists', className: 'is-lists', label: 'Listy', getValue: (entry) => ratioFor(entry, 'kvLists') }
         ], { percent: true });
         workerKvChart.innerHTML = svg || '<div class="worker-usage-chart-empty">Brak danych o operacjach KV.</div>';
       }
     }
+
+    function getWorkerUsageTooltipText(day, highlightedMetric) {
+      const entry = workerUsageTooltipEntries.get(day);
+      if (!entry) return '';
+      const orderedMetrics = [
+        ...WORKER_USAGE_METRICS.filter((metric) => metric.key === highlightedMetric),
+        ...WORKER_USAGE_METRICS.filter((metric) => metric.key !== highlightedMetric)
+      ];
+      const values = orderedMetrics.map(({ key, label }) => {
+        const value = entry.values?.[key];
+        if (!Number.isFinite(value)) return null;
+        const limit = entry.limits?.[key];
+        const limitText = Number.isFinite(limit) ? ` / ${formatUsageNumber(limit)}` : '';
+        const percent = Number.isFinite(limit) && limit > 0 ? ` (${((value / limit) * 100).toFixed(1)}%)` : '';
+        return `${label}: ${formatUsageNumber(value)}${limitText}${percent}`;
+      }).filter(Boolean);
+      return [
+        formatUsageHistoryDate(entry.date),
+        entry.complete ? '' : 'Bieżący, niepełny pomiar',
+        ...values
+      ].filter(Boolean).join('\n');
+    }
+
+    function positionWorkerUsageChartTooltip(clientX, clientY) {
+      if (!workerUsageChartTooltip) return;
+      const gap = 14;
+      const bounds = workerUsageChartTooltip.getBoundingClientRect();
+      const left = Math.min(Math.max(8, clientX + gap), Math.max(8, window.innerWidth - bounds.width - 8));
+      const top = Math.min(Math.max(8, clientY + gap), Math.max(8, window.innerHeight - bounds.height - 8));
+      workerUsageChartTooltip.style.left = `${left}px`;
+      workerUsageChartTooltip.style.top = `${top}px`;
+    }
+
+    function showWorkerUsageChartTooltip(point, clientX, clientY) {
+      if (!workerUsageChartTooltip || !point) return;
+      const text = getWorkerUsageTooltipText(point.getAttribute('data-usage-day') || '', point.getAttribute('data-usage-metric') || '');
+      if (!text) return;
+      workerUsageChartTooltip.textContent = text;
+      workerUsageChartTooltip.hidden = false;
+      positionWorkerUsageChartTooltip(clientX, clientY);
+    }
+
+    function hideWorkerUsageChartTooltip() {
+      if (workerUsageChartTooltip) workerUsageChartTooltip.hidden = true;
+    }
+
+    [workerRequestsChart, workerKvChart].forEach((chart) => {
+      if (!chart) return;
+      chart.addEventListener('pointerover', (event) => {
+        const point = event.target.closest?.('.worker-chart-point');
+        if (point) showWorkerUsageChartTooltip(point, event.clientX, event.clientY);
+      });
+      chart.addEventListener('pointermove', (event) => {
+        if (!workerUsageChartTooltip?.hidden) positionWorkerUsageChartTooltip(event.clientX, event.clientY);
+      });
+      chart.addEventListener('pointerout', (event) => {
+        if (event.target.closest?.('.worker-chart-point')) hideWorkerUsageChartTooltip();
+      });
+      chart.addEventListener('focusin', (event) => {
+        const point = event.target.closest?.('.worker-chart-point');
+        if (!point) return;
+        const bounds = point.getBoundingClientRect();
+        showWorkerUsageChartTooltip(point, bounds.left + (bounds.width / 2), bounds.top + bounds.height);
+      });
+      chart.addEventListener('focusout', hideWorkerUsageChartTooltip);
+    });
 
     function renderWorkerUsageHistory(serverHistory = [], archivedHistory = workerUsageArchive) {
       if (!workerUsageHistoryBody) return;

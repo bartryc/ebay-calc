@@ -2559,6 +2559,15 @@ body.dark-mode .admin-identity {
 .worker-chart-point {
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
+  cursor: crosshair;
+  transition: stroke-width 120ms ease, filter 120ms ease;
+}
+
+.worker-chart-point:hover,
+.worker-chart-point:focus {
+  stroke-width: 5;
+  filter: brightness(1.1);
+  outline: none;
 }
 
 .worker-chart-point.is-partial {
@@ -2628,6 +2637,23 @@ body.dark-mode .admin-identity {
 .worker-usage-chart-legend .is-writes { color: #d89016; }
 .worker-usage-chart-legend .is-deletes { color: #d13b2f; }
 .worker-usage-chart-legend .is-lists { color: #7a45c7; }
+
+.worker-usage-chart-tooltip {
+  position: fixed;
+  z-index: 500;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--card) 96%, var(--accent) 4%);
+  box-shadow: 0 10px 26px rgba(20, 29, 43, 0.2);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.45;
+  white-space: pre-line;
+  pointer-events: none;
+}
 
 .worker-usage-chart-empty {
   display: grid;
