@@ -301,7 +301,7 @@
             <p class="highlight-note">Każda cena brutto ERP jest przeliczana na eBay przez jeden mnożnik: wyliczony z kursu, VAT i FEE albo ręczny po włączeniu switcha.</p>
             <div class="base-commission-tools">
               <label for="currentBaseMultiplier" class="field-label">Aktualny mnożnik Base
-                <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera. Switch używa go do wyceny eBay i brutto ERP 1:1 z Base, a pole narzutu eBay pokazuje tylko przeliczenie pomocnicze." aria-label="Pomoc">?</span>
+                <span class="field-help" data-tooltip="Wpisz bieżący mnożnik z BaseLinkera lub wybierz preset, aby automatycznie włączyć tryb ręczny. Po wyłączeniu switcha kalkulator używa aktualnego kursu i FEE." aria-label="Pomoc">?</span>
               </label>
               <input type="text" inputmode="decimal" id="currentBaseMultiplier" step="0.0001" min="0" placeholder="Np. 0.2654">
               <div class="base-multiplier-presets-wrap">
@@ -318,7 +318,7 @@
 
               <div class="min-price-box" id="baseCommissionBox">
                 <div><strong>Wyliczony narzut eBay (%):</strong> <span id="calculatedCommissionFromBase">—</span>
-                  <span class="field-help inline-help" data-tooltip="Wzór odwrotny: narzut eBay = (mnożnik × 1.23 / ((1 + VAT klienta) × kurs)) - 1." aria-label="Pomoc">?</span>
+                  <span class="field-help inline-help" data-tooltip="Przy włączonym switchu: narzut wynika z wpisanego mnożnika. Przy wyłączonym: używany jest standardowy narzut z aktualnego kursu i FEE." aria-label="Pomoc">?</span>
                 </div>
               </div>
             </div>

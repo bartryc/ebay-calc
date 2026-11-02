@@ -2061,8 +2061,8 @@ function updateCommissionFromBaseMultiplier() {
   const baseState = window.CalculatorUI.readBaseState(document, getActiveCommissionRate);
   const exchangeRate = baseState.exchangeRate;
   const vatRate = baseState.vatRate;
-  const hasManualMultiplier = String(baseMultiplierEl.value || '').trim() !== '';
-  const baseMultiplier = hasManualMultiplier
+  const useManualMultiplier = isCurrentBasePricingEnabled();
+  const baseMultiplier = useManualMultiplier
     ? baseState.currentBaseMultiplier
     : window.CalculatorCore.baseMultiplier(exchangeRate, vatRate, baseState.commission);
 
@@ -3888,6 +3888,18 @@ currencySelectEl.addEventListener('change', () => {
 });
 
 const currentBaseMultiplierEl = document.getElementById('currentBaseMultiplier');
+function syncBasePricingToggleFromInput() {
+  const toggle = document.getElementById('useCurrentBaseMultiplierToggle');
+  if (!toggle || !currentBaseMultiplierEl) return;
+  const rawValue = String(currentBaseMultiplierEl.value || '').trim();
+  const multiplier = parseNumber(rawValue);
+  if (Number.isFinite(multiplier) && multiplier > 0) {
+    toggle.checked = true;
+  } else if (!rawValue) {
+    toggle.checked = false;
+  }
+}
+
 function refreshCurrentBaseMultiplierPricing() {
   window.CalculatorUI.clearRecalculatedFields();
   updateCommissionFromBaseMultiplier();
@@ -3900,12 +3912,14 @@ function refreshCurrentBaseMultiplierPricing() {
 
 if (currentBaseMultiplierEl) {
   currentBaseMultiplierEl.addEventListener('input', () => {
+    syncBasePricingToggleFromInput();
     refreshCurrentBaseMultiplierPricing();
     scheduleHistoryLog('currentBaseMultiplier');
     syncSelectedBaseMultiplierPreset();
     persistCalculatorPreferences();
   });
   currentBaseMultiplierEl.addEventListener('change', () => {
+    syncBasePricingToggleFromInput();
     refreshCurrentBaseMultiplierPricing();
     flushHistoryLog('currentBaseMultiplier');
     syncSelectedBaseMultiplierPreset();
@@ -3936,6 +3950,8 @@ if (baseMultiplierPresetButtons) {
     if (!preset) return;
     selectedBaseMultiplierPresetId = preset.id;
     currentBaseMultiplierEl.value = formatBaseMultiplierPresetValue(preset.multiplier);
+    const toggle = document.getElementById('useCurrentBaseMultiplierToggle');
+    if (toggle) toggle.checked = true;
     refreshCurrentBaseMultiplierPricing();
     window.CalculatorUI.flashRecalculatedField(currentBaseMultiplierEl);
     addHistoryEntry('currentBaseMultiplier');
@@ -3951,6 +3967,7 @@ if (useCurrentBaseMultiplierToggle) {
   useCurrentBaseMultiplierToggle.addEventListener('change', () => {
     window.CalculatorUI.clearRecalculatedFields();
     hideSelfTestDetails();
+    updateCommissionFromBaseMultiplier();
     resyncPricingFromCurrentSource();
     persistCalculatorPreferences();
   });
