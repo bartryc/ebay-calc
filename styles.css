@@ -1096,7 +1096,7 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
 
 .base-multiplier-preset-buttons {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
   gap: 6px;
 }
 
@@ -1123,16 +1123,18 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
   background: color-mix(in srgb, var(--accent) 10%, var(--card));
 }
 
-.base-multiplier-preset-buttons span,
-.base-multiplier-preset-buttons small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.base-multiplier-preset-label,
+.base-multiplier-preset-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
-.base-multiplier-preset-buttons small {
+.base-multiplier-preset-value {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  line-height: 1.25;
 }
 
 .search-card {

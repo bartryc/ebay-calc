@@ -2059,9 +2059,12 @@ function updateCommissionFromBaseMultiplier() {
   if (!baseMultiplierEl || !resultEl) return;
 
   const baseState = window.CalculatorUI.readBaseState(document, getActiveCommissionRate);
-  const baseMultiplier = baseState.currentBaseMultiplier;
   const exchangeRate = baseState.exchangeRate;
   const vatRate = baseState.vatRate;
+  const hasManualMultiplier = String(baseMultiplierEl.value || '').trim() !== '';
+  const baseMultiplier = hasManualMultiplier
+    ? baseState.currentBaseMultiplier
+    : window.CalculatorCore.baseMultiplier(exchangeRate, vatRate, baseState.commission);
 
   if (!Number.isFinite(baseMultiplier) || baseMultiplier <= 0 || !Number.isFinite(exchangeRate) || exchangeRate <= 0 || !Number.isFinite(vatRate) || vatRate < 0) {
     resultEl.textContent = '—';
@@ -3181,7 +3184,7 @@ function renderBaseMultiplierPresetButtons() {
   container.innerHTML = presets.map((item) => {
     const isActive = Number.isFinite(currentMultiplier) && Math.abs(currentMultiplier - item.multiplier) < 0.0000001;
     const multiplierText = formatBaseMultiplierPresetValue(item.multiplier);
-    return `<button type="button" class="${isActive ? 'is-active' : ''}" data-base-multiplier-preset-id="${escapeHtml(item.id)}" aria-pressed="${isActive ? 'true' : 'false'}" title="Ustaw mnożnik Base ${escapeHtml(multiplierText)}"><span>${escapeHtml(item.label)}</span><small>${escapeHtml(multiplierText)}</small></button>`;
+    return `<button type="button" class="${isActive ? 'is-active' : ''}" data-base-multiplier-preset-id="${escapeHtml(item.id)}" aria-pressed="${isActive ? 'true' : 'false'}" title="Ustaw mnożnik Base ${escapeHtml(multiplierText)}"><span class="base-multiplier-preset-label">${escapeHtml(item.label)}</span><small class="base-multiplier-preset-value">${escapeHtml(multiplierText)}</small></button>`;
   }).join('');
 }
 
