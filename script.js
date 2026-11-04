@@ -4124,15 +4124,29 @@ if (calculatorPresetButtons) {
 
 (async () => {
   renderRateProviderOptions();
-  await loadCurrenciesConfig();
-  await loadCustomRateProviders();
-  await loadCalculatorPresetsConfig();
-  await loadBaseMultiplierPresetsConfig();
-  await loadDefaultRateProviderSelection();
-  await loadDefaultCommissionRate();
+  // Apply cached settings immediately, while refreshing independent server
+  // settings in parallel so one slow request cannot delay the rest.
+  const configTasks = [
+    loadCurrenciesConfig(),
+    loadCustomRateProviders(),
+    loadCalculatorPresetsConfig(),
+    loadBaseMultiplierPresetsConfig(),
+    loadDefaultRateProviderSelection(),
+    loadDefaultCommissionRate()
+  ];
   restoreCalculatorPreferences();
-  const currency = document.getElementById('currency').value;
+  let currency = document.getElementById('currency').value;
+  let providerKey = window.RateService.normalizeProviderKey(rateSourceSelect?.value || window.RateService.DEFAULT_PROVIDER);
   fetchExchangeRate(currency, { notify: false });
+  checkRateProvidersStatus(currency);
+  await Promise.allSettled(configTasks);
+  const refreshedCurrency = document.getElementById('currency').value;
+  const refreshedProviderKey = window.RateService.normalizeProviderKey(rateSourceSelect?.value || window.RateService.DEFAULT_PROVIDER);
+  if (refreshedCurrency !== currency || refreshedProviderKey !== providerKey) {
+    currency = refreshedCurrency;
+    providerKey = refreshedProviderKey;
+    fetchExchangeRate(currency, { notify: false });
+  }
   checkRateProvidersStatus(currency);
 })();
 
