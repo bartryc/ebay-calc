@@ -4030,8 +4030,8 @@
       }
     }
 
-    function buildReportClipboardText(title, reason) {
-      return [title, reason]
+    function buildReportClipboardText(title, reason, comment) {
+      return [title, reason, comment]
         .map((value) => String(value || '').trim())
         .filter(Boolean)
         .join('\n\n');
@@ -6555,7 +6555,8 @@
           if (!reasonText) return;
           const reportItem = reasonBlock.closest('.report-item');
           const titleText = '';
-          const clipboardText = buildReportClipboardText(titleText, reasonText);
+          const adminComment = reportItem?.querySelector('.report-note')?.value?.trim() || '';
+          const clipboardText = buildReportClipboardText(titleText, reasonText, adminComment ? `Notatka admina: ${adminComment}` : '');
           const t0 = performance.now();
           copyTextToClipboard(clipboardText).then((ok) => {
             const t1 = performance.now();

@@ -2919,7 +2919,6 @@ function updateEbayCurrencyLabel() {
 // Clear button handler
 document.getElementById('clearBtn').addEventListener('click', () => {
   clearCalculatorPreferences();
-  window.resetSearchPreferences?.();
   window.CalculatorUI.clearRecalculatedFields();
   document.getElementById('plnNetto').value = '';
   document.getElementById('plnBrutto').value = '';
@@ -3176,19 +3175,24 @@ function renderBaseMultiplierPresetButtons() {
   const container = document.getElementById('baseMultiplierPresetButtons');
   if (!container) return;
   const currentMultiplier = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
+  const manualPricingEnabled = isCurrentBasePricingEnabled();
   const presets = baseMultiplierPresetsConfig.presets.filter((item) => item.enabled !== false);
   if (!presets.length) {
     container.innerHTML = '<span class="preset-empty">Brak skonfigurowanych presetów</span>';
     return;
   }
   container.innerHTML = presets.map((item) => {
-    const isActive = Number.isFinite(currentMultiplier) && Math.abs(currentMultiplier - item.multiplier) < 0.0000001;
+    const isActive = manualPricingEnabled && Number.isFinite(currentMultiplier) && Math.abs(currentMultiplier - item.multiplier) < 0.0000001;
     const multiplierText = formatBaseMultiplierPresetValue(item.multiplier);
     return `<button type="button" class="${isActive ? 'is-active' : ''}" data-base-multiplier-preset-id="${escapeHtml(item.id)}" aria-pressed="${isActive ? 'true' : 'false'}" title="Ustaw mnożnik Base ${escapeHtml(multiplierText)}"><span class="base-multiplier-preset-label">${escapeHtml(item.label)}</span><small class="base-multiplier-preset-value">${escapeHtml(multiplierText)}</small></button>`;
   }).join('');
 }
 
 function syncSelectedBaseMultiplierPreset() {
+  if (!isCurrentBasePricingEnabled()) {
+    selectedBaseMultiplierPresetId = '';
+    return;
+  }
   const current = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
   selectedBaseMultiplierPresetId = baseMultiplierPresetsConfig.presets.find((item) => (
     item.enabled !== false && Number.isFinite(current) && Math.abs(current - item.multiplier) < 0.0000001
@@ -3271,6 +3275,13 @@ function applyPreset(currencyOrPreset, vat) {
     : normalizeCalculatorPreset({ currency: currencyOrPreset, vat });
   if (!preset) return;
   isPresetApplied = true;
+  // Calculator presets use the current live rate/fee calculation. Do not let
+  // a previously selected manual Base multiplier override the new preset.
+  const basePricingToggle = document.getElementById('useCurrentBaseMultiplierToggle');
+  if (basePricingToggle) basePricingToggle.checked = false;
+  selectedBaseMultiplierPresetId = '';
+  renderBaseMultiplierPresetButtons();
+  updateCommissionFromBaseMultiplier();
   const sourceBeforePreset = getSourceForPricingParamChange();
   applyPresetAmountModes(preset.vat);
   document.getElementById('currency').value = preset.currency;
@@ -3967,6 +3978,8 @@ if (useCurrentBaseMultiplierToggle) {
   useCurrentBaseMultiplierToggle.addEventListener('change', () => {
     window.CalculatorUI.clearRecalculatedFields();
     hideSelfTestDetails();
+    syncSelectedBaseMultiplierPreset();
+    renderBaseMultiplierPresetButtons();
     updateCommissionFromBaseMultiplier();
     resyncPricingFromCurrentSource();
     persistCalculatorPreferences();
