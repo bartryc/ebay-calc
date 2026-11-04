@@ -7434,6 +7434,57 @@ body[data-page-title="Kalkulator"] .layout {
   align-items: stretch;
 }
 
+body[data-page-title="Kalkulator"] .page {
+  width: calc(100% - 36px);
+  max-width: var(--main-page-max-width, 1440px);
+}
+
+.main-page-width-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+  max-width: var(--main-page-max-width, 1440px);
+  margin: -2px auto 12px;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.main-page-width-control label {
+  font-weight: 700;
+}
+
+.main-page-width-control input[type="range"] {
+  width: clamp(100px, 15vw, 190px);
+  accent-color: var(--accent);
+  cursor: ew-resize;
+}
+
+.main-page-width-control output {
+  min-width: 54px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.main-page-width-control button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.main-page-width-control button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 body[data-page-title="Kalkulator"].layout-three-columns .layout {
   --layout-left-fr: 46fr;
   --layout-right-fr: 30fr;
@@ -8734,4 +8785,9 @@ body[data-page-title="Kalkulator"] #markupFromSaleBox {
   body[data-page-title="Kalkulator"] #markupFromSaleBox {
     grid-template-columns: 1fr;
   }
+}
+
+body[data-page-title="Kalkulator"] .page {
+  width: calc(100% - 36px);
+  max-width: var(--main-page-max-width, 1440px);
 }

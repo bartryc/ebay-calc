@@ -116,6 +116,27 @@ const layoutColumnRatioEl = document.getElementById('layoutColumnRatio');
 const layoutColumnModeBtn = document.getElementById('layoutColumnModeBtn');
 const layoutFitWindowBtn = document.getElementById('layoutFitWindowBtn');
 const pageLayoutRoot = document.querySelector('body[data-page-title="Kalkulator"] .layout');
+const mainPageWidthRange = document.getElementById('mainPageWidthRange');
+const mainPageWidthValue = document.getElementById('mainPageWidthValue');
+const mainPageWidthFitBtn = document.getElementById('mainPageWidthFitBtn');
+const MAIN_PAGE_WIDTH_KEY = 'mainCalculatorMaxWidthV1';
+function applyMainPageWidth(value, persist = true) {
+  if (!mainPageWidthRange) return;
+  const width = Math.min(1800, Math.max(1100, Number(value) || 1440));
+  mainPageWidthRange.value = String(width);
+  if (mainPageWidthValue) mainPageWidthValue.value = `${width} px`;
+  document.documentElement.style.setProperty('--main-page-max-width', `${width}px`);
+  if (persist) {
+    try { localStorage.setItem(MAIN_PAGE_WIDTH_KEY, String(width)); } catch (_) {}
+  }
+}
+if (mainPageWidthRange) {
+  let savedWidth = 1440;
+  try { savedWidth = Number(localStorage.getItem(MAIN_PAGE_WIDTH_KEY)) || savedWidth; } catch (_) {}
+  applyMainPageWidth(savedWidth, false);
+  mainPageWidthRange.addEventListener('input', () => applyMainPageWidth(mainPageWidthRange.value));
+  mainPageWidthFitBtn?.addEventListener('click', () => applyMainPageWidth(1800));
+}
 const columnResizer = document.getElementById('columnResizer');
 const columnResizerRight = document.getElementById('columnResizerRight');
 const layoutResetModal = document.getElementById('layoutResetModal');
