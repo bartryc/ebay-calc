@@ -50,13 +50,6 @@
       </div>
     </header>
     <div id="result" class="alert-banner info-alert" aria-live="polite"></div>
-    <div class="main-page-width-control" role="group" aria-label="Szerokość kalkulatora">
-      <label for="mainPageWidthRange">Szerokość strony</label>
-      <input id="mainPageWidthRange" type="range" min="1100" max="1800" step="20" value="1440" aria-describedby="mainPageWidthValue">
-      <output id="mainPageWidthValue" for="mainPageWidthRange">1440 px</output>
-      <button type="button" id="mainPageWidthFitBtn" title="Rozciągnij kalkulator na szerokość ekranu">Dopasuj do ekranu</button>
-    </div>
-
     <div class="layout">
       <section class="app-card">
         <form id="priceForm">
@@ -345,6 +338,13 @@
       <strong>Tryb edycji układu</strong>
       <span id="layoutColumnRatio" class="layout-column-ratio" aria-live="polite">Kolumny 62% / 38%</span>
       <div class="layout-edit-actions">
+        <div class="main-page-width-control" role="group" aria-label="Szerokość kalkulatora">
+          <label for="mainPageWidthRange">Szerokość</label>
+          <input id="mainPageWidthRange" type="range" min="1100" max="1800" step="20" value="1440" aria-describedby="mainPageWidthValue">
+          <output id="mainPageWidthValue" for="mainPageWidthRange">1440 px</output>
+          <button type="button" id="mainPageWidthFitBtn" title="Rozciągnij kalkulator na szerokość ekranu">Dopasuj</button>
+        </div>
+        <span class="layout-edit-separator" aria-hidden="true"></span>
         <div id="layoutGlobalPresets" class="layout-global-presets"></div>
         <span class="layout-edit-separator" aria-hidden="true"></span>
         <button type="button" id="layoutColumnModeBtn">3 kolumny</button>

@@ -122,7 +122,8 @@ const mainPageWidthFitBtn = document.getElementById('mainPageWidthFitBtn');
 const MAIN_PAGE_WIDTH_KEY = 'mainCalculatorMaxWidthV1';
 function applyMainPageWidth(value, persist = true) {
   if (!mainPageWidthRange) return;
-  const width = Math.min(1800, Math.max(1100, Number(value) || 1440));
+  const rawWidth = Math.min(1800, Math.max(1100, Number(value) || 1440));
+  const width = 1100 + Math.round((rawWidth - 1100) / 20) * 20;
   mainPageWidthRange.value = String(width);
   if (mainPageWidthValue) mainPageWidthValue.value = `${width} px`;
   document.documentElement.style.setProperty('--main-page-max-width', `${width}px`);
@@ -135,7 +136,7 @@ if (mainPageWidthRange) {
   try { savedWidth = Number(localStorage.getItem(MAIN_PAGE_WIDTH_KEY)) || savedWidth; } catch (_) {}
   applyMainPageWidth(savedWidth, false);
   mainPageWidthRange.addEventListener('input', () => applyMainPageWidth(mainPageWidthRange.value));
-  mainPageWidthFitBtn?.addEventListener('click', () => applyMainPageWidth(1800));
+  mainPageWidthFitBtn?.addEventListener('click', () => applyMainPageWidth(Math.min(1800, window.innerWidth - 36)));
 }
 const columnResizer = document.getElementById('columnResizer');
 const columnResizerRight = document.getElementById('columnResizerRight');
