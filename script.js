@@ -3520,23 +3520,29 @@ function normalizeCurrenciesConfig(raw) {
   const incoming = raw && typeof raw === 'object' ? raw : {};
   const incomingList = Array.isArray(incoming.currencies) ? incoming.currencies : [];
   const byCode = new Map(DEFAULT_CURRENCIES.map((item) => [item.code, { ...item, enabled: true }]));
-  incomingList.map(normalizeCurrencyItem).filter(Boolean).forEach((item) => {
+  const incomingCurrencies = incomingList.map(normalizeCurrencyItem).filter(Boolean);
+  incomingCurrencies.forEach((item) => {
     byCode.set(item.code, item);
   });
+  const orderedCodes = [...new Set([
+    ...incomingCurrencies.map((item) => item.code),
+    ...DEFAULT_CURRENCIES.map((item) => item.code)
+  ])];
   return {
     version: Number(incoming.version) || 1,
-    currencies: Array.from(byCode.values()).filter((item) => item.enabled !== false)
+    currencies: orderedCodes.map((code) => byCode.get(code)).filter((item) => item && item.enabled !== false)
   };
 }
 
-function renderCurrencyOptions() {
+function renderCurrencyOptions({ preferDefault = false } = {}) {
   const currencySelect = document.getElementById('currency');
   if (!currencySelect) return;
-  const current = currencySelect.value || 'EUR';
+  const defaultCurrency = currenciesConfig.currencies[0]?.code || 'EUR';
+  const current = preferDefault ? defaultCurrency : (currencySelect.value || defaultCurrency);
   currencySelect.innerHTML = currenciesConfig.currencies
     .map((item) => `<option value="${item.code}">${item.label || item.code}</option>`)
     .join('');
-  currencySelect.value = currenciesConfig.currencies.some((item) => item.code === current) ? current : 'EUR';
+  currencySelect.value = currenciesConfig.currencies.some((item) => item.code === current) ? current : defaultCurrency;
   document.getElementById('currencyLabel').innerText = currencySelect.value;
   updateEbayCurrencyLabel();
 }
@@ -3547,13 +3553,13 @@ async function loadCurrenciesConfig() {
     try {
       currenciesConfig = normalizeCurrenciesConfig(JSON.parse(fromLocal));
       window.RateService.registerCustomCurrencies(currenciesConfig.currencies);
-      renderCurrencyOptions();
+      renderCurrencyOptions({ preferDefault: !readCalculatorPreferences()?.currency });
     } catch (_error) {
       // ignore local parse error
     }
   } else {
     window.RateService.registerCustomCurrencies(currenciesConfig.currencies);
-    renderCurrencyOptions();
+    renderCurrencyOptions({ preferDefault: !readCalculatorPreferences()?.currency });
   }
   if (!window.PN_MAPPINGS_API?.request) return;
   try {
@@ -3565,7 +3571,7 @@ async function loadCurrenciesConfig() {
     currenciesConfig = normalizeCurrenciesConfig(parsed);
     window.RateService.registerCustomCurrencies(currenciesConfig.currencies);
     localStorage.setItem(CURRENCIES_CONFIG_CACHE_KEY, JSON.stringify(currenciesConfig));
-    renderCurrencyOptions();
+    renderCurrencyOptions({ preferDefault: !readCalculatorPreferences()?.currency });
   } catch (_error) {
     // fallback to built-in/local currencies
   }
@@ -4491,7 +4497,12 @@ if (partNumberInput) {
 
       const icon = document.createElement('img');
       icon.className = 'source-icon';
-      icon.src = String(cfg?.icon || defaultSourceIcons[sourceId] || '');
+      const configuredIcon = String(cfg?.icon || '').trim();
+      if (configuredIcon && configuredIcon.toUpperCase() !== 'PLACEHOLDER') {
+        icon.src = configuredIcon;
+      } else if (!configuredIcon && defaultSourceIcons[sourceId]) {
+        icon.src = defaultSourceIcons[sourceId];
+      }
       icon.alt = '';
       icon.setAttribute('aria-hidden', 'true');
       if (cfg?.iconDark) {

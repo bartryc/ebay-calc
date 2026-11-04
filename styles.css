@@ -3018,7 +3018,14 @@ body.dark-mode .admin-identity {
   gap: 10px;
 }
 
+.currency-config-row {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+}
+
 .currency-config-chip {
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px;
@@ -3030,6 +3037,33 @@ body.dark-mode .admin-identity {
   color: var(--ink);
   text-align: left;
   cursor: pointer;
+}
+
+.currency-config-order {
+  display: grid;
+  gap: 4px;
+}
+
+.currency-config-order button {
+  width: 34px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-2);
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.currency-config-order button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.currency-config-order button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .currency-config-chip:hover {

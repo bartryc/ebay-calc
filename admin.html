@@ -334,7 +334,7 @@
           <div class="rate-provider-editor currency-editor">
             <div class="rate-provider-editor-header">
               <h4>Waluty</h4>
-              <div class="admin-meta">Dodaj kod ISO waluty, np. AUD. Fallback jest używany tylko, gdy API kursu nie odpowie.</div>
+              <div class="admin-meta">Zmień kolejność przyciskami góra/dół. Pierwsza waluta jest domyślna dla nowych użytkowników. Fallback jest używany tylko, gdy API kursu nie odpowie.</div>
             </div>
             <div id="currencyConfigList" class="currency-config-list"></div>
             <div class="admin-log-controls currency-config-controls">
@@ -1169,6 +1169,7 @@
     ];
     let customRateProvidersConfig = { version: 1, providers: [] };
     let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES };
+    let currencyOrderSaving = false;
     let calculatorPresetsConfig = { version: 1, presets: [] };
     let baseMultiplierPresetsConfig = { version: 1, presets: [] };
     let hdWhitelistConfig = { version: 1, ips: [] };
@@ -2952,25 +2953,36 @@
       const incoming = raw && typeof raw === 'object' ? raw : {};
       const byCode = new Map(BUILTIN_CURRENCIES.map((item) => [item.code, { ...item, enabled: true }]));
       const incomingList = Array.isArray(incoming.currencies) ? incoming.currencies : [];
-      incomingList.map(normalizeCurrencyItem).filter(Boolean).forEach((item) => {
+      const incomingCurrencies = incomingList.map(normalizeCurrencyItem).filter(Boolean);
+      incomingCurrencies.forEach((item) => {
         byCode.set(item.code, item);
       });
+      const orderedCodes = [...new Set([
+        ...incomingCurrencies.map((item) => item.code),
+        ...BUILTIN_CURRENCIES.map((item) => item.code)
+      ])];
       return {
         version: Number(incoming.version) || 1,
-        currencies: Array.from(byCode.values()).filter((item) => item.enabled !== false)
+        currencies: orderedCodes.map((code) => byCode.get(code)).filter((item) => item && item.enabled !== false)
       };
     }
 
     function renderCurrencyConfigList() {
       if (!currencyConfigList) return;
-      currencyConfigList.innerHTML = currenciesConfig.currencies.map((item) => {
+      currencyConfigList.innerHTML = currenciesConfig.currencies.map((item, index) => {
         const builtin = BUILTIN_CURRENCIES.some((currency) => currency.code === item.code);
         return `
-          <button type="button" class="currency-config-chip" data-currency-code="${item.code}">
-            <strong>${escapeHtml(item.label || item.code)}</strong>
-            <span>${escapeHtml(item.code)}</span>
-            <small>${builtin ? 'Wbudowana' : `Fallback ${Number(item.fallbackRate).toFixed(4)}`}</small>
-          </button>
+          <div class="currency-config-row">
+            <button type="button" class="currency-config-chip" data-currency-code="${item.code}">
+              <strong>${escapeHtml(item.label || item.code)}</strong>
+              <span>${escapeHtml(item.code)}</span>
+              <small>${index === 0 ? 'Domyślna · ' : ''}${builtin ? 'Wbudowana' : `Fallback ${Number(item.fallbackRate).toFixed(4)}`}</small>
+            </button>
+            <div class="currency-config-order" aria-label="Kolejność waluty ${escapeHtml(item.code)}">
+              <button type="button" data-currency-move="up" data-currency-code="${item.code}" aria-label="Przenieś ${escapeHtml(item.code)} wyżej" ${currencyOrderSaving || index === 0 ? 'disabled' : ''}>↑</button>
+              <button type="button" data-currency-move="down" data-currency-code="${item.code}" aria-label="Przenieś ${escapeHtml(item.code)} niżej" ${currencyOrderSaving || index === currenciesConfig.currencies.length - 1 ? 'disabled' : ''}>↓</button>
+            </div>
+          </div>
         `;
       }).join('');
       if (currencyConfigHint) {
@@ -4600,7 +4612,33 @@
         renderHdWhitelistAccessState();
       });
 
-    currencyConfigList?.addEventListener('click', (event) => {
+    currencyConfigList?.addEventListener('click', async (event) => {
+      const moveButton = event.target.closest('[data-currency-move]');
+      if (moveButton) {
+        if (currencyOrderSaving) return;
+        const code = moveButton.getAttribute('data-currency-code') || '';
+        const direction = moveButton.getAttribute('data-currency-move');
+        const currentIndex = currenciesConfig.currencies.findIndex((currency) => currency.code === code);
+        const nextIndex = currentIndex + (direction === 'up' ? -1 : 1);
+        if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currenciesConfig.currencies.length) return;
+        const previousCurrencies = [...currenciesConfig.currencies];
+        const nextCurrencies = [...currenciesConfig.currencies];
+        [nextCurrencies[currentIndex], nextCurrencies[nextIndex]] = [nextCurrencies[nextIndex], nextCurrencies[currentIndex]];
+        currenciesConfig = { ...currenciesConfig, currencies: nextCurrencies };
+        currencyOrderSaving = true;
+        renderCurrencyConfigList();
+        try {
+          await saveCurrenciesConfig();
+          showToast(`${code} przeniesiono. Pierwsza waluta jest domyślna.`, 'ok');
+        } catch (error) {
+          currenciesConfig = { ...currenciesConfig, currencies: previousCurrencies };
+          showToast(`Błąd zapisu kolejności: ${error.message || 'unknown'}`, 'warn');
+        } finally {
+          currencyOrderSaving = false;
+          renderCurrencyConfigList();
+        }
+        return;
+      }
       const chip = event.target.closest('.currency-config-chip');
       if (!chip) return;
       const code = chip.getAttribute('data-currency-code') || '';
