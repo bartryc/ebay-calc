@@ -2489,10 +2489,11 @@ body.dark-mode .admin-identity {
 .worker-usage-chart-card {
   min-width: 0;
   margin: 0;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--card-2);
+  padding: 15px 16px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
+  border-radius: 16px;
+  background: linear-gradient(155deg, color-mix(in srgb, var(--card) 96%, var(--accent) 4%), var(--card-2));
+  box-shadow: 0 8px 24px rgba(23, 39, 67, 0.055);
 }
 
 .worker-usage-chart-card figcaption {
@@ -2505,13 +2506,15 @@ body.dark-mode .admin-identity {
 
 .worker-usage-chart-card figcaption span {
   color: var(--ink);
-  font-size: 0.88em;
-  font-weight: 750;
+  font-size: 0.94em;
+  font-weight: 780;
+  letter-spacing: -0.015em;
 }
 
 .worker-usage-chart-card figcaption small {
   color: var(--muted);
-  font-size: 0.7em;
+  font-size: 0.72em;
+  font-weight: 600;
 }
 
 .worker-usage-chart {
@@ -2525,11 +2528,13 @@ body.dark-mode .admin-identity {
   width: 100%;
   height: auto;
   overflow: visible;
+  margin-top: 5px;
 }
 
 .worker-chart-grid line {
-  stroke: color-mix(in srgb, var(--border) 78%, transparent);
+  stroke: color-mix(in srgb, var(--border) 62%, transparent);
   stroke-width: 1;
+  stroke-dasharray: 3 5;
   vector-effect: non-scaling-stroke;
 }
 
@@ -2537,7 +2542,8 @@ body.dark-mode .admin-identity {
 .worker-chart-date {
   fill: var(--muted);
   font-family: inherit;
-  font-size: 10px;
+  font-size: 9px;
+  font-weight: 600;
 }
 
 .worker-chart-grid text {
@@ -2550,14 +2556,31 @@ body.dark-mode .admin-identity {
 
 .worker-chart-series path {
   fill: none;
-  stroke-width: 2.5;
+  stroke-width: 2.8;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
 
+.worker-chart-series .worker-chart-area {
+  stroke: none;
+  opacity: 0.11;
+}
+
+.worker-chart-series.is-worker .worker-chart-area { fill: var(--accent); }
+.worker-chart-series.is-reads .worker-chart-area { fill: #0f5bff; }
+.worker-chart-series.is-writes .worker-chart-area { fill: #d89016; }
+.worker-chart-series.is-deletes .worker-chart-area { fill: #d13b2f; }
+.worker-chart-series.is-lists .worker-chart-area { fill: #7a45c7; }
+.worker-chart-series .worker-chart-area { stroke: none !important; }
+
+.worker-chart-series .worker-chart-line {
+  fill: none;
+  filter: drop-shadow(0 1px 1px rgba(20, 35, 60, 0.16));
+}
+
 .worker-chart-point {
-  stroke-width: 2;
+  stroke-width: 1.8;
   vector-effect: non-scaling-stroke;
   cursor: crosshair;
   transition: stroke-width 120ms ease, filter 120ms ease;
@@ -2565,8 +2588,8 @@ body.dark-mode .admin-identity {
 
 .worker-chart-point:hover,
 .worker-chart-point:focus {
-  stroke-width: 5;
-  filter: brightness(1.1);
+  stroke-width: 3.5;
+  filter: brightness(1.08) drop-shadow(0 0 3px currentColor);
   outline: none;
 }
 
@@ -2616,21 +2639,30 @@ body.dark-mode .admin-identity {
 .worker-usage-chart-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px 11px;
-  min-height: 20px;
-  margin-bottom: 2px;
+  gap: 6px 8px;
+  min-height: 22px;
+  margin: 9px 0 2px;
   color: var(--muted);
   font-size: 0.68em;
 }
 
 .worker-usage-chart-legend span::before {
   display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 5px;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
   border-radius: 50%;
   background: currentColor;
   content: '';
+}
+
+.worker-usage-chart-legend span {
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 6%, var(--card));
+  font-size: 0.72em;
+  font-weight: 700;
 }
 
 .worker-usage-chart-legend .is-reads { color: #0f5bff; }
