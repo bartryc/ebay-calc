@@ -46,7 +46,7 @@ const DEFAULT_CURRENCIES = [
   { code: 'USD', label: 'USD', fallbackRate: 0.2632 },
   { code: 'GBP', label: 'GBP', fallbackRate: 0.2000 }
 ];
-let currenciesConfig = { version: 1, currencies: DEFAULT_CURRENCIES };
+let currenciesConfig = { version: 1, currencies: DEFAULT_CURRENCIES, comparisonDirection: 'currency-to-pln' };
 let calculatorPresetsConfig = { version: 1, presets: [] };
 let baseMultiplierPresetsConfig = { version: 1, presets: [] };
 const DEFAULT_RATE_PROVIDERS = window.RateService?.DEFAULT_RATE_PROVIDERS || [
@@ -3399,20 +3399,27 @@ function fetchExchangeRate(currency, options = {}) {
           return;
         }
         const displayedRate = Number(rate.toFixed(4));
-        const currentCurrencyToPln = 1 / displayedRate;
-        const previousCurrencyToPln = 1 / previousRate;
-        const difference = currentCurrencyToPln - previousCurrencyToPln;
-        const percent = (difference / previousCurrencyToPln) * 100;
+        const direction = currenciesConfig.comparisonDirection === 'pln-to-currency'
+          ? 'pln-to-currency'
+          : 'currency-to-pln';
+        const isPlnToCurrency = direction === 'pln-to-currency';
+        const currentReferenceRate = isPlnToCurrency ? displayedRate : (1 / displayedRate);
+        const previousReferenceRate = isPlnToCurrency ? previousRate : (1 / previousRate);
+        const difference = currentReferenceRate - previousReferenceRate;
+        const percent = (difference / previousReferenceRate) * 100;
         const previousLabel = new Date(`${previousDate}T12:00:00`).toLocaleDateString('pl-PL');
         if (Math.abs(difference) < 0.0000001) {
           exchangeRateTrend.textContent = `Bez zmian vs ${previousLabel}`;
           exchangeRateTrend.classList.add('is-flat');
         } else {
-          const isCurrencyRising = difference > 0;
-          exchangeRateTrend.textContent = `${isCurrencyRising ? '↑' : '↓'} ${Math.abs(percent).toFixed(2)}% vs ${previousLabel}`;
-          exchangeRateTrend.classList.add(isCurrencyRising ? 'is-currency-rising' : 'is-currency-falling');
+          const referenceRateRising = difference > 0;
+          const currencyValueRising = isPlnToCurrency ? difference < 0 : difference > 0;
+          const directionText = isPlnToCurrency ? `PLN → ${currency}` : `${currency} → PLN`;
+          exchangeRateTrend.textContent = `${referenceRateRising ? '↑' : '↓'} ${Math.abs(percent).toFixed(2)}% ${directionText} vs ${previousLabel}`;
+          exchangeRateTrend.classList.add(currencyValueRising ? 'is-currency-rising' : 'is-currency-falling');
         }
-        exchangeRateTrend.title = `Poprzedni kurs: ${previousCurrencyToPln.toFixed(4)} PLN za ${currency} · ${previousLabel}`;
+        const directionLabel = isPlnToCurrency ? `PLN za ${currency}` : `${currency} za PLN`;
+        exchangeRateTrend.title = `Poprzedni kurs: ${previousReferenceRate.toFixed(4)} ${directionLabel} · ${previousLabel}`;
         exchangeRateTrend.hidden = false;
       }).catch(() => {});
     }
@@ -3567,7 +3574,8 @@ function normalizeCurrenciesConfig(raw) {
   ])];
   return {
     version: Number(incoming.version) || 1,
-    currencies: orderedCodes.map((code) => byCode.get(code)).filter((item) => item && item.enabled !== false)
+    currencies: orderedCodes.map((code) => byCode.get(code)).filter((item) => item && item.enabled !== false),
+    comparisonDirection: incoming.comparisonDirection === 'pln-to-currency' ? 'pln-to-currency' : 'currency-to-pln'
   };
 }
 
@@ -4180,14 +4188,18 @@ if (calculatorPresetButtons) {
   restoreCalculatorPreferences();
   let currency = document.getElementById('currency').value;
   let providerKey = window.RateService.normalizeProviderKey(rateSourceSelect?.value || window.RateService.DEFAULT_PROVIDER);
+  let comparisonDirection = currenciesConfig.comparisonDirection;
   fetchExchangeRate(currency, { notify: false });
   checkRateProvidersStatus(currency);
   await Promise.allSettled(configTasks);
   const refreshedCurrency = document.getElementById('currency').value;
   const refreshedProviderKey = window.RateService.normalizeProviderKey(rateSourceSelect?.value || window.RateService.DEFAULT_PROVIDER);
-  if (refreshedCurrency !== currency || refreshedProviderKey !== providerKey) {
+  const refreshedComparisonDirection = currenciesConfig.comparisonDirection;
+  if (refreshedCurrency !== currency || refreshedProviderKey !== providerKey
+    || refreshedComparisonDirection !== comparisonDirection) {
     currency = refreshedCurrency;
     providerKey = refreshedProviderKey;
+    comparisonDirection = refreshedComparisonDirection;
     fetchExchangeRate(currency, { notify: false });
   }
   checkRateProvidersStatus(currency);

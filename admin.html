@@ -355,6 +355,17 @@
               <button type="button" id="currencyConfigSaveBtn">Dodaj / zapisz walutę</button>
               <button type="button" id="currencyConfigDeleteBtn">Usuń walutę</button>
             </div>
+            <div class="admin-log-controls currency-trend-controls">
+              <div class="admin-log-field">
+                <label for="currencyTrendDirectionSelect">Kierunek porównania trendu</label>
+                <select id="currencyTrendDirectionSelect">
+                  <option value="currency-to-pln">Waluta → PLN (wartość waluty w zł)</option>
+                  <option value="pln-to-currency">PLN → waluta (siła nabywcza zł)</option>
+                </select>
+                <small>Drożejąca waluta pozostaje czerwona, taniejąca zielona; strzałka pokazuje zmianę wybranego kursu.</small>
+              </div>
+              <button type="button" id="currencyTrendDirectionSaveBtn">Zapisz kierunek</button>
+            </div>
             <div id="currencyConfigHint" class="admin-meta">Wbudowane: EUR, USD, GBP.</div>
           </div>
 
@@ -1071,6 +1082,8 @@
     const currencyConfigSaveBtn = document.getElementById('currencyConfigSaveBtn');
     const currencyConfigDeleteBtn = document.getElementById('currencyConfigDeleteBtn');
     const currencyConfigHint = document.getElementById('currencyConfigHint');
+    const currencyTrendDirectionSelect = document.getElementById('currencyTrendDirectionSelect');
+    const currencyTrendDirectionSaveBtn = document.getElementById('currencyTrendDirectionSaveBtn');
     const rateProviderOverview = document.getElementById('rateProviderOverview');
     const rateProviderConfigSelect = document.getElementById('rateProviderConfigSelect');
     const rateProviderConfigId = document.getElementById('rateProviderConfigId');
@@ -1168,7 +1181,7 @@
       }
     ];
     let customRateProvidersConfig = { version: 1, providers: [] };
-    let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES };
+    let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES, comparisonDirection: 'currency-to-pln' };
     let currencyOrderSaving = false;
     let calculatorPresetsConfig = { version: 1, presets: [] };
     let baseMultiplierPresetsConfig = { version: 1, presets: [] };
@@ -2802,8 +2815,8 @@
       {
         id: 'currency-config',
         root: '.currency-editor',
-        controls: '#currencyConfigCode, #currencyConfigLabel, #currencyConfigFallback',
-        actions: '#currencyConfigSaveBtn, #currencyConfigDeleteBtn'
+        controls: '#currencyConfigCode, #currencyConfigLabel, #currencyConfigFallback, #currencyTrendDirectionSelect',
+        actions: '#currencyConfigSaveBtn, #currencyConfigDeleteBtn, #currencyTrendDirectionSaveBtn'
       },
       {
         id: 'rate-provider-config',
@@ -2963,8 +2976,15 @@
       ])];
       return {
         version: Number(incoming.version) || 1,
-        currencies: orderedCodes.map((code) => byCode.get(code)).filter((item) => item && item.enabled !== false)
+        currencies: orderedCodes.map((code) => byCode.get(code)).filter((item) => item && item.enabled !== false),
+        comparisonDirection: incoming.comparisonDirection === 'pln-to-currency' ? 'pln-to-currency' : 'currency-to-pln'
       };
+    }
+
+    function syncCurrencyTrendDirectionSelect() {
+      if (currencyTrendDirectionSelect) {
+        currencyTrendDirectionSelect.value = currenciesConfig.comparisonDirection;
+      }
     }
 
     function renderCurrencyConfigList() {
@@ -3014,6 +3034,7 @@
       if (!window.PN_MAPPINGS_API?.request) {
         currenciesConfig = normalizeCurrenciesConfig(null);
         renderCurrencyConfigList();
+        syncCurrencyTrendDirectionSelect();
         return;
       }
       try {
@@ -3025,6 +3046,7 @@
         currenciesConfig = normalizeCurrenciesConfig(null);
       }
       renderCurrencyConfigList();
+      syncCurrencyTrendDirectionSelect();
     }
 
     function normalizeCalculatorPreset(item, index = 0) {
@@ -4684,6 +4706,25 @@
         showToast(`Waluta ${code} usunięta.`, 'ok');
       } catch (error) {
         showToast(`Błąd usuwania waluty: ${error.message || 'unknown'}`, 'warn');
+      }
+    });
+
+    currencyTrendDirectionSaveBtn?.addEventListener('click', async () => {
+      const direction = currencyTrendDirectionSelect?.value === 'pln-to-currency'
+        ? 'pln-to-currency'
+        : 'currency-to-pln';
+      const previousDirection = currenciesConfig.comparisonDirection;
+      currenciesConfig = { ...currenciesConfig, comparisonDirection: direction };
+      currencyTrendDirectionSaveBtn.disabled = true;
+      try {
+        await saveCurrenciesConfig();
+        showToast('Zapisano kierunek porównania kursu.', 'ok');
+      } catch (error) {
+        currenciesConfig = { ...currenciesConfig, comparisonDirection: previousDirection };
+        syncCurrencyTrendDirectionSelect();
+        showToast(`Błąd zapisu kierunku: ${error.message || 'unknown'}`, 'warn');
+      } finally {
+        currencyTrendDirectionSaveBtn.disabled = false;
       }
     });
 

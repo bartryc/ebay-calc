@@ -3093,6 +3093,22 @@ body.dark-mode .admin-identity {
   align-items: end;
 }
 
+.currency-trend-controls {
+  grid-template-columns: minmax(240px, 1fr) auto;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.currency-trend-controls > button {
+  min-height: 38px;
+}
+
+.currency-trend-controls .admin-log-field small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
 .currency-config-controls .admin-log-field input {
   width: 100%;
 }
