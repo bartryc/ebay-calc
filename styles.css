@@ -3093,22 +3093,6 @@ body.dark-mode .admin-identity {
   align-items: end;
 }
 
-.currency-trend-controls {
-  grid-template-columns: minmax(240px, 1fr) auto;
-  align-items: end;
-  margin-top: 12px;
-}
-
-.currency-trend-controls > button {
-  min-height: 38px;
-}
-
-.currency-trend-controls .admin-log-field small {
-  color: var(--muted);
-  font-size: 0.76rem;
-  line-height: 1.4;
-}
-
 .currency-config-controls .admin-log-field input {
   width: 100%;
 }
@@ -5603,6 +5587,61 @@ body.dark-mode .report-item.is-on-hold .report-kind {
 
   .log-pretty-facts {
     grid-template-columns: 1fr;
+  }
+}
+
+.admin-log-controls.currency-trend-controls {
+  grid-template-columns: minmax(0, 420px) auto;
+  justify-content: start;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.admin-log-controls.currency-trend-controls .admin-log-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.admin-log-controls.currency-trend-controls > button {
+  width: auto;
+  min-width: 160px;
+  justify-self: start;
+  align-self: end;
+  white-space: nowrap;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.admin-log-controls.currency-trend-controls > button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.admin-log-controls.currency-trend-controls .admin-log-field small {
+  color: var(--muted);
+  max-width: 420px;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.admin-log-controls.currency-trend-controls > button {
+  min-height: 38px;
+}
+
+@media (max-width: 700px) {
+  .admin-log-controls.currency-trend-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-log-controls.currency-trend-controls > button {
+    width: 100%;
+    justify-self: stretch;
   }
 }
 
