@@ -3371,7 +3371,7 @@ function fetchExchangeRate(currency, options = {}) {
   exchangeInfo.innerText = 'Pobieranie kursu...';
   if (exchangeRateTrend) {
     exchangeRateTrend.hidden = true;
-    exchangeRateTrend.classList.remove('is-up', 'is-down', 'is-flat');
+    exchangeRateTrend.classList.remove('is-currency-rising', 'is-currency-falling', 'is-flat');
   }
   if (exchangeRateTooltip) exchangeRateTooltip.setAttribute('data-tooltip', '');
 
@@ -3399,18 +3399,20 @@ function fetchExchangeRate(currency, options = {}) {
           return;
         }
         const displayedRate = Number(rate.toFixed(4));
-        const difference = displayedRate - previousRate;
-        const percent = (difference / previousRate) * 100;
+        const currentCurrencyToPln = 1 / displayedRate;
+        const previousCurrencyToPln = 1 / previousRate;
+        const difference = currentCurrencyToPln - previousCurrencyToPln;
+        const percent = (difference / previousCurrencyToPln) * 100;
         const previousLabel = new Date(`${previousDate}T12:00:00`).toLocaleDateString('pl-PL');
         if (Math.abs(difference) < 0.0000001) {
           exchangeRateTrend.textContent = `Bez zmian vs ${previousLabel}`;
           exchangeRateTrend.classList.add('is-flat');
         } else {
-          const isUp = difference > 0;
-          exchangeRateTrend.textContent = `${isUp ? '↑' : '↓'} ${Math.abs(percent).toFixed(2)}% vs ${previousLabel}`;
-          exchangeRateTrend.classList.add(isUp ? 'is-up' : 'is-down');
+          const isCurrencyRising = difference > 0;
+          exchangeRateTrend.textContent = `${isCurrencyRising ? '↑' : '↓'} ${Math.abs(percent).toFixed(2)}% vs ${previousLabel}`;
+          exchangeRateTrend.classList.add(isCurrencyRising ? 'is-currency-rising' : 'is-currency-falling');
         }
-        exchangeRateTrend.title = `Poprzedni kurs: ${previousRate.toFixed(4)} · ${previousLabel}`;
+        exchangeRateTrend.title = `Poprzedni kurs: ${previousCurrencyToPln.toFixed(4)} PLN za ${currency} · ${previousLabel}`;
         exchangeRateTrend.hidden = false;
       }).catch(() => {});
     }
