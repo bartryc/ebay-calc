@@ -5777,6 +5777,33 @@ input[type="text"][inputmode="decimal"]:disabled {
   margin-bottom: 8px;
 }
 
+.exchange-rate-trend {
+  justify-self: start;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.exchange-rate-trend.is-up {
+  border-color: color-mix(in srgb, #15803d 30%, var(--border));
+  background: color-mix(in srgb, #16a34a 10%, var(--card));
+  color: #15803d;
+}
+
+.exchange-rate-trend.is-down {
+  border-color: color-mix(in srgb, #dc2626 30%, var(--border));
+  background: color-mix(in srgb, #dc2626 9%, var(--card));
+  color: #b91c1c;
+}
+
+body.dark-mode .exchange-rate-trend.is-up { color: #4ade80; }
+body.dark-mode .exchange-rate-trend.is-down { color: #f87171; }
+
 .field-label {
   display: inline-flex;
   align-items: center;

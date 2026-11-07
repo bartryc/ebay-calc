@@ -448,6 +448,54 @@ function normalizePnKey(value) {
   return value.replace(/\s+/g, '').toUpperCase();
 }
 
+async function recordRateSnapshot(currency, rate, source = '') {
+  const normalizedCurrency = String(currency || '').trim().toUpperCase();
+  const numericRate = Number(rate);
+  if (!/^[A-Z]{3}$/.test(normalizedCurrency) || !Number.isFinite(numericRate) || numericRate <= 0) return null;
+  const roundedRate = Number(numericRate.toFixed(4));
+  const dateParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Warsaw',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+  const part = (type) => dateParts.find((item) => item.type === type)?.value || '';
+  const date = `${part('year')}-${part('month')}-${part('day')}`;
+  const cacheKey = 'pnRateHistoryCacheV1';
+  let cache = {};
+  try {
+    const stored = JSON.parse(localStorage.getItem(cacheKey) || '{}');
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) cache = stored;
+  } catch (_error) {
+    // Ignore stale cache and ask the Worker for the authoritative record.
+  }
+  if (cache[normalizedCurrency]?.date === date && Number(cache[normalizedCurrency]?.rate) === roundedRate) {
+    return { ...(cache[normalizedCurrency].snapshot || {}), cached: true };
+  }
+  try {
+    const response = await window.PN_MAPPINGS_API.request('/rates/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currency: normalizedCurrency, rate: roundedRate, date, source: String(source || '').slice(0, 40) })
+    });
+    if (!response.ok) return null;
+    const result = await response.json();
+    cache[normalizedCurrency] = {
+      date,
+      rate: roundedRate,
+      snapshot: result
+    };
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(cache));
+    } catch (_error) {
+      // The server record remains authoritative when browser storage is full.
+    }
+    return result;
+  } catch (_error) {
+    return null;
+  }
+}
+
 function normalizePattern(value) {
   const raw = value.replace(/\s+/g, '');
   let out = '';
@@ -776,6 +824,7 @@ window.PN_MAPPINGS_API = {
   setExactEntry,
   normalizeCreatedAt,
   load: loadPnData,
+  recordRateSnapshot,
   log: enqueueLog,
   getAdminLogActor,
   setAdminLogActor,

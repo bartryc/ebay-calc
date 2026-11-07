@@ -3356,16 +3356,23 @@ function updateEbayPriceFromNettoOrBrutto() {
   }
 }
 
+let exchangeRateTrendRequestSeq = 0;
 function fetchExchangeRate(currency, options = {}) {
   const exchangeInfo = document.getElementById('exchangeInfo');
   const exchangeRateTooltip = document.getElementById('exchangeRateTooltip');
   const exchangeRateInp = document.getElementById('exchangeRate');
   const ebayPriceInput = document.getElementById('ebayPrice');
   const rateSourceSelect = document.getElementById('rateSource');
+  const exchangeRateTrend = document.getElementById('exchangeRateTrend');
+  const trendRequestSeq = ++exchangeRateTrendRequestSeq;
   const providerKey = window.RateService.normalizeProviderKey(rateSourceSelect?.value || window.RateService.DEFAULT_PROVIDER);
   const provider = window.RateService.getProvider(providerKey).provider;
   const notify = options.notify === true;
   exchangeInfo.innerText = 'Pobieranie kursu...';
+  if (exchangeRateTrend) {
+    exchangeRateTrend.hidden = true;
+    exchangeRateTrend.classList.remove('is-up', 'is-down', 'is-flat');
+  }
   if (exchangeRateTooltip) exchangeRateTooltip.setAttribute('data-tooltip', '');
 
   const nettoValue = parseNumber(document.getElementById('plnNetto').value);
@@ -3379,6 +3386,34 @@ function fetchExchangeRate(currency, options = {}) {
   const applyRate = (rate, providerLabel, providerKeyUsed) => {
     exchangeRateInp.value = rate.toFixed(4);
     currentExchangeRate = rate;
+    if (exchangeRateTrend && window.PN_MAPPINGS_API?.recordRateSnapshot) {
+      window.PN_MAPPINGS_API.recordRateSnapshot(currency, rate, providerKeyUsed).then((snapshot) => {
+        if (!snapshot || trendRequestSeq !== exchangeRateTrendRequestSeq
+          || document.getElementById('currency')?.value !== currency) return;
+        const previousRate = Number(snapshot.previous?.rate);
+        const previousDate = String(snapshot.previous?.date || '');
+        if (!Number.isFinite(previousRate) || previousRate <= 0 || !previousDate) {
+          exchangeRateTrend.textContent = 'Zapisano pierwszy kurs';
+          exchangeRateTrend.classList.add('is-flat');
+          exchangeRateTrend.hidden = false;
+          return;
+        }
+        const displayedRate = Number(rate.toFixed(4));
+        const difference = displayedRate - previousRate;
+        const percent = (difference / previousRate) * 100;
+        const previousLabel = new Date(`${previousDate}T12:00:00`).toLocaleDateString('pl-PL');
+        if (Math.abs(difference) < 0.0000001) {
+          exchangeRateTrend.textContent = `Bez zmian vs ${previousLabel}`;
+          exchangeRateTrend.classList.add('is-flat');
+        } else {
+          const isUp = difference > 0;
+          exchangeRateTrend.textContent = `${isUp ? '↑' : '↓'} ${Math.abs(percent).toFixed(2)}% vs ${previousLabel}`;
+          exchangeRateTrend.classList.add(isUp ? 'is-up' : 'is-down');
+        }
+        exchangeRateTrend.title = `Poprzedni kurs: ${previousRate.toFixed(4)} · ${previousLabel}`;
+        exchangeRateTrend.hidden = false;
+      }).catch(() => {});
+    }
     const now = new Date();
     exchangeInfo.innerText = `Kurs PLN/${currency}: ${rate.toFixed(4)} (${now.toLocaleString('pl-PL')})`;
     if (exchangeRateTooltip && Number.isFinite(rate) && rate > 0) {
