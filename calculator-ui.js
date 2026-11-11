@@ -40,7 +40,13 @@
       id: rawId || `base-${index + 1}`,
       label: label || fallbackLabel,
       multiplier,
-      enabled: item?.enabled !== false
+      enabled: item?.enabled !== false,
+      currency: /^[A-Z]{3}$/.test(String(item?.currency || '').trim().toUpperCase())
+        ? String(item.currency).trim().toUpperCase()
+        : '',
+      updatedAt: Number.isFinite(Date.parse(item?.updatedAt || ''))
+        ? new Date(item.updatedAt).toISOString()
+        : ''
     };
   }
 

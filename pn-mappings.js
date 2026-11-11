@@ -461,7 +461,8 @@ async function recordRateSnapshot(currency, rate, source = '') {
   }).formatToParts(new Date());
   const part = (type) => dateParts.find((item) => item.type === type)?.value || '';
   const date = `${part('year')}-${part('month')}-${part('day')}`;
-  const cacheKey = 'pnRateHistoryCacheV1';
+  const normalizedSource = String(source || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40) || 'unknown';
+  const cacheKey = 'pnRateHistoryCacheV2';
   let cache = {};
   try {
     const stored = JSON.parse(localStorage.getItem(cacheKey) || '{}');
@@ -469,18 +470,19 @@ async function recordRateSnapshot(currency, rate, source = '') {
   } catch (_error) {
     // Ignore stale cache and ask the Worker for the authoritative record.
   }
-  if (cache[normalizedCurrency]?.date === date && Number(cache[normalizedCurrency]?.rate) === roundedRate) {
-    return { ...(cache[normalizedCurrency].snapshot || {}), cached: true };
+  const currencySourceKey = `${normalizedCurrency}:${normalizedSource}`;
+  if (cache[currencySourceKey]?.date === date && Number(cache[currencySourceKey]?.rate) === roundedRate) {
+    return { ...(cache[currencySourceKey].snapshot || {}), cached: true };
   }
   try {
     const response = await window.PN_MAPPINGS_API.request('/rates/history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currency: normalizedCurrency, rate: roundedRate, date, source: String(source || '').slice(0, 40) })
+      body: JSON.stringify({ currency: normalizedCurrency, rate: roundedRate, date, source: normalizedSource })
     });
     if (!response.ok) return null;
     const result = await response.json();
-    cache[normalizedCurrency] = {
+    cache[currencySourceKey] = {
       date,
       rate: roundedRate,
       snapshot: result

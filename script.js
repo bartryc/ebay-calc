@@ -46,7 +46,16 @@ const DEFAULT_CURRENCIES = [
   { code: 'USD', label: 'USD', fallbackRate: 0.2632 },
   { code: 'GBP', label: 'GBP', fallbackRate: 0.2000 }
 ];
-let currenciesConfig = { version: 1, currencies: DEFAULT_CURRENCIES, comparisonDirection: 'currency-to-pln' };
+let currenciesConfig = {
+  version: 1,
+  currencies: DEFAULT_CURRENCIES,
+  comparisonDirection: 'currency-to-pln',
+  alerts: {
+    suddenDrop: { enabled: true, mode: 'percent', threshold: 5 },
+    presetDrift: { enabled: true, thresholdPercent: 5 }
+  }
+};
+const rateDropAlertLastShown = new Map();
 let calculatorPresetsConfig = { version: 1, presets: [] };
 let baseMultiplierPresetsConfig = { version: 1, presets: [] };
 const DEFAULT_RATE_PROVIDERS = window.RateService?.DEFAULT_RATE_PROVIDERS || [
@@ -2115,6 +2124,7 @@ function updateBaseMultiplier() {
     multiplierEl.dataset.value = '';
     if (multiplierSummaryEl) multiplierSummaryEl.textContent = '—';
     updateCommissionFromBaseMultiplier();
+    renderBaseMultiplierPresetButtons();
     return;
   }
 
@@ -2124,6 +2134,7 @@ function updateBaseMultiplier() {
     multiplierEl.dataset.value = '';
     if (multiplierSummaryEl) multiplierSummaryEl.textContent = '—';
     updateCommissionFromBaseMultiplier();
+    renderBaseMultiplierPresetButtons();
     return;
   }
   const formatted = multiplierBrutto.toFixed(4);
@@ -2131,6 +2142,7 @@ function updateBaseMultiplier() {
   multiplierEl.dataset.value = formatted;
   if (multiplierSummaryEl) multiplierSummaryEl.textContent = formatted;
   updateCommissionFromBaseMultiplier();
+  renderBaseMultiplierPresetButtons();
 }
 
 function updateSummaryMetrics() {
@@ -3198,15 +3210,30 @@ function renderBaseMultiplierPresetButtons() {
   if (!container) return;
   const currentMultiplier = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
   const manualPricingEnabled = isCurrentBasePricingEnabled();
+  const selectedCurrency = document.getElementById('currency')?.value || '';
+  const baseState = window.CalculatorUI.readBaseState(document, getActiveCommissionRate);
+  const liveMultiplier = window.CalculatorCore.baseMultiplier(baseState.exchangeRate, baseState.vatRate, baseState.commission);
+  const driftConfig = currenciesConfig.alerts?.presetDrift || {};
+  const driftThreshold = Number(driftConfig.thresholdPercent) || 5;
   const presets = baseMultiplierPresetsConfig.presets.filter((item) => item.enabled !== false);
   if (!presets.length) {
     container.innerHTML = '<span class="preset-empty">Brak skonfigurowanych presetów</span>';
     return;
   }
   container.innerHTML = presets.map((item) => {
-    const isActive = manualPricingEnabled && Number.isFinite(currentMultiplier) && Math.abs(currentMultiplier - item.multiplier) < 0.0000001;
+    const isActive = manualPricingEnabled && Number.isFinite(currentMultiplier)
+      && Math.abs(currentMultiplier - item.multiplier) < 0.0000001
+      && (!item.currency || item.currency === selectedCurrency);
+    const canCompareDrift = driftConfig.enabled !== false && Number.isFinite(liveMultiplier) && liveMultiplier > 0
+      && (!item.currency || item.currency === selectedCurrency);
+    const driftPercent = canCompareDrift ? (Math.abs(item.multiplier - liveMultiplier) / liveMultiplier) * 100 : NaN;
+    const showDriftWarning = Number.isFinite(driftPercent) && driftPercent >= driftThreshold * 0.8;
     const multiplierText = formatBaseMultiplierPresetValue(item.multiplier);
-    return `<button type="button" class="${isActive ? 'is-active' : ''}" data-base-multiplier-preset-id="${escapeHtml(item.id)}" aria-pressed="${isActive ? 'true' : 'false'}" title="Ustaw mnożnik Base ${escapeHtml(multiplierText)}"><span class="base-multiplier-preset-label">${escapeHtml(item.label)}</span><small class="base-multiplier-preset-value">${escapeHtml(multiplierText)}</small></button>`;
+    const currencyText = item.currency ? ` · ${escapeHtml(item.currency)}` : '';
+    const warningMarkup = showDriftWarning
+      ? `<small class="base-multiplier-drift-warning">⚠ Odchylenie ${driftPercent.toFixed(1)}% · próg ${driftThreshold.toFixed(1)}%</small>`
+      : '';
+    return `<button type="button" class="${isActive ? 'is-active' : ''}${showDriftWarning ? ' has-drift-warning' : ''}" data-base-multiplier-preset-id="${escapeHtml(item.id)}" aria-pressed="${isActive ? 'true' : 'false'}" title="Ustaw mnożnik Base ${escapeHtml(multiplierText)}${currencyText}"><span class="base-multiplier-preset-label">${escapeHtml(item.label)}</span><small class="base-multiplier-preset-value">${escapeHtml(multiplierText)}${currencyText}</small>${warningMarkup}</button>`;
   }).join('');
 }
 
@@ -3216,8 +3243,10 @@ function syncSelectedBaseMultiplierPreset() {
     return;
   }
   const current = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
+  const currency = document.getElementById('currency')?.value || '';
   selectedBaseMultiplierPresetId = baseMultiplierPresetsConfig.presets.find((item) => (
     item.enabled !== false && Number.isFinite(current) && Math.abs(current - item.multiplier) < 0.0000001
+      && (!item.currency || item.currency === currency)
   ))?.id || '';
 }
 
@@ -3357,6 +3386,109 @@ function updateEbayPriceFromNettoOrBrutto() {
 }
 
 let exchangeRateTrendRequestSeq = 0;
+const currencyHistoryTrendButton = document.getElementById('exchangeRateTrend');
+const currencyHistoryModal = document.getElementById('currencyHistoryModal');
+const currencyHistoryModalTitle = document.getElementById('currencyHistoryModalTitle');
+const currencyHistoryModalClose = document.getElementById('currencyHistoryModalClose');
+const currencyHistoryModalStatus = document.getElementById('currencyHistoryModalStatus');
+const currencyHistoryModalList = document.getElementById('currencyHistoryModalList');
+const currencyHistoryModalSearch = document.getElementById('currencyHistoryModalSearch');
+const currencyHistoryModalSource = document.getElementById('currencyHistoryModalSource');
+let currencyHistoryModalRows = [];
+
+function renderCurrencyHistoryModalRows() {
+  if (!currencyHistoryModalList) return;
+  const search = String(currencyHistoryModalSearch?.value || '').trim().toLowerCase();
+  const selectedSource = String(currencyHistoryModalSource?.value || '').toLowerCase();
+  const rows = currencyHistoryModalRows.filter((item) => !search
+    || `${item.date} ${item.source} ${item.rate} ${item.inverse}`.toLowerCase().includes(search))
+    .filter((item) => !selectedSource || item.source.toLowerCase() === selectedSource);
+  if (!rows.length) {
+    currencyHistoryModalList.innerHTML = '<div class="admin-meta">Brak pasujących zapisów kursu.</div>';
+    return;
+  }
+  const ordered = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+  const previousByDate = new Map();
+  ordered.forEach((item, index) => previousByDate.set(item.date, ordered[index - 1] || null));
+  const currency = document.getElementById('currency')?.value || '';
+  const plnToCurrency = currenciesConfig.comparisonDirection === 'pln-to-currency';
+  const currentDirectionLabel = plnToCurrency ? `PLN → ${currency}` : `${currency} → PLN`;
+  currencyHistoryModalList.innerHTML = `<div class="currency-history-table-wrap"><table class="currency-history-table">
+    <thead><tr><th>Data</th><th>PLN → ${escapeHtml(currency)}</th><th>${escapeHtml(currency)} → PLN</th><th>Zmiana (${escapeHtml(currentDirectionLabel)})</th><th>Źródło</th></tr></thead>
+    <tbody>${rows.map((item) => {
+      const previous = previousByDate.get(item.date);
+      const currentReference = plnToCurrency ? item.rate : item.inverse;
+      const previousReference = previous ? (plnToCurrency ? previous.rate : previous.inverse) : NaN;
+      const change = previous && previousReference ? ((currentReference - previousReference) / previousReference) * 100 : NaN;
+      const currencyRising = plnToCurrency ? change < 0 : change > 0;
+      const changeClass = !Number.isFinite(change) || Math.abs(change) < 0.000001 ? 'is-flat' : currencyRising ? 'is-up' : 'is-down';
+      const changeText = Number.isFinite(change) ? `${change > 0 ? '+' : ''}${change.toFixed(2)}%` : '—';
+      return `<tr><td>${escapeHtml(item.date)}</td><td>${item.rate.toFixed(4)}</td><td>${item.inverse.toFixed(4)}</td><td class="${changeClass}">${changeText}</td><td>${escapeHtml(item.source || '—')}</td></tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+async function loadCurrencyHistoryModal(currency, source) {
+  currencyHistoryModalStatus.textContent = `Pobieram zapisane kursy ${currency}…`;
+  currencyHistoryModalList.innerHTML = '';
+  try {
+    const response = await window.PN_MAPPINGS_API.request(`/rates/history?currency=${encodeURIComponent(currency)}&source=${encodeURIComponent(source)}`, { method: 'GET' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const records = Array.isArray(payload) ? payload : (payload.history || payload.records || payload.snapshots || payload.items || payload.data || []);
+    currencyHistoryModalRows = (Array.isArray(records) ? records : []).map((item) => {
+      const rate = Number(item.rate ?? item.plnToCurrency ?? item.pln_to_currency);
+      const date = String(item.date || item.day || item.createdAt || item.created_at || '').slice(0, 10);
+      if (!Number.isFinite(rate) || rate <= 0 || !date) return null;
+      return { date, rate, inverse: 1 / rate, source: String(item.source || item.provider || '').trim().toLowerCase() };
+    }).filter(Boolean).sort((a, b) => b.date.localeCompare(a.date));
+    currencyHistoryModalStatus.textContent = currencyHistoryModalRows.length
+      ? `Zapisane dni ze źródła ${source}: ${currencyHistoryModalRows.length}. Zielony oznacza wzrost wartości waluty, czerwony — spadek.`
+      : `Brak zapisów dla źródła ${source}.`;
+    renderCurrencyHistoryModalRows();
+  } catch (error) {
+    currencyHistoryModalRows = [];
+    currencyHistoryModalStatus.textContent = `Nie udało się pobrać historii (${error.message}). Worker musi obsługiwać GET /rates/history?currency=…`;
+  }
+}
+
+async function openCurrencyHistoryModal() {
+  if (!currencyHistoryModal) return;
+  const currency = String(document.getElementById('currency')?.value || '').toUpperCase();
+  currencyHistoryModal.style.display = 'flex';
+  currencyHistoryModalTitle.textContent = `Historia kursu ${currency}`;
+  currencyHistoryModalSearch.value = '';
+  const activeSource = String(document.getElementById('rateSource')?.value || '').toLowerCase();
+  const sourceOptions = Array.from(document.getElementById('rateSource')?.options || []);
+  currencyHistoryModalSource.innerHTML = sourceOptions
+    .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.textContent || option.value)}</option>`)
+    .join('');
+  currencyHistoryModalSource.value = sourceOptions.some((option) => option.value.toLowerCase() === activeSource)
+    ? activeSource
+    : (sourceOptions[0]?.value || '');
+  await loadCurrencyHistoryModal(currency, currencyHistoryModalSource.value);
+}
+
+function closeCurrencyHistoryModal() {
+  if (currencyHistoryModal) currencyHistoryModal.style.display = 'none';
+}
+
+currencyHistoryTrendButton?.addEventListener('click', openCurrencyHistoryModal);
+currencyHistoryModalClose?.addEventListener('click', closeCurrencyHistoryModal);
+currencyHistoryModal?.addEventListener('click', (event) => {
+  if (event.target === currencyHistoryModal) closeCurrencyHistoryModal();
+});
+currencyHistoryModalSearch?.addEventListener('input', renderCurrencyHistoryModalRows);
+currencyHistoryModalSource?.addEventListener('change', () => {
+  if (currencyHistoryModal?.style.display === 'flex') {
+    const currency = String(document.getElementById('currency')?.value || '').toUpperCase();
+    loadCurrencyHistoryModal(currency, currencyHistoryModalSource.value);
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && currencyHistoryModal?.style.display === 'flex') closeCurrencyHistoryModal();
+});
+
 function fetchExchangeRate(currency, options = {}) {
   const exchangeInfo = document.getElementById('exchangeInfo');
   const exchangeRateTooltip = document.getElementById('exchangeRateTooltip');
@@ -3394,6 +3526,16 @@ function fetchExchangeRate(currency, options = {}) {
         const previousDate = String(snapshot.previous?.date || '');
         if (!Number.isFinite(previousRate) || previousRate <= 0 || !previousDate) {
           exchangeRateTrend.textContent = 'Zapisano pierwszy kurs';
+          exchangeRateTrend.title = 'Kliknij, aby otworzyć historię kursu';
+          exchangeRateTrend.classList.add('is-flat');
+          exchangeRateTrend.hidden = false;
+          return;
+        }
+        const previousSource = String(snapshot.previous?.source || snapshot.previous?.provider || '').trim().toLowerCase();
+        const currentSource = String(providerKeyUsed || '').trim().toLowerCase();
+        if (!previousSource || previousSource !== currentSource) {
+          exchangeRateTrend.textContent = `Zapisano kurs z ${currentSource}; brak porównywalnego zapisu z tego źródła`;
+          exchangeRateTrend.title = 'Porównanie wykonywane jest tylko dla tej samej waluty i źródła kursu. Kliknij, aby zobaczyć historię.';
           exchangeRateTrend.classList.add('is-flat');
           exchangeRateTrend.hidden = false;
           return;
@@ -3419,8 +3561,30 @@ function fetchExchangeRate(currency, options = {}) {
           exchangeRateTrend.classList.add(currencyValueRising ? 'is-currency-rising' : 'is-currency-falling');
         }
         const directionLabel = isPlnToCurrency ? `PLN za ${currency}` : `${currency} za PLN`;
-        exchangeRateTrend.title = `Poprzedni kurs: ${previousReferenceRate.toFixed(4)} ${directionLabel} · ${previousLabel}`;
+        exchangeRateTrend.title = `Poprzedni kurs: ${previousReferenceRate.toFixed(4)} ${directionLabel} · ${previousLabel}. Kliknij, aby otworzyć historię.`;
         exchangeRateTrend.hidden = false;
+        const dropConfig = currenciesConfig.alerts?.suddenDrop || {};
+        const dropAmount = Math.max(0, -difference);
+        const configuredThreshold = Number(dropConfig.threshold) || 5;
+        const suddenDropDetected = dropConfig.enabled !== false && difference < 0 && (
+          dropConfig.mode === 'minor-units'
+            ? dropAmount * 100 >= configuredThreshold
+            : Math.abs(percent) >= configuredThreshold
+        );
+        const alertKey = `${currency}:${currentSource}`;
+        const lastAlertAt = rateDropAlertLastShown.get(alertKey) || 0;
+        if (suddenDropDetected && Date.now() - lastAlertAt > 15 * 60 * 1000) {
+          rateDropAlertLastShown.set(alertKey, Date.now());
+          const dropDescription = dropConfig.mode === 'minor-units'
+            ? `${(dropAmount * 100).toFixed(1)} gr/centów`
+            : `${Math.abs(percent).toFixed(2)}%`;
+          showMainToast(
+            `Nagły spadek kursu ${currency} ze źródła ${currentSource} (${dropDescription}, ${directionLabel}). Sprawdź mnożniki Base.`,
+            'warn',
+            undefined,
+            { dedupeKey: `currency-drop-${currency}-${currentSource}` }
+          );
+        }
       }).catch(() => {});
     }
     const now = new Date();
@@ -3460,6 +3624,7 @@ function fetchExchangeRate(currency, options = {}) {
       calculatePrice();
     }
     isPresetApplied = false;
+    updateBaseMultiplier();
   };
 
   const fetchRateFrom = window.RateService.createFetchRate(fetch);
@@ -3575,7 +3740,18 @@ function normalizeCurrenciesConfig(raw) {
   return {
     version: Number(incoming.version) || 1,
     currencies: orderedCodes.map((code) => byCode.get(code)).filter((item) => item && item.enabled !== false),
-    comparisonDirection: incoming.comparisonDirection === 'pln-to-currency' ? 'pln-to-currency' : 'currency-to-pln'
+    comparisonDirection: incoming.comparisonDirection === 'pln-to-currency' ? 'pln-to-currency' : 'currency-to-pln',
+    alerts: {
+      suddenDrop: {
+        enabled: incoming.alerts?.suddenDrop?.enabled !== false,
+        mode: incoming.alerts?.suddenDrop?.mode === 'minor-units' ? 'minor-units' : 'percent',
+        threshold: Math.max(0.01, Number(incoming.alerts?.suddenDrop?.threshold) || 5)
+      },
+      presetDrift: {
+        enabled: incoming.alerts?.presetDrift?.enabled !== false,
+        thresholdPercent: Math.max(0.1, Number(incoming.alerts?.presetDrift?.thresholdPercent) || 5)
+      }
+    }
   };
 }
 
@@ -3599,6 +3775,7 @@ async function loadCurrenciesConfig() {
       currenciesConfig = normalizeCurrenciesConfig(JSON.parse(fromLocal));
       window.RateService.registerCustomCurrencies(currenciesConfig.currencies);
       renderCurrencyOptions({ preferDefault: !readCalculatorPreferences()?.currency });
+      renderBaseMultiplierPresetButtons();
     } catch (_error) {
       // ignore local parse error
     }
@@ -3606,7 +3783,10 @@ async function loadCurrenciesConfig() {
     window.RateService.registerCustomCurrencies(currenciesConfig.currencies);
     renderCurrencyOptions({ preferDefault: !readCalculatorPreferences()?.currency });
   }
-  if (!window.PN_MAPPINGS_API?.request) return;
+  if (!window.PN_MAPPINGS_API?.request) {
+    updateBaseMultiplier();
+    return;
+  }
   try {
     const response = await window.PN_MAPPINGS_API.request(`/notes?id=${encodeURIComponent(CURRENCIES_CONFIG_NOTE_ID)}`, { method: 'GET' });
     if (!response.ok) return;
@@ -3620,6 +3800,7 @@ async function loadCurrenciesConfig() {
   } catch (_error) {
     // fallback to built-in/local currencies
   }
+  updateBaseMultiplier();
 }
 
 function normalizeRateProvidersConfig(raw) {
@@ -3918,6 +4099,8 @@ function resyncPricingFromCurrentSource(preferredSource = null) {
 currencySelectEl.addEventListener('change', () => {
   const selectedCurrency = currencySelectEl.value;
   selectedCalculatorPresetId = '';
+  syncSelectedBaseMultiplierPreset();
+  renderBaseMultiplierPresetButtons();
   window.CalculatorUI.clearRecalculatedFields();
   document.getElementById('currencyLabel').innerText = selectedCurrency;
   updateEbayCurrencyLabel();
@@ -4032,11 +4215,22 @@ if (baseMultiplierPresetButtons) {
     const presetId = button.getAttribute('data-base-multiplier-preset-id') || '';
     const preset = baseMultiplierPresetsConfig.presets.find((item) => item.id === presetId && item.enabled !== false);
     if (!preset) return;
+    const currencySelect = document.getElementById('currency');
+    if (preset.currency && currencySelect && !Array.from(currencySelect.options).some((option) => option.value === preset.currency)) {
+      showMainToast(`Waluta ${preset.currency} przypisana do presetu nie jest dostępna.`, 'warn');
+      return;
+    }
     selectedBaseMultiplierPresetId = preset.id;
     currentBaseMultiplierEl.value = formatBaseMultiplierPresetValue(preset.multiplier);
     const toggle = document.getElementById('useCurrentBaseMultiplierToggle');
     if (toggle) toggle.checked = true;
-    refreshCurrentBaseMultiplierPricing();
+    const currencyChanged = Boolean(preset.currency && currencySelect && currencySelect.value !== preset.currency);
+    if (currencyChanged) {
+      currencySelect.value = preset.currency;
+      currencySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+      refreshCurrentBaseMultiplierPricing();
+    }
     window.CalculatorUI.flashRecalculatedField(currentBaseMultiplierEl);
     addHistoryEntry('currentBaseMultiplier');
     persistCalculatorPreferences();

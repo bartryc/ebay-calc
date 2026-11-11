@@ -1139,6 +1139,26 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
   line-height: 1.25;
 }
 
+.base-multiplier-preset-buttons button.has-drift-warning {
+  border-color: #d69e00;
+  background: color-mix(in srgb, #facc15 12%, var(--card));
+}
+
+.base-multiplier-preset-buttons button.has-drift-warning.is-active {
+  box-shadow: inset 0 0 0 1px #d69e00;
+}
+
+.base-multiplier-drift-warning {
+  color: #9a6700;
+  font-size: 0.73rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+body.dark-mode .base-multiplier-drift-warning {
+  color: #facc15;
+}
+
 .search-card {
   margin-bottom: 10px;
   padding: 12px;
@@ -3129,6 +3149,76 @@ body.dark-mode .admin-identity {
   width: 100%;
 }
 
+.currency-alert-settings,
+.currency-history-panel {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card-2) 70%, transparent);
+}
+
+.currency-alert-settings h4,
+.currency-history-panel h4 {
+  margin: 0 0 10px;
+}
+
+.currency-alert-controls,
+.currency-history-controls {
+  align-items: end;
+}
+
+.currency-alert-controls .source-dual-icon-toggle {
+  min-height: 38px;
+  align-self: end;
+}
+
+.currency-history-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.currency-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.currency-history-table th,
+.currency-history-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.currency-history-table th {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.currency-history-table .is-up {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.currency-history-table .is-down {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.currency-history-table .is-flat {
+  color: var(--muted);
+}
+
+body.dark-mode .currency-history-table .is-up {
+  color: #ff8a80;
+}
+
+body.dark-mode .currency-history-table .is-down {
+  color: #86efac;
+}
+
 .calculator-preset-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -3171,6 +3261,39 @@ body.dark-mode .admin-identity {
 
 .calculator-preset-enabled {
   margin-top: 26px;
+}
+
+.base-multiplier-editor-control {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) auto;
+  gap: 5px;
+  align-items: center;
+}
+
+.base-multiplier-editor-control input {
+  min-width: 0;
+}
+
+.base-multiplier-step {
+  min-height: 36px;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--card-2);
+  color: var(--ink);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.base-multiplier-step:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.base-multiplier-step:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .rate-provider-config-controls {
@@ -5866,6 +5989,7 @@ input[type="text"][inputmode="decimal"]:disabled {
 
 .exchange-rate-trend {
   justify-self: start;
+  display: block;
   padding: 3px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -5874,6 +5998,18 @@ input[type="text"][inputmode="decimal"]:disabled {
   font-size: 0.72rem;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+}
+
+.exchange-rate-trend[hidden] {
+  display: none;
+}
+
+.exchange-rate-trend:hover,
+.exchange-rate-trend:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
 }
 
 .exchange-rate-trend.is-currency-rising {
@@ -5890,6 +6026,20 @@ input[type="text"][inputmode="decimal"]:disabled {
 
 body.dark-mode .exchange-rate-trend.is-currency-rising { color: #f87171; }
 body.dark-mode .exchange-rate-trend.is-currency-falling { color: #4ade80; }
+
+.currency-history-modal .mapping-modal-card {
+  max-width: 780px;
+}
+
+.currency-history-modal .mapping-modal-body {
+  display: grid;
+  gap: 10px;
+}
+
+.currency-history-modal .currency-history-list {
+  max-height: min(55vh, 460px);
+  overflow: auto;
+}
 
 .field-label {
   display: inline-flex;

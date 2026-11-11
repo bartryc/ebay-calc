@@ -366,6 +366,38 @@
               </div>
               <button type="button" id="currencyTrendDirectionSaveBtn">Zapisz kierunek</button>
             </div>
+            <div class="currency-alert-settings">
+              <h4>Alerty kursów i mnożników</h4>
+              <div class="admin-log-controls currency-alert-controls">
+                <label class="source-dual-icon-toggle"><input type="checkbox" id="currencyDropAlertEnabled" checked><span>Ostrzegaj przy nagłym spadku kursu</span></label>
+                <div class="admin-log-field">
+                  <label for="currencyDropAlertMode">Próg spadku</label>
+                  <select id="currencyDropAlertMode"><option value="percent">Procent</option><option value="minor-units">Grosze / centy</option></select>
+                </div>
+                <div class="admin-log-field">
+                  <label for="currencyDropAlertThreshold">Wartość progu</label>
+                  <input type="number" id="currencyDropAlertThreshold" min="0.01" step="0.1" value="5">
+                </div>
+                <label class="source-dual-icon-toggle"><input type="checkbox" id="basePresetDriftAlertEnabled" checked><span>Oznacz presety Base z dużym odchyleniem</span></label>
+                <div class="admin-log-field">
+                  <label for="basePresetDriftAlertThreshold">Próg odchylenia presetów (%)</label>
+                  <input type="number" id="basePresetDriftAlertThreshold" min="0.1" step="0.1" value="5">
+                </div>
+              </div>
+              <p class="admin-meta">Kwotowy próg wpisuje się w groszach/centach (np. 5 = 0,05). Porównanie kursu używa wybranego wyżej kierunku.</p>
+              <button type="button" id="currencyAlertsSaveBtn">Zapisz ustawienia alertów</button>
+            </div>
+            <div class="currency-history-panel">
+              <h4>Historia i porównanie kursów</h4>
+              <div class="admin-log-controls currency-history-controls">
+                <div class="admin-log-field"><label for="currencyHistoryCurrency">Waluta</label><select id="currencyHistoryCurrency"></select></div>
+                <div class="admin-log-field"><label for="currencyHistorySource">Źródło kursu</label><select id="currencyHistorySource"><option value="">Wszystkie źródła</option></select></div>
+                <div class="admin-log-field"><label for="currencyHistorySearch">Szukaj po dacie, kursie lub źródle</label><input type="search" id="currencyHistorySearch" placeholder="np. 2026-11 albo NBP"></div>
+                <button type="button" id="currencyHistoryLoadBtn">Pobierz historię</button>
+              </div>
+              <div id="currencyHistoryStatus" class="admin-meta" role="status">Wybierz walutę, aby zobaczyć zapisane kursy.</div>
+              <div id="currencyHistoryList" class="currency-history-list"></div>
+            </div>
             <div id="currencyConfigHint" class="admin-meta">Wbudowane: EUR, USD, GBP.</div>
           </div>
 
@@ -490,7 +522,15 @@
               </div>
               <div class="admin-log-field">
                 <label for="baseMultiplierPresetValue">Mnożnik Base</label>
-                <input type="number" id="baseMultiplierPresetValue" min="0.000001" step="0.0001" placeholder="Np. 0.2654">
+                <div class="base-multiplier-editor-control">
+                  <button type="button" class="base-multiplier-step" data-base-multiplier-step="-0.001" aria-label="Zmniejsz o 0,001">−0,001</button>
+                  <input type="number" id="baseMultiplierPresetValue" min="0.000001" step="0.0001" placeholder="Np. 0.2654">
+                  <button type="button" class="base-multiplier-step" data-base-multiplier-step="0.001" aria-label="Zwiększ o 0,001">+0,001</button>
+                </div>
+              </div>
+              <div class="admin-log-field">
+                <label for="baseMultiplierPresetCurrency">Waluta docelowa</label>
+                <select id="baseMultiplierPresetCurrency"><option value="">Nie zmieniaj waluty</option></select>
               </div>
               <div class="admin-log-field">
                 <label class="source-dual-icon-toggle calculator-preset-enabled">
@@ -920,6 +960,45 @@
   <script>
     if (window.UITheme?.init) window.UITheme.init();
     sessionStorage.setItem('adminSessionUnlockedV1', '1');
+    const adminLogApi = window.PN_MAPPINGS_API;
+    if (adminLogApi?.request && !adminLogApi.request.__adminAuditWrapped) {
+      const originalAdminRequest = adminLogApi.request.bind(adminLogApi);
+      const auditedAdminRequest = async (path, options = {}) => {
+        const method = String(options.method || 'GET').toUpperCase();
+        const pathname = (() => {
+          try { return new URL(path, window.location.href).pathname; } catch (_error) { return String(path || '').split('?')[0]; }
+        })();
+        const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+          && pathname !== '/log' && pathname !== '/log-batch';
+        try {
+          const response = await originalAdminRequest(path, options);
+          if (isWrite) {
+            adminLogApi.log?.('admin', {
+              action: 'admin-api-write',
+              method,
+              endpoint: pathname,
+              eventId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              result: response.ok ? 'success' : 'http-error',
+              status: response.status
+            });
+          }
+          return response;
+        } catch (error) {
+          if (isWrite) {
+            adminLogApi.log?.('admin', {
+              action: 'admin-api-write',
+              method,
+              endpoint: pathname,
+              eventId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              result: 'network-error'
+            });
+          }
+          throw error;
+        }
+      };
+      auditedAdminRequest.__adminAuditWrapped = true;
+      adminLogApi.request = auditedAdminRequest;
+    }
     document.querySelectorAll('a[href^="pn-mappings.html"]').forEach((link) => {
       link.addEventListener('click', () => {
         sessionStorage.setItem('adminMappingEntryV1', '1');
@@ -927,6 +1006,50 @@
     });
 
     const toastStack = document.getElementById('mappingToastStack');
+    function logAdminPanelInteraction(eventName, control) {
+      if (!adminLogApi?.log || !control) return;
+      const activeTab = document.querySelector('[data-admin-tab-btn].is-active')?.getAttribute('data-admin-tab-btn') || '';
+      const controlType = control.matches('input, select, textarea')
+        ? `${control.tagName.toLowerCase()}${control.type ? `:${control.type}` : ''}`
+        : control.tagName.toLowerCase();
+      const stableControl = control.id
+        || control.getAttribute('data-admin-tab-btn')
+        || control.getAttribute('data-admin-tab')
+        || Array.from(control.classList || []).slice(0, 2).join('.')
+        || controlType;
+      adminLogApi.log('admin', {
+        action: 'admin-panel-interaction',
+        event: eventName,
+        eventId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        control: stableControl,
+        controlType,
+        tab: activeTab
+      });
+    }
+
+    document.addEventListener('click', (event) => {
+      const control = event.target.closest('button, a[href], summary, input[type="checkbox"], input[type="radio"]');
+      if (!control || control.closest('#mappingToastStack')) return;
+      if (!control.closest('.admin-shell, .admin-identity')) return;
+      if (control.matches('button[type="submit"]') && control.closest('form')) return;
+      if (control.matches('input[type="checkbox"], input[type="radio"]')) return;
+      logAdminPanelInteraction('click', control);
+    }, true);
+    document.addEventListener('change', (event) => {
+      const control = event.target.closest('input, select, textarea');
+      if (!control || control.closest('#mappingToastStack')) return;
+      if (!control.closest('.admin-shell, .admin-identity')) return;
+      logAdminPanelInteraction('change', control);
+    }, true);
+    document.addEventListener('submit', (event) => {
+      const form = event.target.closest('form');
+      if (!form || !form.closest('.admin-shell, .admin-identity')) return;
+      logAdminPanelInteraction('submit', form);
+    }, true);
+    adminLogApi?.log?.('admin', {
+      action: 'admin-panel-open',
+      eventId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    });
     const adminIdentity = document.getElementById('adminIdentity');
     const adminIdentityForm = document.getElementById('adminIdentityForm');
     const adminIdentityInput = document.getElementById('adminIdentityInput');
@@ -1023,6 +1146,7 @@
     const baseMultiplierPresetSelect = document.getElementById('baseMultiplierPresetSelect');
     const baseMultiplierPresetLabel = document.getElementById('baseMultiplierPresetLabel');
     const baseMultiplierPresetValue = document.getElementById('baseMultiplierPresetValue');
+    const baseMultiplierPresetCurrency = document.getElementById('baseMultiplierPresetCurrency');
     const baseMultiplierPresetEnabled = document.getElementById('baseMultiplierPresetEnabled');
     const baseMultiplierPresetNewBtn = document.getElementById('baseMultiplierPresetNewBtn');
     const baseMultiplierPresetSaveBtn = document.getElementById('baseMultiplierPresetSaveBtn');
@@ -1084,6 +1208,19 @@
     const currencyConfigHint = document.getElementById('currencyConfigHint');
     const currencyTrendDirectionSelect = document.getElementById('currencyTrendDirectionSelect');
     const currencyTrendDirectionSaveBtn = document.getElementById('currencyTrendDirectionSaveBtn');
+    const currencyDropAlertEnabled = document.getElementById('currencyDropAlertEnabled');
+    const currencyDropAlertMode = document.getElementById('currencyDropAlertMode');
+    const currencyDropAlertThreshold = document.getElementById('currencyDropAlertThreshold');
+    const basePresetDriftAlertEnabled = document.getElementById('basePresetDriftAlertEnabled');
+    const basePresetDriftAlertThreshold = document.getElementById('basePresetDriftAlertThreshold');
+    const currencyAlertsSaveBtn = document.getElementById('currencyAlertsSaveBtn');
+    const currencyHistoryCurrency = document.getElementById('currencyHistoryCurrency');
+    const currencyHistorySource = document.getElementById('currencyHistorySource');
+    const currencyHistorySearch = document.getElementById('currencyHistorySearch');
+    const currencyHistoryLoadBtn = document.getElementById('currencyHistoryLoadBtn');
+    const currencyHistoryStatus = document.getElementById('currencyHistoryStatus');
+    const currencyHistoryList = document.getElementById('currencyHistoryList');
+    let currencyHistoryRows = [];
     const rateProviderOverview = document.getElementById('rateProviderOverview');
     const rateProviderConfigSelect = document.getElementById('rateProviderConfigSelect');
     const rateProviderConfigId = document.getElementById('rateProviderConfigId');
@@ -1181,7 +1318,15 @@
       }
     ];
     let customRateProvidersConfig = { version: 1, providers: [] };
-    let currenciesConfig = { version: 1, currencies: BUILTIN_CURRENCIES, comparisonDirection: 'currency-to-pln' };
+    let currenciesConfig = {
+      version: 1,
+      currencies: BUILTIN_CURRENCIES,
+      comparisonDirection: 'currency-to-pln',
+      alerts: {
+        suddenDrop: { enabled: true, mode: 'percent', threshold: 5 },
+        presetDrift: { enabled: true, thresholdPercent: 5 }
+      }
+    };
     let currencyOrderSaving = false;
     let calculatorPresetsConfig = { version: 1, presets: [] };
     let baseMultiplierPresetsConfig = { version: 1, presets: [] };
@@ -2815,8 +2960,8 @@
       {
         id: 'currency-config',
         root: '.currency-editor',
-        controls: '#currencyConfigCode, #currencyConfigLabel, #currencyConfigFallback, #currencyTrendDirectionSelect',
-        actions: '#currencyConfigSaveBtn, #currencyConfigDeleteBtn, #currencyTrendDirectionSaveBtn'
+        controls: '#currencyConfigCode, #currencyConfigLabel, #currencyConfigFallback, #currencyTrendDirectionSelect, #currencyDropAlertEnabled, #currencyDropAlertMode, #currencyDropAlertThreshold, #basePresetDriftAlertEnabled, #basePresetDriftAlertThreshold',
+        actions: '#currencyConfigSaveBtn, #currencyConfigDeleteBtn, #currencyTrendDirectionSaveBtn, #currencyAlertsSaveBtn'
       },
       {
         id: 'rate-provider-config',
@@ -2833,7 +2978,7 @@
       {
         id: 'base-multiplier-presets',
         root: '#baseMultiplierPresetSection',
-        controls: '#baseMultiplierPresetLabel, #baseMultiplierPresetValue, #baseMultiplierPresetEnabled',
+        controls: '#baseMultiplierPresetLabel, #baseMultiplierPresetValue, #baseMultiplierPresetCurrency, #baseMultiplierPresetEnabled, .base-multiplier-step',
         actions: '#baseMultiplierPresetNewBtn, #baseMultiplierPresetSaveBtn, #baseMultiplierPresetDeleteBtn'
       },
       {
@@ -2910,7 +3055,16 @@
       button.className = 'admin-edit-toggle';
       button.dataset.adminEditFree = 'true';
       button.addEventListener('click', () => {
-        setAdminEditScope(scope, !scope.root.classList.contains('is-admin-editing'));
+        const isEditing = scope.root.classList.contains('is-admin-editing');
+        if (isEditing && scope.id === 'base-multiplier-presets' && isBaseMultiplierPresetEditorDirty()) {
+          const save = window.confirm('Masz niezapisane zmiany w presecie Base.\n\nOK — zapisz zmiany i zakończ edycję.\nAnuluj — wróć do edycji.');
+          if (!save) return;
+          handleSaveBaseMultiplierPreset().then((saved) => {
+            if (saved) setAdminEditScope(scope, false);
+          }).catch((error) => showToast(`Nie udało się zapisać presetu: ${error.message}`, 'warn'));
+          return;
+        }
+        setAdminEditScope(scope, !isEditing);
       });
       bar.appendChild(button);
       const firstChild = scope.root.firstElementChild;
@@ -2977,7 +3131,18 @@
       return {
         version: Number(incoming.version) || 1,
         currencies: orderedCodes.map((code) => byCode.get(code)).filter((item) => item && item.enabled !== false),
-        comparisonDirection: incoming.comparisonDirection === 'pln-to-currency' ? 'pln-to-currency' : 'currency-to-pln'
+        comparisonDirection: incoming.comparisonDirection === 'pln-to-currency' ? 'pln-to-currency' : 'currency-to-pln',
+        alerts: {
+          suddenDrop: {
+            enabled: incoming.alerts?.suddenDrop?.enabled !== false,
+            mode: incoming.alerts?.suddenDrop?.mode === 'minor-units' ? 'minor-units' : 'percent',
+            threshold: Math.max(0.01, Number(incoming.alerts?.suddenDrop?.threshold) || 5)
+          },
+          presetDrift: {
+            enabled: incoming.alerts?.presetDrift?.enabled !== false,
+            thresholdPercent: Math.max(0.1, Number(incoming.alerts?.presetDrift?.thresholdPercent) || 5)
+          }
+        }
       };
     }
 
@@ -2985,10 +3150,17 @@
       if (currencyTrendDirectionSelect) {
         currencyTrendDirectionSelect.value = currenciesConfig.comparisonDirection;
       }
+      const alerts = currenciesConfig.alerts || {};
+      if (currencyDropAlertEnabled) currencyDropAlertEnabled.checked = alerts.suddenDrop?.enabled !== false;
+      if (currencyDropAlertMode) currencyDropAlertMode.value = alerts.suddenDrop?.mode === 'minor-units' ? 'minor-units' : 'percent';
+      if (currencyDropAlertThreshold) currencyDropAlertThreshold.value = String(alerts.suddenDrop?.threshold ?? 5);
+      if (basePresetDriftAlertEnabled) basePresetDriftAlertEnabled.checked = alerts.presetDrift?.enabled !== false;
+      if (basePresetDriftAlertThreshold) basePresetDriftAlertThreshold.value = String(alerts.presetDrift?.thresholdPercent ?? 5);
     }
 
     function renderCurrencyConfigList() {
       if (!currencyConfigList) return;
+      renderBaseMultiplierPresetCurrencyOptions();
       currencyConfigList.innerHTML = currenciesConfig.currencies.map((item, index) => {
         const builtin = BUILTIN_CURRENCIES.some((currency) => currency.code === item.code);
         return `
@@ -3009,6 +3181,95 @@
         currencyConfigHint.textContent = `Aktywne waluty: ${currenciesConfig.currencies.map((item) => item.code).join(', ')}`;
       }
       renderCalculatorPresetCurrencyOptions();
+      renderCurrencyHistoryOptions();
+    }
+
+    function renderCurrencyHistoryOptions() {
+      if (!currencyHistoryCurrency) return;
+      const current = currencyHistoryCurrency.value;
+      currencyHistoryCurrency.innerHTML = currenciesConfig.currencies
+        .map((item) => `<option value="${escapeHtml(item.code)}">${escapeHtml(item.label || item.code)}</option>`)
+        .join('');
+      currencyHistoryCurrency.value = currenciesConfig.currencies.some((item) => item.code === current)
+        ? current
+        : (currenciesConfig.currencies[0]?.code || '');
+    }
+
+    function renderCurrencyHistorySourceOptions() {
+      if (!currencyHistorySource) return;
+      const current = currencyHistorySource.value;
+      currencyHistorySource.innerHTML = '<option value="">Wszystkie źródła</option>' + customRateProvidersConfig.providers
+        .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label || item.id)} (${escapeHtml(item.id)})</option>`)
+        .join('');
+      currencyHistorySource.value = customRateProvidersConfig.providers.some((item) => item.id === current) ? current : '';
+    }
+
+    function renderCurrencyHistory() {
+      if (!currencyHistoryList) return;
+      const query = String(currencyHistorySearch?.value || '').trim().toLowerCase();
+      const selectedSource = String(currencyHistorySource?.value || '').toLowerCase();
+      const rows = currencyHistoryRows.filter((row) => !selectedSource || row.source.toLowerCase() === selectedSource)
+        .filter((row) => !query || `${row.date} ${row.source} ${row.rate} ${row.inverse}`.toLowerCase().includes(query));
+      if (!rows.length) {
+        currencyHistoryList.innerHTML = '<div class="admin-meta">Brak zapisów pasujących do wyszukiwania.</div>';
+        return;
+      }
+      const chronological = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+      const previousByDate = new Map();
+      const previousBySource = new Map();
+      chronological.forEach((row) => {
+        previousByDate.set(`${row.source}:${row.date}`, previousBySource.get(row.source) || null);
+        previousBySource.set(row.source, row);
+      });
+      const direction = currenciesConfig.comparisonDirection === 'pln-to-currency' ? 'pln-to-currency' : 'currency-to-pln';
+      currencyHistoryList.innerHTML = `<div class="currency-history-table-wrap"><table class="currency-history-table">
+        <thead><tr><th>Data</th><th>PLN → waluta</th><th>Waluta → PLN</th><th>Zmiana (${direction === 'pln-to-currency' ? 'PLN → waluta' : 'waluta → PLN'})</th><th>Źródło</th></tr></thead>
+        <tbody>${rows.map((row) => {
+          const previous = row.source ? previousByDate.get(`${row.source}:${row.date}`) : null;
+          const currentReference = direction === 'pln-to-currency' ? row.rate : row.inverse;
+          const previousReference = previous ? (direction === 'pln-to-currency' ? previous.rate : previous.inverse) : NaN;
+          const change = previous && previousReference ? ((currentReference - previousReference) / previousReference) * 100 : NaN;
+          const currencyValueRising = direction === 'pln-to-currency' ? change < 0 : change > 0;
+          const changeClass = !Number.isFinite(change) || Math.abs(change) < 0.000001 ? 'is-flat' : currencyValueRising ? 'is-up' : 'is-down';
+          const changeText = Number.isFinite(change) ? `${change > 0 ? '+' : ''}${change.toFixed(2)}%` : '—';
+          return `<tr><td>${escapeHtml(row.date)}</td><td>${row.rate.toFixed(4)}</td><td>${row.inverse.toFixed(4)}</td><td class="${changeClass}">${changeText}</td><td>${escapeHtml(row.source || '—')}</td></tr>`;
+        }).join('')}</tbody>
+      </table></div>`;
+    }
+
+    async function loadCurrencyHistory() {
+      const currency = String(currencyHistoryCurrency?.value || '').toUpperCase();
+      if (!currency || !window.PN_MAPPINGS_API?.request) return;
+      currencyHistoryLoadBtn.disabled = true;
+      currencyHistoryStatus.textContent = `Pobieram historię ${currency}…`;
+      try {
+        const source = String(currencyHistorySource?.value || '').toLowerCase();
+        const sourceQuery = source ? `&source=${encodeURIComponent(source)}` : '';
+        const response = await window.PN_MAPPINGS_API.request(`/rates/history?currency=${encodeURIComponent(currency)}${sourceQuery}`, { method: 'GET' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const records = Array.isArray(payload) ? payload : (payload.history || payload.records || payload.snapshots || payload.items || payload.data || []);
+        currencyHistoryRows = (Array.isArray(records) ? records : []).map((item) => {
+          const rate = Number(item.rate ?? item.plnToCurrency ?? item.pln_to_currency);
+          const date = String(item.date || item.day || item.createdAt || item.created_at || '').slice(0, 10);
+          if (!Number.isFinite(rate) || rate <= 0 || !date) return null;
+          return { date, rate, inverse: 1 / rate, source: String(item.source || item.provider || '').trim().toLowerCase() };
+        }).filter(Boolean).sort((a, b) => b.date.localeCompare(a.date));
+        const selectedSource = String(currencyHistorySource?.value || '').toLowerCase();
+        const hasSourceMetadata = currencyHistoryRows.some((row) => row.source);
+        currencyHistoryStatus.textContent = currencyHistoryRows.length && selectedSource && !hasSourceMetadata
+          ? 'Te historyczne wpisy nie zawierają źródła, więc nie można ich bezpiecznie porównać. Nowe zapisy wymagają aktualizacji Workera.'
+          : currencyHistoryRows.length
+            ? `Zapisane odczyty: ${currencyHistoryRows.length}. Porównanie jest rozdzielone według źródła kursu.`
+            : 'Worker nie zwrócił zapisów historii dla tej waluty i źródła.';
+        renderCurrencyHistory();
+      } catch (error) {
+        currencyHistoryRows = [];
+        currencyHistoryStatus.textContent = `Nie udało się pobrać historii. ${error.message}. Sprawdź obsługę GET /rates/history w Workerze.`;
+        renderCurrencyHistory();
+      } finally {
+        currencyHistoryLoadBtn.disabled = false;
+      }
     }
 
     function fillCurrencyEditor(item) {
@@ -3253,7 +3514,13 @@
         id,
         label: label || fallbackLabel,
         multiplier,
-        enabled: item?.enabled !== false
+        enabled: item?.enabled !== false,
+        currency: /^[A-Z]{3}$/.test(String(item?.currency || '').trim().toUpperCase())
+          ? String(item.currency).trim().toUpperCase()
+          : '',
+        updatedAt: Number.isFinite(Date.parse(item?.updatedAt || ''))
+          ? new Date(item.updatedAt).toISOString()
+          : ''
       };
     }
 
@@ -3285,6 +3552,16 @@
       baseMultiplierPresetSelect.value = baseMultiplierPresetsConfig.presets.some((item) => item.id === current) ? current : '';
     }
 
+    function renderBaseMultiplierPresetCurrencyOptions() {
+      if (!baseMultiplierPresetCurrency) return;
+      const current = baseMultiplierPresetCurrency.value;
+      const list = currenciesConfig.currencies.length ? currenciesConfig.currencies : BUILTIN_CURRENCIES;
+      baseMultiplierPresetCurrency.innerHTML = '<option value="">Nie zmieniaj waluty</option>' + list
+        .map((item) => `<option value="${escapeHtml(item.code)}">${escapeHtml(item.label || item.code)}</option>`)
+        .join('');
+      baseMultiplierPresetCurrency.value = list.some((item) => item.code === current) ? current : '';
+    }
+
     function renderBaseMultiplierPresetList() {
       if (!baseMultiplierPresetList) return;
       const activeCount = baseMultiplierPresetsConfig.presets.filter((item) => item.enabled !== false).length;
@@ -3295,6 +3572,8 @@
         <button type="button" class="calculator-preset-row ${item.enabled === false ? 'is-disabled' : ''}" data-base-preset-id="${item.id}">
           <strong>${escapeHtml(item.label)}</strong>
           <span>Mnożnik Base: ${escapeHtml(formatBaseMultiplierPresetValue(item.multiplier))}</span>
+          <span>Waluta: ${escapeHtml(item.currency || 'bez zmiany')}</span>
+          <small>Ostatnia edycja: ${item.updatedAt ? new Date(item.updatedAt).toLocaleString('pl-PL') : 'brak danych'}</small>
           <small>${item.enabled === false ? 'Ukryty w kalkulatorze' : 'Widoczny w kalkulatorze'}</small>
         </button>
       `).join('');
@@ -3304,11 +3583,13 @@
       if (baseMultiplierPresetSelect) baseMultiplierPresetSelect.value = preset?.id || '';
       if (baseMultiplierPresetLabel) baseMultiplierPresetLabel.value = preset?.label || '';
       if (baseMultiplierPresetValue) baseMultiplierPresetValue.value = preset ? formatBaseMultiplierPresetValue(preset.multiplier) : '';
+      if (baseMultiplierPresetCurrency) baseMultiplierPresetCurrency.value = preset?.currency || '';
       if (baseMultiplierPresetEnabled) baseMultiplierPresetEnabled.checked = preset?.enabled !== false;
     }
 
     function renderBaseMultiplierPresetsEditor() {
       renderBaseMultiplierPresetSelect();
+      renderBaseMultiplierPresetCurrencyOptions();
       renderBaseMultiplierPresetList();
       if (!baseMultiplierPresetSelect?.value) fillBaseMultiplierPresetEditor(null);
     }
@@ -3318,8 +3599,21 @@
         id: baseMultiplierPresetSelect?.value || undefined,
         label: baseMultiplierPresetLabel?.value,
         multiplier: baseMultiplierPresetValue?.value,
+        currency: baseMultiplierPresetCurrency?.value || '',
         enabled: baseMultiplierPresetEnabled?.checked
       });
+    }
+
+    function isBaseMultiplierPresetEditorDirty() {
+      const selectedId = baseMultiplierPresetSelect?.value || '';
+      const current = collectBaseMultiplierPresetFromEditor();
+      if (!selectedId) return Boolean(baseMultiplierPresetLabel?.value.trim() || baseMultiplierPresetValue?.value);
+      const saved = baseMultiplierPresetsConfig.presets.find((item) => item.id === selectedId);
+      if (!saved || !current) return true;
+      return current.label !== saved.label
+        || Math.abs(current.multiplier - saved.multiplier) > 0.0000001
+        || current.currency !== saved.currency
+        || current.enabled !== saved.enabled;
     }
 
     async function saveBaseMultiplierPresetsConfig() {
@@ -3356,13 +3650,16 @@
       const item = collectBaseMultiplierPresetFromEditor();
       if (!item || !String(baseMultiplierPresetLabel?.value || '').trim()) {
         showToast('Uzupełnij nazwę i dodatni mnożnik Base.', 'warn');
-        return;
+        return false;
       }
+      const previousConfig = baseMultiplierPresetsConfig;
+      const previousPresets = [...baseMultiplierPresetsConfig.presets];
       const selectedId = baseMultiplierPresetSelect?.value || '';
       let savedId = selectedId;
+      const updatedAt = new Date().toISOString();
       if (selectedId) {
         baseMultiplierPresetsConfig.presets = baseMultiplierPresetsConfig.presets.map((preset) => (
-          preset.id === selectedId ? { ...item, id: selectedId } : preset
+          preset.id === selectedId ? { ...item, id: selectedId, updatedAt } : preset
         ));
       } else {
         const fallbackId = `base-${baseMultiplierPresetsConfig.presets.length + 1}`;
@@ -3374,16 +3671,22 @@
           counter += 1;
         }
         savedId = nextId;
-        baseMultiplierPresetsConfig.presets.push({ ...item, id: nextId });
+        baseMultiplierPresetsConfig.presets.push({ ...item, id: nextId, updatedAt });
       }
       baseMultiplierPresetsConfig = normalizeBaseMultiplierPresetsConfig(baseMultiplierPresetsConfig);
       const t0 = performance.now();
-      await saveBaseMultiplierPresetsConfig();
+      try {
+        await saveBaseMultiplierPresetsConfig();
+      } catch (error) {
+        baseMultiplierPresetsConfig = { ...previousConfig, presets: previousPresets };
+        throw error;
+      }
       renderBaseMultiplierPresetsEditor();
       const saved = baseMultiplierPresetsConfig.presets.find((preset) => preset.id === savedId);
       if (baseMultiplierPresetSelect && saved) baseMultiplierPresetSelect.value = saved.id;
       if (saved) fillBaseMultiplierPresetEditor(saved);
       showToast('Preset mnożnika Base zapisany.', 'ok', performance.now() - t0);
+      return true;
     }
 
     async function handleDeleteBaseMultiplierPreset() {
@@ -3616,6 +3919,7 @@
         : '<option value="">Brak API</option>';
       rateProviderConfigSelect.value = providers.some((item) => item.id === current) ? current : (providers[0]?.id || '');
       fillRateProviderEditor(getSelectedRateProviderConfig());
+      renderCurrencyHistorySourceOptions();
       renderDefaultRateProviderOptions();
       renderRateProviderOverview();
     }
@@ -4541,9 +4845,20 @@
       baseMultiplierPresetNewBtn.addEventListener('click', () => {
         if (baseMultiplierPresetSelect) baseMultiplierPresetSelect.value = '';
         fillBaseMultiplierPresetEditor(null);
+        if (baseMultiplierPresetCurrency) baseMultiplierPresetCurrency.value = currenciesConfig.currencies[0]?.code || '';
         baseMultiplierPresetLabel?.focus();
       });
     }
+
+    document.querySelectorAll('.base-multiplier-step').forEach((button) => {
+      button.addEventListener('click', () => {
+        const current = parseFloat(String(baseMultiplierPresetValue?.value || '').replace(',', '.'));
+        const delta = Number(button.dataset.baseMultiplierStep);
+        if (!Number.isFinite(current) || !Number.isFinite(delta) || !baseMultiplierPresetValue) return;
+        baseMultiplierPresetValue.value = (Math.round((current + delta) * 1000000) / 1000000).toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+        baseMultiplierPresetValue.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
 
     if (baseMultiplierPresetSaveBtn) {
       baseMultiplierPresetSaveBtn.addEventListener('click', async () => {
@@ -4727,6 +5042,46 @@
         currencyTrendDirectionSaveBtn.disabled = false;
       }
     });
+
+    currencyAlertsSaveBtn?.addEventListener('click', async () => {
+      const dropThreshold = Number(currencyDropAlertThreshold?.value);
+      const driftThreshold = Number(basePresetDriftAlertThreshold?.value);
+      if (!Number.isFinite(dropThreshold) || dropThreshold <= 0 || !Number.isFinite(driftThreshold) || driftThreshold <= 0) {
+        showToast('Podaj dodatnie progi alertów.', 'warn');
+        return;
+      }
+      const previousAlerts = currenciesConfig.alerts;
+      currenciesConfig = {
+        ...currenciesConfig,
+        alerts: {
+          suddenDrop: {
+            enabled: !!currencyDropAlertEnabled?.checked,
+            mode: currencyDropAlertMode?.value === 'minor-units' ? 'minor-units' : 'percent',
+            threshold: dropThreshold
+          },
+          presetDrift: {
+            enabled: !!basePresetDriftAlertEnabled?.checked,
+            thresholdPercent: driftThreshold
+          }
+        }
+      };
+      currencyAlertsSaveBtn.disabled = true;
+      try {
+        await saveCurrenciesConfig();
+        showToast('Zapisano progi alertów walut i presetów.', 'ok');
+      } catch (error) {
+        currenciesConfig = { ...currenciesConfig, alerts: previousAlerts };
+        syncCurrencyTrendDirectionSelect();
+        showToast(`Błąd zapisu alertów: ${error.message || 'unknown'}`, 'warn');
+      } finally {
+        currencyAlertsSaveBtn.disabled = false;
+      }
+    });
+
+    currencyHistoryLoadBtn?.addEventListener('click', loadCurrencyHistory);
+    currencyHistoryCurrency?.addEventListener('change', loadCurrencyHistory);
+    currencyHistorySource?.addEventListener('change', loadCurrencyHistory);
+    currencyHistorySearch?.addEventListener('input', renderCurrencyHistory);
 
     rateProviderConfigSelect?.addEventListener('change', () => {
       fillRateProviderEditor(getSelectedRateProviderConfig());

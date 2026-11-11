@@ -98,7 +98,7 @@
               <div id="exchangeRateTooltip" class="input-tooltip" data-tooltip="">
                 <input type="text" inputmode="decimal" id="exchangeRate" step="0.0001" min="0" required disabled>
               </div>
-              <div id="exchangeRateTrend" class="exchange-rate-trend" role="status" aria-live="polite" hidden></div>
+              <button type="button" id="exchangeRateTrend" class="exchange-rate-trend" aria-label="Otwórz historię kursu" aria-live="polite" hidden></button>
             </div>
 
             <div class="layout-item" data-layout-item="calc-vat">
@@ -416,6 +416,23 @@
       <div class="mapping-modal-actions confirm-actions">
         <button type="button" id="layoutResetModalCancel">Anuluj</button>
         <button type="button" id="layoutResetModalConfirm" class="btn-danger">Przywróć domyślny</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="currencyHistoryModal" class="mapping-modal currency-history-modal" style="display: none;">
+    <div class="mapping-modal-card" role="dialog" aria-modal="true" aria-labelledby="currencyHistoryModalTitle">
+      <div class="mapping-modal-header">
+        <strong id="currencyHistoryModalTitle">Historia kursu</strong>
+        <button type="button" id="currencyHistoryModalClose" aria-label="Zamknij historię kursu">×</button>
+      </div>
+      <div class="mapping-modal-body">
+        <label for="currencyHistoryModalSource">Źródło kursu</label>
+        <select id="currencyHistoryModalSource"></select>
+        <label for="currencyHistoryModalSearch">Szukaj po dacie lub źródle</label>
+        <input type="search" id="currencyHistoryModalSearch" placeholder="np. 2026-11 albo NBP">
+        <div id="currencyHistoryModalStatus" class="admin-meta" role="status">Wczytuję historię kursów…</div>
+        <div id="currencyHistoryModalList" class="currency-history-list"></div>
       </div>
     </div>
   </div>
