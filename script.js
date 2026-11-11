@@ -5007,6 +5007,22 @@ if (partNumberInput) {
     }
   }
 
+  function setReportButtonLoading(button, label) {
+    if (!button) return () => {};
+    const previousText = button.textContent;
+    const wasDisabled = button.disabled;
+    button.disabled = true;
+    button.classList.add('is-loading');
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = label;
+    return () => {
+      button.textContent = previousText;
+      button.disabled = wasDisabled;
+      button.classList.remove('is-loading');
+      button.removeAttribute('aria-busy');
+    };
+  }
+
   async function flushPendingReports({ silent = false } = {}) {
     if (reportQueueFlushInProgress) return;
     const pending = loadPendingReports();
@@ -5074,7 +5090,7 @@ if (partNumberInput) {
 
   async function submitOrQueueReport(payload, submitButton, successMessage) {
     if (!submitButton) return;
-    submitButton.disabled = true;
+    const stopLoading = setReportButtonLoading(submitButton, 'Wysyłanie…');
     try {
       await sendReportPayload(payload);
       showMainToast(successMessage, 'ok');
@@ -5090,7 +5106,7 @@ if (partNumberInput) {
       }
       closeReportModal();
     } finally {
-      submitButton.disabled = false;
+      stopLoading();
     }
   }
 
@@ -5139,12 +5155,12 @@ if (partNumberInput) {
   }
   if (reportPendingFlushBtn) {
     reportPendingFlushBtn.addEventListener('click', async () => {
-      reportPendingFlushBtn.disabled = true;
+      const stopLoading = setReportButtonLoading(reportPendingFlushBtn, 'Ponawianie…');
       try {
         await flushPendingReports({ silent: false });
-        updatePendingReportButton();
       } finally {
-        reportPendingFlushBtn.disabled = false;
+        stopLoading();
+        updatePendingReportButton();
       }
     });
   }

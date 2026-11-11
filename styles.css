@@ -1473,6 +1473,38 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
   flex-wrap: wrap;
 }
 
+.report-modal-card .mapping-modal-actions button.is-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0.82;
+  cursor: progress;
+}
+
+.report-modal-card .mapping-modal-actions button.is-loading::before,
+#reportPendingFlushBtn.is-loading::before {
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  content: '';
+  animation: report-submit-spin 700ms linear infinite;
+}
+
+#reportPendingFlushBtn.is-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: progress;
+}
+
+@keyframes report-submit-spin {
+  to { transform: rotate(360deg); }
+}
+
 #reportModalSubmit {
   border-color: rgba(15, 91, 255, 0.45);
   background: var(--accent);
