@@ -4289,6 +4289,12 @@ if (baseMultiplierPresetButtons) {
     currentBaseMultiplierEl.value = formatBaseMultiplierPresetValue(preset.multiplier);
     const toggle = document.getElementById('useCurrentBaseMultiplierToggle');
     if (toggle) toggle.checked = true;
+    // A Base preset carries the VAT used for its pricing calculation. Check
+    // explicitly for a finite value so VAT 0% is applied instead of skipped.
+    if (Number.isFinite(preset.vatRate)) {
+      vatRateInputEl.value = String(preset.vatRate);
+      vatRateInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     const currencyChanged = Boolean(preset.currency && currencySelect && currencySelect.value !== preset.currency);
     if (currencyChanged) {
       currencySelect.value = preset.currency;

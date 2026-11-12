@@ -8404,12 +8404,119 @@ body[data-page-title="Admin"] .admin-card-wide {
 }
 
 body[data-page-title="Admin"] .admin-actions button,
-body[data-page-title="Admin"] .admin-log-field button,
+body[data-page-title="Admin"] .admin-log-field button:not(.source-insert-inline-btn),
+body[data-page-title="Admin"] .admin-identity-form button,
+body[data-page-title="Admin"] .default-setting-control-row button,
+body[data-page-title="Admin"] .admin-log-pagination button,
+body[data-page-title="Admin"] .currency-alert-settings > button,
+body[data-page-title="Admin"] .currency-trend-controls > button,
+body[data-page-title="Admin"] .currency-history-controls > button,
+body[data-page-title="Admin"] .worker-usage-header-actions button,
 body[data-page-title="Kalkulator"] #refreshRateBtn,
 body[data-page-title="Kalkulator"] #stockUrlBtn,
 body[data-page-title="Kalkulator"] #clearBtn,
 body[data-page-title="Kalkulator"] .report-quick-btn {
   border-radius: 8px;
+}
+
+body[data-page-title="Admin"] .admin-actions button,
+body[data-page-title="Admin"] .admin-log-field button:not(.source-insert-inline-btn),
+body[data-page-title="Admin"] .admin-identity-form button,
+body[data-page-title="Admin"] .default-setting-control-row button,
+body[data-page-title="Admin"] .admin-log-pagination button,
+body[data-page-title="Admin"] .currency-alert-settings > button,
+body[data-page-title="Admin"] .currency-trend-controls > button,
+body[data-page-title="Admin"] .currency-history-controls > button,
+body[data-page-title="Admin"] .worker-usage-header-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+body[data-page-title="Admin"] .admin-actions button:hover:not(:disabled),
+body[data-page-title="Admin"] .admin-log-field button:not(.source-insert-inline-btn):hover:not(:disabled),
+body[data-page-title="Admin"] .admin-identity-form button:hover:not(:disabled),
+body[data-page-title="Admin"] .default-setting-control-row button:hover:not(:disabled),
+body[data-page-title="Admin"] .admin-log-pagination button:hover:not(:disabled),
+body[data-page-title="Admin"] .currency-alert-settings > button:hover:not(:disabled),
+body[data-page-title="Admin"] .currency-trend-controls > button:hover:not(:disabled),
+body[data-page-title="Admin"] .currency-history-controls > button:hover:not(:disabled),
+body[data-page-title="Admin"] .worker-usage-header-actions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+  color: var(--accent);
+  box-shadow: 0 2px 7px rgba(15, 91, 255, 0.1);
+}
+
+body[data-page-title="Admin"] .admin-actions button:focus-visible,
+body[data-page-title="Admin"] .admin-log-field button:not(.source-insert-inline-btn):focus-visible,
+body[data-page-title="Admin"] .admin-identity-form button:focus-visible,
+body[data-page-title="Admin"] .default-setting-control-row button:focus-visible,
+body[data-page-title="Admin"] .admin-log-pagination button:focus-visible,
+body[data-page-title="Admin"] .currency-alert-settings > button:focus-visible,
+body[data-page-title="Admin"] .currency-trend-controls > button:focus-visible,
+body[data-page-title="Admin"] .currency-history-controls > button:focus-visible,
+body[data-page-title="Admin"] .worker-usage-header-actions button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  outline-offset: 2px;
+}
+
+body[data-page-title="Admin"] .admin-actions button:disabled,
+body[data-page-title="Admin"] .admin-log-field button:not(.source-insert-inline-btn):disabled,
+body[data-page-title="Admin"] .admin-identity-form button:disabled,
+body[data-page-title="Admin"] .default-setting-control-row button:disabled,
+body[data-page-title="Admin"] .admin-log-pagination button:disabled,
+body[data-page-title="Admin"] .currency-alert-settings > button:disabled,
+body[data-page-title="Admin"] .currency-trend-controls > button:disabled,
+body[data-page-title="Admin"] .currency-history-controls > button:disabled,
+body[data-page-title="Admin"] .worker-usage-header-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+body[data-page-title="Admin"] .base-multiplier-step {
+  min-height: 38px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--card-2);
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+body[data-page-title="Admin"] .admin-log-field small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+body[data-page-title="Admin"] .admin-actions button.is-dirty {
+  border-color: rgba(29, 178, 95, 0.7);
+  background: rgba(29, 178, 95, 0.14);
+  color: #15924f;
+  box-shadow: 0 0 0 2px rgba(29, 178, 95, 0.2);
+}
+
+body[data-page-title="Admin"] .admin-actions button.is-dirty:hover:not(:disabled) {
+  border-color: rgba(29, 178, 95, 0.9);
+  background: rgba(29, 178, 95, 0.14);
+  color: #0f7a41;
 }
 
 body[data-page-title="Admin"] .admin-kpi,

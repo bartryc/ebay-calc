@@ -375,16 +375,18 @@
                   <select id="currencyDropAlertMode"><option value="percent">Procent</option><option value="minor-units">Grosze / centy</option></select>
                 </div>
                 <div class="admin-log-field">
-                  <label for="currencyDropAlertThreshold">Wartość progu</label>
+                  <label for="currencyDropAlertThreshold" id="currencyDropAlertThresholdLabel">Wartość progu (%)</label>
                   <input type="number" id="currencyDropAlertThreshold" min="0.01" step="0.1" value="5">
+                  <small>Porównuje najnowszy zapis z poprzednim dla tej samej waluty i źródła. Wybierz próg procentowy albo kwotowy poniżej.</small>
                 </div>
                 <label class="source-dual-icon-toggle"><input type="checkbox" id="basePresetDriftAlertEnabled" checked><span>Oznacz presety Base z dużym odchyleniem</span></label>
                 <div class="admin-log-field">
                   <label for="basePresetDriftAlertThreshold">Próg odchylenia presetów (%)</label>
                   <input type="number" id="basePresetDriftAlertThreshold" min="0.1" step="0.1" value="5">
+                  <small>Porównuje zapisany mnożnik z mnożnikiem live dla kursu, źródła i VAT danego presetu. Żółte ostrzeżenie pojawia się od 80% tego progu.</small>
                 </div>
               </div>
-              <p class="admin-meta">Kwotowy próg wpisuje się w groszach/centach (np. 5 = 0,05). Porównanie kursu używa wybranego wyżej kierunku.</p>
+              <p class="admin-meta">Próg „Grosze / centy” podajesz w setnych części jednostki kursu: 5 oznacza zmianę o 0,05. Alert pojawia się, gdy wybrany kierunek porównania (PLN → waluta albo waluta → PLN) spadnie co najmniej o ten próg.</p>
               <button type="button" id="currencyAlertsSaveBtn">Zapisz ustawienia alertów</button>
             </div>
             <div class="currency-history-panel">
@@ -509,7 +511,7 @@
             <summary class="report-summary">
               <span>Presety mnożnika Base</span>
             </summary>
-            <p>Zdefiniuj szybkie mnożniki widoczne w karcie Base. VAT jest używany do porównania odchylenia i nie zmienia VAT-u kalkulatora po kliknięciu presetu.</p>
+            <p>Zdefiniuj szybkie mnożniki widoczne w karcie Base. Kliknięcie presetu ustawia też przypisany VAT (również 0%) i walutę.</p>
             <div class="admin-log-controls calculator-preset-controls">
               <div class="admin-log-field">
                 <label for="baseMultiplierPresetSelect">Istniejące</label>
@@ -534,7 +536,7 @@
                 <select id="baseMultiplierPresetCurrency"><option value="">Nie zmieniaj waluty</option></select>
               </div>
               <div class="admin-log-field">
-                <label for="baseMultiplierPresetVat">VAT do porównania odchylenia (%)</label>
+                <label for="baseMultiplierPresetVat">VAT kalkulacji i odchylenia (%)</label>
                 <input type="number" id="baseMultiplierPresetVat" min="0" max="100" step="0.1" placeholder="Np. 23">
               </div>
               <div class="admin-log-field">
@@ -544,6 +546,7 @@
                 </label>
               </div>
             </div>
+            <p class="admin-meta">Kroki przyciskami zmieniają mnożnik o ±0,001. Pole liczbowe pozwala wpisać dokładniejszą wartość; strzałki pola zmieniają ją o 0,0001.</p>
             <div class="admin-actions source-actions">
               <button type="button" id="baseMultiplierPresetNewBtn">Nowy preset</button>
               <button type="button" id="baseMultiplierPresetSaveBtn">Zapisz preset</button>
@@ -1217,6 +1220,7 @@
     const currencyDropAlertEnabled = document.getElementById('currencyDropAlertEnabled');
     const currencyDropAlertMode = document.getElementById('currencyDropAlertMode');
     const currencyDropAlertThreshold = document.getElementById('currencyDropAlertThreshold');
+    const currencyDropAlertThresholdLabel = document.getElementById('currencyDropAlertThresholdLabel');
     const basePresetDriftAlertEnabled = document.getElementById('basePresetDriftAlertEnabled');
     const basePresetDriftAlertThreshold = document.getElementById('basePresetDriftAlertThreshold');
     const currencyAlertsSaveBtn = document.getElementById('currencyAlertsSaveBtn');
@@ -3159,6 +3163,11 @@
       const alerts = currenciesConfig.alerts || {};
       if (currencyDropAlertEnabled) currencyDropAlertEnabled.checked = alerts.suddenDrop?.enabled !== false;
       if (currencyDropAlertMode) currencyDropAlertMode.value = alerts.suddenDrop?.mode === 'minor-units' ? 'minor-units' : 'percent';
+      if (currencyDropAlertThresholdLabel) {
+        currencyDropAlertThresholdLabel.textContent = currencyDropAlertMode?.value === 'minor-units'
+          ? 'Wartość progu (gr/centów)'
+          : 'Wartość progu (%)';
+      }
       if (currencyDropAlertThreshold) currencyDropAlertThreshold.value = String(alerts.suddenDrop?.threshold ?? 5);
       if (basePresetDriftAlertEnabled) basePresetDriftAlertEnabled.checked = alerts.presetDrift?.enabled !== false;
       if (basePresetDriftAlertThreshold) basePresetDriftAlertThreshold.value = String(alerts.presetDrift?.thresholdPercent ?? 5);
@@ -5055,6 +5064,14 @@
         showToast(`Błąd zapisu kierunku: ${error.message || 'unknown'}`, 'warn');
       } finally {
         currencyTrendDirectionSaveBtn.disabled = false;
+      }
+    });
+
+    currencyDropAlertMode?.addEventListener('change', () => {
+      if (currencyDropAlertThresholdLabel) {
+        currencyDropAlertThresholdLabel.textContent = currencyDropAlertMode.value === 'minor-units'
+          ? 'Wartość progu (gr/centów)'
+          : 'Wartość progu (%)';
       }
     });
 
