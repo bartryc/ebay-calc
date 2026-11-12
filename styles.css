@@ -1139,6 +1139,20 @@ body.layout-edit-mode .layout-item.is-layout-hidden-preview {
   line-height: 1.25;
 }
 
+.base-multiplier-drift-value,
+.base-multiplier-drift-unavailable {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.base-multiplier-drift-unavailable {
+  opacity: 0.82;
+}
+
 .base-multiplier-preset-buttons button.has-drift-warning {
   border-color: #d69e00;
   background: color-mix(in srgb, #facc15 12%, var(--card));

@@ -58,6 +58,8 @@ let currenciesConfig = {
 const rateDropAlertLastShown = new Map();
 let calculatorPresetsConfig = { version: 1, presets: [] };
 let baseMultiplierPresetsConfig = { version: 1, presets: [] };
+const basePresetDriftRates = new Map();
+let basePresetDriftRequestSeq = 0;
 const DEFAULT_RATE_PROVIDERS = window.RateService?.DEFAULT_RATE_PROVIDERS || [
   {
     id: 'erapi',
@@ -3211,8 +3213,8 @@ function renderBaseMultiplierPresetButtons() {
   const currentMultiplier = parseNumber(document.getElementById('currentBaseMultiplier')?.value);
   const manualPricingEnabled = isCurrentBasePricingEnabled();
   const selectedCurrency = document.getElementById('currency')?.value || '';
+  const selectedSource = String(document.getElementById('rateSource')?.value || '').trim().toLowerCase();
   const baseState = window.CalculatorUI.readBaseState(document, getActiveCommissionRate);
-  const liveMultiplier = window.CalculatorCore.baseMultiplier(baseState.exchangeRate, baseState.vatRate, baseState.commission);
   const driftConfig = currenciesConfig.alerts?.presetDrift || {};
   const driftThreshold = Number(driftConfig.thresholdPercent) || 5;
   const presets = baseMultiplierPresetsConfig.presets.filter((item) => item.enabled !== false);
@@ -3224,17 +3226,77 @@ function renderBaseMultiplierPresetButtons() {
     const isActive = manualPricingEnabled && Number.isFinite(currentMultiplier)
       && Math.abs(currentMultiplier - item.multiplier) < 0.0000001
       && (!item.currency || item.currency === selectedCurrency);
-    const canCompareDrift = driftConfig.enabled !== false && Number.isFinite(liveMultiplier) && liveMultiplier > 0
-      && (!item.currency || item.currency === selectedCurrency);
+    const rateEntry = item.currency && selectedSource
+      ? basePresetDriftRates.get(`${item.currency}:${selectedSource}`)
+      : null;
+    const presetVatRatio = Number.isFinite(item.vatRate) ? item.vatRate / 100 : NaN;
+    const liveMultiplier = rateEntry && Number.isFinite(presetVatRatio) && Number.isFinite(baseState.commission)
+      ? window.CalculatorCore.baseMultiplier(rateEntry.rate, presetVatRatio, baseState.commission)
+      : NaN;
+    const canCompareDrift = driftConfig.enabled !== false && Number.isFinite(liveMultiplier) && liveMultiplier > 0;
     const driftPercent = canCompareDrift ? (Math.abs(item.multiplier - liveMultiplier) / liveMultiplier) * 100 : NaN;
     const showDriftWarning = Number.isFinite(driftPercent) && driftPercent >= driftThreshold * 0.8;
     const multiplierText = formatBaseMultiplierPresetValue(item.multiplier);
     const currencyText = item.currency ? ` · ${escapeHtml(item.currency)}` : '';
+    const rateDetails = item.currency
+      ? rateEntry
+        ? `<small class="base-multiplier-drift-value">Kurs ${rateEntry.rate.toFixed(4)} · VAT ${item.vatRate == null ? '—' : `${item.vatRate}%`} · ${escapeHtml(selectedSource)}${rateEntry.date ? ` · ${escapeHtml(rateEntry.date)}` : ''}</small>`
+        : `<small class="base-multiplier-drift-unavailable">Brak kursu ${escapeHtml(item.currency)} ze źródła ${escapeHtml(selectedSource || '—')}</small>`
+      : '<small class="base-multiplier-drift-unavailable">Przypisz walutę i VAT, aby liczyć odchylenie</small>';
+    const deviationDetails = Number.isFinite(driftPercent)
+      ? `<small class="base-multiplier-drift-value">Odchylenie ${driftPercent.toFixed(2)}%</small>`
+      : item.vatRate == null
+        ? '<small class="base-multiplier-drift-unavailable">Ustaw VAT w panelu admina</small>'
+        : '';
     const warningMarkup = showDriftWarning
       ? `<small class="base-multiplier-drift-warning">⚠ Odchylenie ${driftPercent.toFixed(1)}% · próg ${driftThreshold.toFixed(1)}%</small>`
       : '';
-    return `<button type="button" class="${isActive ? 'is-active' : ''}${showDriftWarning ? ' has-drift-warning' : ''}" data-base-multiplier-preset-id="${escapeHtml(item.id)}" aria-pressed="${isActive ? 'true' : 'false'}" title="Ustaw mnożnik Base ${escapeHtml(multiplierText)}${currencyText}"><span class="base-multiplier-preset-label">${escapeHtml(item.label)}</span><small class="base-multiplier-preset-value">${escapeHtml(multiplierText)}${currencyText}</small>${warningMarkup}</button>`;
+    return `<button type="button" class="${isActive ? 'is-active' : ''}${showDriftWarning ? ' has-drift-warning' : ''}" data-base-multiplier-preset-id="${escapeHtml(item.id)}" aria-pressed="${isActive ? 'true' : 'false'}" title="Ustaw mnożnik Base ${escapeHtml(multiplierText)}${currencyText}"><span class="base-multiplier-preset-label">${escapeHtml(item.label)}</span><small class="base-multiplier-preset-value">${escapeHtml(multiplierText)}${currencyText}</small>${rateDetails}${deviationDetails}${warningMarkup}</button>`;
   }).join('');
+}
+
+async function loadBasePresetDriftRates() {
+  const requestSeq = ++basePresetDriftRequestSeq;
+  const source = String(document.getElementById('rateSource')?.value || '').trim().toLowerCase();
+  const currencies = [...new Set(baseMultiplierPresetsConfig.presets
+    .map((preset) => preset.currency)
+    .filter((currency) => /^[A-Z]{3}$/.test(currency || '')))];
+  if (!source || !currencies.length || !window.PN_MAPPINGS_API?.request) {
+    renderBaseMultiplierPresetButtons();
+    return;
+  }
+
+  const results = await Promise.all(currencies.map(async (currency) => {
+    try {
+      const query = `currency=${encodeURIComponent(currency)}&source=${encodeURIComponent(source)}`;
+      const response = await window.PN_MAPPINGS_API.request(`/rates/history?${query}`, { method: 'GET' });
+      if (!response.ok) return [currency, null];
+      const payload = await response.json();
+      const history = Array.isArray(payload)
+        ? payload
+        : (payload?.history || payload?.records || payload?.snapshots || payload?.items || payload?.data || []);
+      const rows = (Array.isArray(history) ? history : []).filter((item) => (
+        String(item?.source || item?.provider || '').trim().toLowerCase() === source
+        && Number.isFinite(Number(item?.rate)) && Number(item.rate) > 0
+        && /^\d{4}-\d{2}-\d{2}$/.test(String(item?.date || item?.day || ''))
+      )).sort((a, b) => String(b.date || b.day).localeCompare(String(a.date || a.day)));
+      const latest = rows[0];
+      return [currency, latest ? {
+        rate: Number(latest.rate),
+        date: String(latest.date || latest.day)
+      } : null];
+    } catch (_error) {
+      return [currency, null];
+    }
+  }));
+
+  if (requestSeq !== basePresetDriftRequestSeq) return;
+  results.forEach(([currency, entry]) => {
+    const key = `${currency}:${source}`;
+    if (entry) basePresetDriftRates.set(key, entry);
+    else basePresetDriftRates.delete(key);
+  });
+  renderBaseMultiplierPresetButtons();
 }
 
 function syncSelectedBaseMultiplierPreset() {
@@ -3518,6 +3580,8 @@ function fetchExchangeRate(currency, options = {}) {
   const applyRate = (rate, providerLabel, providerKeyUsed) => {
     exchangeRateInp.value = rate.toFixed(4);
     currentExchangeRate = rate;
+    const rateSourceKey = String(providerKeyUsed || providerKey).trim().toLowerCase();
+    basePresetDriftRates.set(`${currency}:${rateSourceKey}`, { rate: Number(rate.toFixed(4)), date: '' });
     if (exchangeRateTrend && window.PN_MAPPINGS_API?.recordRateSnapshot) {
       window.PN_MAPPINGS_API.recordRateSnapshot(currency, rate, providerKeyUsed).then((snapshot) => {
         if (!snapshot || trendRequestSeq !== exchangeRateTrendRequestSeq
@@ -3599,6 +3663,7 @@ function fetchExchangeRate(currency, options = {}) {
     }
     if (rateSourceSelect && providerKeyUsed && rateSourceSelect.value !== providerKeyUsed) {
       rateSourceSelect.value = providerKeyUsed;
+      loadBasePresetDriftRates();
     }
     if (convertEbayPriceNeeded) {
       const newEbayPrice = convertEbayPrice(rate);
@@ -4338,6 +4403,7 @@ const rateSourceSelect = document.getElementById('rateSource');
 if (rateSourceSelect) {
   rateSourceSelect.addEventListener('change', () => {
     applyRateProviderSelection(rateSourceSelect.value);
+    loadBasePresetDriftRates();
     fetchExchangeRate(document.getElementById('currency').value, { notify: true });
     checkRateProvidersStatus(document.getElementById('currency').value);
   });
@@ -4397,6 +4463,7 @@ if (calculatorPresetButtons) {
     fetchExchangeRate(currency, { notify: false });
   }
   checkRateProvidersStatus(currency);
+  loadBasePresetDriftRates();
 })();
 
 document.getElementById('historyList').addEventListener('click', (event) => {

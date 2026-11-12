@@ -33,6 +33,11 @@
   function normalizeBaseMultiplierPreset(item, index = 0) {
     const multiplier = root.CalculatorCore.parseNumber(item?.multiplier);
     if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
+    const rawVatRate = item?.vatRate;
+    const vatRate = rawVatRate == null || rawVatRate === ''
+      ? null
+      : root.CalculatorCore.parseNumber(rawVatRate);
+    const validVatRate = Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100 ? vatRate : null;
     const rawId = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
     const fallbackLabel = `Base ${formatBaseMultiplierPresetValue(multiplier)}`;
     const label = String(item?.label || item?.name || fallbackLabel).trim().slice(0, 40);
@@ -40,6 +45,7 @@
       id: rawId || `base-${index + 1}`,
       label: label || fallbackLabel,
       multiplier,
+      vatRate: validVatRate,
       enabled: item?.enabled !== false,
       currency: /^[A-Z]{3}$/.test(String(item?.currency || '').trim().toUpperCase())
         ? String(item.currency).trim().toUpperCase()

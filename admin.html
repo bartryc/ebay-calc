@@ -509,7 +509,7 @@
             <summary class="report-summary">
               <span>Presety mnożnika Base</span>
             </summary>
-            <p>Zdefiniuj szybkie mnożniki widoczne w karcie Base na stronie kalkulatora.</p>
+            <p>Zdefiniuj szybkie mnożniki widoczne w karcie Base. VAT jest używany do porównania odchylenia i nie zmienia VAT-u kalkulatora po kliknięciu presetu.</p>
             <div class="admin-log-controls calculator-preset-controls">
               <div class="admin-log-field">
                 <label for="baseMultiplierPresetSelect">Istniejące</label>
@@ -532,6 +532,10 @@
               <div class="admin-log-field">
                 <label for="baseMultiplierPresetCurrency">Waluta docelowa</label>
                 <select id="baseMultiplierPresetCurrency"><option value="">Nie zmieniaj waluty</option></select>
+              </div>
+              <div class="admin-log-field">
+                <label for="baseMultiplierPresetVat">VAT do porównania odchylenia (%)</label>
+                <input type="number" id="baseMultiplierPresetVat" min="0" max="100" step="0.1" placeholder="Np. 23">
               </div>
               <div class="admin-log-field">
                 <label class="source-dual-icon-toggle calculator-preset-enabled">
@@ -1148,6 +1152,7 @@
     const baseMultiplierPresetLabel = document.getElementById('baseMultiplierPresetLabel');
     const baseMultiplierPresetValue = document.getElementById('baseMultiplierPresetValue');
     const baseMultiplierPresetCurrency = document.getElementById('baseMultiplierPresetCurrency');
+    const baseMultiplierPresetVat = document.getElementById('baseMultiplierPresetVat');
     const baseMultiplierPresetEnabled = document.getElementById('baseMultiplierPresetEnabled');
     const baseMultiplierPresetNewBtn = document.getElementById('baseMultiplierPresetNewBtn');
     const baseMultiplierPresetSaveBtn = document.getElementById('baseMultiplierPresetSaveBtn');
@@ -2979,7 +2984,7 @@
       {
         id: 'base-multiplier-presets',
         root: '#baseMultiplierPresetSection',
-        controls: '#baseMultiplierPresetLabel, #baseMultiplierPresetValue, #baseMultiplierPresetCurrency, #baseMultiplierPresetEnabled, .base-multiplier-step',
+        controls: '#baseMultiplierPresetLabel, #baseMultiplierPresetValue, #baseMultiplierPresetCurrency, #baseMultiplierPresetVat, #baseMultiplierPresetEnabled, .base-multiplier-step',
         actions: '#baseMultiplierPresetNewBtn, #baseMultiplierPresetSaveBtn, #baseMultiplierPresetDeleteBtn'
       },
       {
@@ -3508,6 +3513,9 @@
     function normalizeBaseMultiplierPreset(item, index = 0) {
       const multiplier = parseFloat(String(item?.multiplier ?? '').replace(',', '.'));
       if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
+      const rawVatRate = item?.vatRate;
+      const vatRateValue = rawVatRate == null || rawVatRate === '' ? NaN : parseFloat(String(rawVatRate).replace(',', '.'));
+      const vatRate = Number.isFinite(vatRateValue) && vatRateValue >= 0 && vatRateValue <= 100 ? vatRateValue : null;
       const id = String(item?.id || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || `base-${index + 1}`;
       const fallbackLabel = `Base ${formatBaseMultiplierPresetValue(multiplier)}`;
       const label = String(item?.label || item?.name || fallbackLabel).trim().slice(0, 40);
@@ -3515,6 +3523,7 @@
         id,
         label: label || fallbackLabel,
         multiplier,
+        vatRate,
         enabled: item?.enabled !== false,
         currency: /^[A-Z]{3}$/.test(String(item?.currency || '').trim().toUpperCase())
           ? String(item.currency).trim().toUpperCase()
@@ -3574,6 +3583,7 @@
           <strong>${escapeHtml(item.label)}</strong>
           <span>Mnożnik Base: ${escapeHtml(formatBaseMultiplierPresetValue(item.multiplier))}</span>
           <span>Waluta: ${escapeHtml(item.currency || 'bez zmiany')}</span>
+          <span>VAT odchylenia: ${item.vatRate == null ? 'nieustawiony' : `${escapeHtml(String(item.vatRate))}%`}</span>
           <small>Ostatnia edycja: ${item.updatedAt ? new Date(item.updatedAt).toLocaleString('pl-PL') : 'brak danych'}</small>
           <small>${item.enabled === false ? 'Ukryty w kalkulatorze' : 'Widoczny w kalkulatorze'}</small>
         </button>
@@ -3585,6 +3595,7 @@
       if (baseMultiplierPresetLabel) baseMultiplierPresetLabel.value = preset?.label || '';
       if (baseMultiplierPresetValue) baseMultiplierPresetValue.value = preset ? formatBaseMultiplierPresetValue(preset.multiplier) : '';
       if (baseMultiplierPresetCurrency) baseMultiplierPresetCurrency.value = preset?.currency || '';
+      if (baseMultiplierPresetVat) baseMultiplierPresetVat.value = preset?.vatRate == null ? '' : String(preset.vatRate);
       if (baseMultiplierPresetEnabled) baseMultiplierPresetEnabled.checked = preset?.enabled !== false;
     }
 
@@ -3601,6 +3612,7 @@
         label: baseMultiplierPresetLabel?.value,
         multiplier: baseMultiplierPresetValue?.value,
         currency: baseMultiplierPresetCurrency?.value || '',
+        vatRate: baseMultiplierPresetVat?.value,
         enabled: baseMultiplierPresetEnabled?.checked
       });
     }
@@ -3614,6 +3626,7 @@
       return current.label !== saved.label
         || Math.abs(current.multiplier - saved.multiplier) > 0.0000001
         || current.currency !== saved.currency
+        || current.vatRate !== saved.vatRate
         || current.enabled !== saved.enabled;
     }
 
@@ -3649,8 +3662,8 @@
 
     async function handleSaveBaseMultiplierPreset() {
       const item = collectBaseMultiplierPresetFromEditor();
-      if (!item || !String(baseMultiplierPresetLabel?.value || '').trim()) {
-        showToast('Uzupełnij nazwę i dodatni mnożnik Base.', 'warn');
+      if (!item || item.vatRate == null || !String(baseMultiplierPresetLabel?.value || '').trim()) {
+        showToast('Uzupełnij nazwę, dodatni mnożnik Base i VAT używany do porównania odchylenia.', 'warn');
         return false;
       }
       const previousConfig = baseMultiplierPresetsConfig;
@@ -4847,6 +4860,7 @@
         if (baseMultiplierPresetSelect) baseMultiplierPresetSelect.value = '';
         fillBaseMultiplierPresetEditor(null);
         if (baseMultiplierPresetCurrency) baseMultiplierPresetCurrency.value = currenciesConfig.currencies[0]?.code || '';
+        if (baseMultiplierPresetVat) baseMultiplierPresetVat.value = '23';
         baseMultiplierPresetLabel?.focus();
       });
     }
